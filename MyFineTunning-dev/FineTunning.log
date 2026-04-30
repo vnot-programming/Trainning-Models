@@ -1,0 +1,41 @@
+[Setup] Melanjutkan workspace yang sudah ada: MyFineTunning-20260423_030331
+=================================================================
+  MyFineTunning — Setup & Verifikasi
+=================================================================
+
+[Setup] Verifikasi dataset...
+  ✅ DET dataset: /root/MyTrainEngine/me-bottle-isempty-ku3-7
+  ✅ SEG dataset: /root/MyTrainEngine/segpoligon-me-bottle-isempty3-5
+  ✅ DET YAML: /root/MyTrainEngine/me-bottle-isempty-ku3-7/data.yaml
+  ✅ SEG YAML: /root/MyTrainEngine/segpoligon-me-bottle-isempty3-5/data.yaml
+
+[Setup] Membuat folder output workspace...
+  📁 /workspace/MyFineTunning-20260423_030331/runs/yolov8m
+  📁 /workspace/MyFineTunning-20260423_030331/runs/yolov8m_seg
+  📁 /workspace/MyFineTunning-20260423_030331/runs/yolov9m
+  📁 /workspace/MyFineTunning-20260423_030331/runs/yolov9m_seg
+  📁 /workspace/MyFineTunning-20260423_030331/runs/yolo11m
+  📁 /workspace/MyFineTunning-20260423_030331/runs/yolo11m_seg
+  📁 /workspace/MyFineTunning-20260423_030331/runs/maskrcnn/weights
+  📁 /workspace/MyFineTunning-20260423_030331/runs/reports
+  📁 /workspace/MyFineTunning-20260423_030331/runs/visuals
+
+[Setup] Konfigurasi aktif:
+  EPOCHS           : 100
+  IMAGE_SIZE        : 640
+  NUM_CLASSES       : 7
+  YOLO_BATCH_SIZE   : 64  (DDP total, dibagi ke semua GPU)
+  MASKRCNN_BATCH    : 4  (Single GPU cuda:0)
+  WORKSPACE_DIR     : /workspace/MyFineTunning-20260423_030331
+
+[Setup] Urutan eksekusi yang BENAR (jalankan satu per satu):
+  1. cd yolo/yolo8   && python -u main.py 2>&1 | tee yolov8_train.log
+  2. cd yolo/yolo9   && python -u main.py 2>&1 | tee yolov9_train.log
+  3. cd yolo/yolo11  && python -u main.py 2>&1 | tee yolo11_train.log
+  4. cd mask-r-cnn   && python -u main.py 2>&1 | tee maskrcnn_train.log
+  5. cd hybrid       && python -u main.py 2>&1 | tee hybrid_eval.log
+
+  Setiap script menghasilkan CSV report di:
+  /workspace/MyFineTunning-20260423_030331/runs/reports/
+
+✅ Setup selesai. Siap menjalankan fine-tuning per model.

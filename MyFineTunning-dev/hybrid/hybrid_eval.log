@@ -1,0 +1,132 @@
+[Device] cuda:0
+
+[Paths] Model yang akan digunakan:
+  ✅ yolo8m_det     : /workspace/MyFineTunning-20260423_030331/runs/yolov8m/weights/best.pt
+  ✅ yolo9m_det     : /workspace/MyFineTunning-20260423_030331/runs/yolov9m/weights/best.pt
+  ✅ yolo11m_det    : /workspace/MyFineTunning-20260423_104653/runs/yolo11m/weights/best.pt
+  ✅ yolo8m_seg     : /workspace/MyFineTunning-20260423_030331/runs/yolov8m_seg/weights/best.pt
+  ✅ yolo9c_seg     : /workspace/MyFineTunning-20260423_030331/runs/yolov9c_seg/weights/best.pt
+  ✅ yolo11m_seg    : /workspace/MyFineTunning-20260423_030331/runs/yolo11m_seg/weights/best.pt
+  ❌ maskrcnn       : /workspace/MyFineTunning-20260423_030331/runs/maskrcnn/weights/best.pt
+
+[Hybrid] SAM2 berhasil dimuat.
+
+[Sampel] 5 gambar dari /root/MyTrainEngine/segpoligon-me-bottle-isempty3-5/test/images
+
+=================================================================
+  Hybrid Pipeline: YOLO11m + SAM2
+=================================================================
+
+[Hybrid] [1/5] /root/MyTrainEngine/segpoligon-me-bottle-isempty3-5/test/images/3779-cabin_jpg.rf.a21172fb7317fd04db9073d638caba56.jpg
+  ✅ /workspace/MyFineTunning-20260423_030331/runs/visuals/hybrid/hybrid_01_3779-cabin_jpg.rf.a21172fb7317fd04db9073d638caba56.png | YOLO=1062.2ms SAM2=633.1ms
+
+[Hybrid] [2/5] /root/MyTrainEngine/segpoligon-me-bottle-isempty3-5/test/images/1972_jpg.rf.1b40c6d28cb5839fe72fef799be3dc6e.jpg
+  ✅ /workspace/MyFineTunning-20260423_030331/runs/visuals/hybrid/hybrid_02_1972_jpg.rf.1b40c6d28cb5839fe72fef799be3dc6e.png | YOLO=25.9ms SAM2=84.9ms
+
+[Hybrid] [3/5] /root/MyTrainEngine/segpoligon-me-bottle-isempty3-5/test/images/2213_jpg.rf.0d67a24f1f3f6a2edb26ac82ba571c19.jpg
+  ✅ /workspace/MyFineTunning-20260423_030331/runs/visuals/hybrid/hybrid_03_2213_jpg.rf.0d67a24f1f3f6a2edb26ac82ba571c19.png | YOLO=25.8ms SAM2=133.3ms
+
+[Hybrid] [4/5] /root/MyTrainEngine/segpoligon-me-bottle-isempty3-5/test/images/4668-cabin_jpg.rf.2fb8569a20c2379f9c7568fba09cfd90.jpg
+  ✅ /workspace/MyFineTunning-20260423_030331/runs/visuals/hybrid/hybrid_04_4668-cabin_jpg.rf.2fb8569a20c2379f9c7568fba09cfd90.png | YOLO=22.9ms SAM2=70.7ms
+
+[Hybrid] [5/5] /root/MyTrainEngine/segpoligon-me-bottle-isempty3-5/test/images/2794-cabin_jpg.rf.b49b0f470342dbdbf8d9ae817436f740.jpg
+  ✅ /workspace/MyFineTunning-20260423_030331/runs/visuals/hybrid/hybrid_05_2794-cabin_jpg.rf.b49b0f470342dbdbf8d9ae817436f740.png | YOLO=24.5ms SAM2=70.4ms
+
+=================================================================
+  Benchmark Semua Model Detection
+=================================================================
+Ultralytics 8.4.41 🚀 Python-3.11.10 torch-2.11.0+cu130 CUDA:0 (NVIDIA RTX PRO 4500 Blackwell, 32125MiB)
+Model summary (fused): 93 layers, 25,843,813 parameters, 0 gradients, 78.7 GFLOPs
+[34m[1mval: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 466.0±83.0 MB/s, size: 17.4 KB)
+
+WARNING ⚠️ Box and segment counts should be equal, but got len(segments) = 57, len(boxes) = 806. To resolve this only boxes will be used and all segments will be removed. To avoid this please supply either a detect or segment dataset, not a detect-segment mixed dataset.
+                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95): 100% ━━━━━━━━━━━━ 42/42 5.3it/s 8.0s
+                   all        671        806      0.932      0.919      0.946      0.838
+Speed: 0.6ms preprocess, 4.7ms inference, 0.0ms loss, 2.5ms postprocess per image
+[MemFlush] benchmark detect — VRAM bebas: 27.98 GB
+Ultralytics 8.4.41 🚀 Python-3.11.10 torch-2.11.0+cu130 CUDA:0 (NVIDIA RTX PRO 4500 Blackwell, 32125MiB)
+YOLOv9m summary (fused): 151 layers, 20,018,053 parameters, 0 gradients, 76.5 GFLOPs
+[34m[1mval: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 587.0±155.4 MB/s, size: 22.6 KB)
+
+WARNING ⚠️ Box and segment counts should be equal, but got len(segments) = 57, len(boxes) = 806. To resolve this only boxes will be used and all segments will be removed. To avoid this please supply either a detect or segment dataset, not a detect-segment mixed dataset.
+                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95): 100% ━━━━━━━━━━━━ 42/42 5.3it/s 7.9s
+                   all        671        806      0.934      0.889       0.94      0.821
+Speed: 0.5ms preprocess, 5.4ms inference, 0.0ms loss, 2.8ms postprocess per image
+[MemFlush] benchmark detect — VRAM bebas: 26.56 GB
+Ultralytics 8.4.41 🚀 Python-3.11.10 torch-2.11.0+cu130 CUDA:0 (NVIDIA RTX PRO 4500 Blackwell, 32125MiB)
+YOLO11m summary (fused): 126 layers, 20,035,429 parameters, 0 gradients, 67.7 GFLOPs
+[34m[1mval: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 487.9±69.2 MB/s, size: 19.5 KB)
+
+WARNING ⚠️ Box and segment counts should be equal, but got len(segments) = 57, len(boxes) = 806. To resolve this only boxes will be used and all segments will be removed. To avoid this please supply either a detect or segment dataset, not a detect-segment mixed dataset.
+                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95): 100% ━━━━━━━━━━━━ 42/42 5.4it/s 7.8s
+                   all        671        806       0.91      0.912      0.946      0.821
+Speed: 0.6ms preprocess, 4.9ms inference, 0.0ms loss, 2.2ms postprocess per image
+[MemFlush] benchmark detect — VRAM bebas: 26.39 GB
+
+=================================================================
+  Benchmark Semua Model Segmentation
+=================================================================
+Ultralytics 8.4.41 🚀 Python-3.11.10 torch-2.11.0+cu130 CUDA:0 (NVIDIA RTX PRO 4500 Blackwell, 32125MiB)
+YOLOv8m-seg summary (fused): 106 layers, 27,226,437 parameters, 0 gradients, 104.3 GFLOPs
+[34m[1mval: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 592.0±250.3 MB/s, size: 23.8 KB)
+
+                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95)     Mask(P          R      mAP50  mAP50-95): 100% ━━━━━━━━━━━━ 30/30 4.4it/s 6.8s
+                   all        480        619      0.815      0.914      0.914      0.797      0.841      0.883      0.906      0.754
+Speed: 0.6ms preprocess, 6.6ms inference, 0.0ms loss, 2.6ms postprocess per image
+[MemFlush] benchmark segment — VRAM bebas: 27.79 GB
+Ultralytics 8.4.41 🚀 Python-3.11.10 torch-2.11.0+cu130 CUDA:0 (NVIDIA RTX PRO 4500 Blackwell, 32125MiB)
+YOLOv9c-seg summary (fused): 169 layers, 27,629,925 parameters, 0 gradients, 147.6 GFLOPs
+[34m[1mval: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 561.2±146.4 MB/s, size: 22.1 KB)
+
+                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95)     Mask(P          R      mAP50  mAP50-95): 100% ━━━━━━━━━━━━ 30/30 3.8it/s 7.9s
+                   all        480        619      0.898      0.899      0.907      0.784      0.886      0.891      0.893      0.734
+Speed: 0.6ms preprocess, 8.7ms inference, 0.0ms loss, 2.1ms postprocess per image
+[MemFlush] benchmark segment — VRAM bebas: 26.38 GB
+Ultralytics 8.4.41 🚀 Python-3.11.10 torch-2.11.0+cu130 CUDA:0 (NVIDIA RTX PRO 4500 Blackwell, 32125MiB)
+YOLO11m-seg summary (fused): 139 layers, 22,340,709 parameters, 0 gradients, 112.9 GFLOPs
+[34m[1mval: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 517.2±35.2 MB/s, size: 19.5 KB)
+
+                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95)     Mask(P          R      mAP50  mAP50-95): 100% ━━━━━━━━━━━━ 30/30 3.8it/s 7.9s
+                   all        480        619       0.87      0.912      0.904      0.784      0.874      0.915      0.905      0.741
+Speed: 0.6ms preprocess, 7.6ms inference, 0.0ms loss, 2.5ms postprocess per image
+[MemFlush] benchmark segment — VRAM bebas: 26.44 GB
+
+✅ Det Comparison : /workspace/MyFineTunning-20260423_030331/runs/reports/report_det_comparison.csv
+✅ Seg Comparison : /workspace/MyFineTunning-20260423_030331/runs/reports/report_seg_comparison.csv
+✅ Hybrid Latency : /workspace/MyFineTunning-20260423_030331/runs/reports/report_hybrid_latency.csv
+   Rata-rata: 430.72 ms (2.32 FPS)
+
+=================================================================
+  Membuat Comparison Grid 1×5
+=================================================================
+
+[Grid] [1/5] 3779-cabin_jpg.rf.a21172fb7317fd04db9073d638caba56
+  ✅ /workspace/MyFineTunning-20260423_030331/runs/visuals/hybrid/comparison_01_3779-cabin_jpg.rf.a21172fb7317fd04db9073d638caba56.png
+
+[Grid] [2/5] 1972_jpg.rf.1b40c6d28cb5839fe72fef799be3dc6e
+  ✅ /workspace/MyFineTunning-20260423_030331/runs/visuals/hybrid/comparison_02_1972_jpg.rf.1b40c6d28cb5839fe72fef799be3dc6e.png
+
+[Grid] [3/5] 2213_jpg.rf.0d67a24f1f3f6a2edb26ac82ba571c19
+  ✅ /workspace/MyFineTunning-20260423_030331/runs/visuals/hybrid/comparison_03_2213_jpg.rf.0d67a24f1f3f6a2edb26ac82ba571c19.png
+
+[Grid] [4/5] 4668-cabin_jpg.rf.2fb8569a20c2379f9c7568fba09cfd90
+  ✅ /workspace/MyFineTunning-20260423_030331/runs/visuals/hybrid/comparison_04_4668-cabin_jpg.rf.2fb8569a20c2379f9c7568fba09cfd90.png
+
+[Grid] [5/5] 2794-cabin_jpg.rf.b49b0f470342dbdbf8d9ae817436f740
+  ✅ /workspace/MyFineTunning-20260423_030331/runs/visuals/hybrid/comparison_05_2794-cabin_jpg.rf.b49b0f470342dbdbf8d9ae817436f740.png
+
+[Compress] Mengompres visuals/ (30 PNG) → /workspace/MyFineTunning-20260423_030331/runs/visuals.tar.gz ...
+[Compress] ✅ visuals.tar.gz: 26.85 MB
+
+✅ Hybrid evaluation selesai.
+
+=================================================================
+  SEMUA PIPELINE SELESAI
+  Workspace  : /workspace/MyFineTunning-20260423_030331
+  Det CSV    : /workspace/MyFineTunning-20260423_030331/runs/reports/report_det_comparison.csv
+  Seg CSV    : /workspace/MyFineTunning-20260423_030331/runs/reports/report_seg_comparison.csv
+  Hybrid CSV : /workspace/MyFineTunning-20260423_030331/runs/reports/report_hybrid_latency.csv
+  Visuals    : /workspace/MyFineTunning-20260423_030331/runs/visuals/hybrid/ (10 gambar)
+               5 hybrid + 5 comparison grid
+  Download   : /workspace/MyFineTunning-20260423_030331/runs/visuals.tar.gz
+=================================================================
