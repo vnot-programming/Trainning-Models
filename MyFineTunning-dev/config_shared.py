@@ -37,20 +37,29 @@ if os.path.exists(_WORKSPACE_ID_FILE):
 else:
     _TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-# Path workspace persisten di RunPOD Network Volume
-_BASE_DIR     = os.environ.get("WORKSPACE_BASE", "/workspace")
+# Path workspace lokal (akan dibackup via rclone)
+_BASE_DIR     = os.environ.get("WORKSPACE_BASE", _FINETUNING_ROOT)
 WORKSPACE_DIR = os.path.join(_BASE_DIR, f"MyFineTunning-{_TIMESTAMP}")
+
+# ==============================================================================
+# PATHS — Project Structure
+# ==============================================================================
+DATASETS_DIR   = os.path.join(_FINETUNING_ROOT, "datasets")
+MODELS_DIR     = os.path.join(_FINETUNING_ROOT, "models")
+DATA_FILES_DIR = os.path.join(_FINETUNING_ROOT, "data-files")
+REPORTS_DIR    = os.path.join(DATA_FILES_DIR, "reports")
+VISUALS_DIR    = os.path.join(DATA_FILES_DIR, "visuals")
 
 # ==============================================================================
 # PATHS — Dataset
 # ==============================================================================
 DET_DATASET_LOCATION = os.environ.get(
     "DET_DATASET",
-    "/root/MyTrainEngine/me-bottle-isempty-ku3-7"
+    os.path.join(DATASETS_DIR, "me-bottle-isempty-ku3-7")
 )
 SEG_DATASET_LOCATION = os.environ.get(
     "SEG_DATASET",
-    "/root/MyTrainEngine/segpoligon-me-bottle-isempty3-5"
+    os.path.join(DATASETS_DIR, "segpoligon-me-bottle-isempty3-5")
 )
 
 DET_YAML = os.path.join(DET_DATASET_LOCATION, "data.yaml")
@@ -153,7 +162,7 @@ def save_yolo_visual_samples(
     import random, gc
     from ultralytics import YOLO
 
-    visual_dir = os.path.join(WORKSPACE_DIR, "runs", "visuals")
+    visual_dir = VISUALS_DIR
     os.makedirs(visual_dir, exist_ok=True)
 
     # Cari gambar yang ada
@@ -208,7 +217,7 @@ def compress_visuals() -> str:
         str — Path ke file .tar.gz, atau "" jika gagal.
     """
     import tarfile
-    visual_dir = os.path.join(WORKSPACE_DIR, "runs", "visuals")
+    visual_dir = VISUALS_DIR
     tar_path   = os.path.join(WORKSPACE_DIR, "runs", "visuals.tar.gz")
 
     if not os.path.isdir(visual_dir):
@@ -312,3 +321,36 @@ def measure_vram_peak(fn_inference, device_id: int = 0) -> float:
     fn_inference()
     torch.cuda.synchronize(device_id)
     return round(torch.cuda.max_memory_allocated(device_id) / 1e9, 2)
+
+
+def download_and_move_model(model_name: str) -> str:
+    """
+    Pastikan model dasar (misal 'yolov8m.pt') tersedia di MODELS_DIR.
+    Jika tidak ada, download menggunakan YOLO dari ultralytics (ke dir aktif),
+    lalu pindahkan file tersebut ke MODELS_DIR.
+    
+    Returns:
+        Absolute path ke model di dalam MODELS_DIR.
+    """
+    import shutil
+    from ultralytics.utils.downloads import attempt_download_asset
+    
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    target_path = os.path.join(MODELS_DIR, model_name)
+    
+    if os.path.exists(target_path):
+        print(f"[Model] ✅ Model sudah ada di: {target_path}")
+        return target_path
+        
+    print(f"[Model] ⏳ Mendownload {model_name}...")
+    try:
+        # Download ke current working directory
+        downloaded_path = attempt_download_asset(model_name)
+        if os.path.exists(downloaded_path):
+            print(f"[Model] ✅ Berhasil didownload ke {downloaded_path}. Memindahkan ke {MODELS_DIR}...")
+            shutil.move(downloaded_path, target_path)
+            return target_path
+    except Exception as e:
+        print(f"[Model] ❌ Gagal mendownload model: {e}")
+    
+    return target_path

@@ -22,26 +22,14 @@ import os, sys, csv, gc
 os.environ["TORCHDYNAMO_DISABLE"]     = "1"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-# ── Paksa workspace ke sesi yang benar ───────────────────────────────────────
-TARGET_WORKSPACE = "/workspace/MyFineTunning-20260423_030331"
-os.environ["WORKSPACE_BASE"] = "/workspace"
-
-_FINETUNING_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-_WS_ID_FILE = os.path.join(_FINETUNING_ROOT, ".workspace_id")
-with open(_WS_ID_FILE, "w") as _f:
-    _f.write("20260423_030331")
-
-ROOT = _FINETUNING_ROOT
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, ROOT)
 
 from config_shared import (WORKSPACE_DIR, DET_YAML, SEG_YAML, IMAGE_SIZE,
-                           get_output_dir, measure_yolo_complexity)
+                           get_output_dir, measure_yolo_complexity, REPORTS_DIR)
 import argparse, torch
 from ultralytics import YOLO
 
-assert WORKSPACE_DIR == TARGET_WORKSPACE, (
-    f"WORKSPACE_DIR mismatch!\n  expected: {TARGET_WORKSPACE}\n  got: {WORKSPACE_DIR}"
-)
 print(f"[Workspace] ✅ {WORKSPACE_DIR}")
 
 parser = argparse.ArgumentParser(description="YOLOv8m Reporter")
@@ -143,8 +131,8 @@ for name, path in [("Detection", best_det), ("Segmentation", best_seg)]:
     if not os.path.exists(path):
         print(f"  ⚠️  {name} best.pt tidak ditemukan: {path}")
 
-# ── Report dir ────────────────────────────────────────────────────────────────
-report_dir = os.path.join(WORKSPACE_DIR, "runs", "reports")
+# ── Report dir ─────────────────────────────────────────────────────────────────────────
+report_dir = REPORTS_DIR
 os.makedirs(report_dir, exist_ok=True)
 
 # ── Detection CSV (format identik report_det_performance.csv) ─────────────────

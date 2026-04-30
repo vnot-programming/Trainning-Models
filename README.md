@@ -24,6 +24,8 @@ Repository for Fine-Tuning models and Computer Vision experiments.
 - `MyFineTunning-dev/data-files` : Historical Datas and Fine Tunning Models
 - `MyFineTunning-dev/models` : Located all Downloaded Base Models
 - `MyFineTunning-dev/datasets` : Located all Downloaded Datasets from Roboflow, Huggingface, or etc
+- `MyFineTunning-dev/data-files/reports` : Contains data such as report_det_comparison,report_det_performance, report_hybrid_latency, report_maskrcnn_ddp_seg, report_model_complexity, report_seg_comparison, report_seg_performance, report_yolo11m, report_yolov8m_complexity, report_yolov8m_det, report_yolov8m_seg, report_yolov9_complexity, report_yolov9c_seg, report_yolov9m_det
+- `MyFineTunning-dev/data-files/visuals` : Contains images data from the models such as yolo8, yolo9, yolo11, mask-r-cnn, hybrid (yolo11+SAM2). The images are using the same example images.
 
 ## 🔄 Development Workflow
 Semua perubahan kode wajib di-push ke branch `dev` sebelum dilakukan sinkronisasi ke `main`.

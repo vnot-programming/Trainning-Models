@@ -50,10 +50,8 @@ sys.path.insert(0, _TRAIN_ENGINE)
 # ==============================================================================
 # KONFIGURASI — Ubah sesuai kebutuhan
 # ==============================================================================
-WORKSPACE_DIR       = "/workspace/MyFineTunning-20260423_104653/runs"
-SEG_DATASET_LOCATION = os.environ.get(
-    "SEG_DATASET", "/root/MyTrainEngine/segpoligon-me-bottle-isempty3-5"
-)
+# Import from config_shared
+from config_shared import WORKSPACE_DIR, SEG_DATASET_LOCATION, REPORTS_DIR, VISUALS_DIR
 NUM_CLASSES         = 7          # Jumlah kelas tanpa background
 EPOCHS              = 100
 BATCH_SIZE_PER_GPU  = 4          # Batch per GPU (total = BATCH_SIZE_PER_GPU × n_gpu)
@@ -66,9 +64,9 @@ N_VISUAL_SAMPLES    = 5
 LOG_EVERY_N_BATCH   = 20
 
 OUTPUT_KEY     = "maskrcnn_multigpu"
-OUTPUT_DIR     = os.path.join(WORKSPACE_DIR, OUTPUT_KEY, "weights")
-REPORT_DIR     = os.path.join(WORKSPACE_DIR, "reports")
-VISUAL_DIR     = os.path.join(WORKSPACE_DIR, "visuals")
+OUTPUT_DIR     = os.path.join(WORKSPACE_DIR, "runs", OUTPUT_KEY, "weights")
+REPORT_DIR     = REPORTS_DIR
+VISUAL_DIR     = VISUALS_DIR
 
 # Nama kelas (urutan sesuai data.yaml)
 CLASS_NAMES = ["dishwasher", "milk", "mineral", "non_mineral",

@@ -38,6 +38,7 @@ from config_shared import (
     WORKSPACE_DIR, DET_DATASET_LOCATION, SEG_DATASET_LOCATION,
     DET_YAML, SEG_YAML, EPOCHS, IMAGE_SIZE, NUM_CLASSES,
     YOLO_BATCH_SIZE, MASKRCNN_BATCH_SIZE,
+    DATASETS_DIR, MODELS_DIR, REPORTS_DIR, VISUALS_DIR
 )
 
 print("=" * 65)
@@ -69,8 +70,8 @@ if errors:
 # ==============================================================================
 # 2. BUAT FOLDER OUTPUT
 # ==============================================================================
-print("\n[Setup] Membuat folder output workspace...")
-folders = [
+print("\n[Setup] Membuat folder output workspace dan direktori global...")
+workspace_folders = [
     "runs/yolov8m",
     "runs/yolov8m_seg",
     "runs/yolov9m",
@@ -78,13 +79,16 @@ folders = [
     "runs/yolo11m",
     "runs/yolo11m_seg",
     "runs/maskrcnn/weights",
-    "runs/reports",
-    "runs/visuals",
 ]
-for folder in folders:
+for folder in workspace_folders:
     full = os.path.join(WORKSPACE_DIR, folder)
     os.makedirs(full, exist_ok=True)
     print(f"  📁 {full}")
+
+global_folders = [DATASETS_DIR, MODELS_DIR, REPORTS_DIR, VISUALS_DIR]
+for folder in global_folders:
+    os.makedirs(folder, exist_ok=True)
+    print(f"  📁 {folder}")
 
 # ==============================================================================
 # 3. RINGKASAN KONFIGURASI
@@ -106,7 +110,7 @@ print(f"""
   5. cd hybrid       && python -u main.py 2>&1 | tee hybrid_eval.log
 
   Setiap script menghasilkan CSV report di:
-  {WORKSPACE_DIR}/runs/reports/
+  {REPORTS_DIR}
 """)
 
 print("✅ Setup selesai. Siap menjalankan fine-tuning per model.")

@@ -107,7 +107,7 @@ if os.path.exists(best_pt):
     print(f"[Eval] Rata-rata latency: {_lat_ms} ms ({_fps_val} FPS)")
 
 # CSV format seg_performance (identik reporter.py)
-report_dir = os.path.join(WORKSPACE_DIR, "runs", "reports")
+report_dir = REPORTS_DIR
 os.makedirs(report_dir, exist_ok=True)
 csv_path   = os.path.join(report_dir, "report_maskrcnn_seg.csv")
 seg_fields = ["Model", "Model Size (MB)", "mAP50-95(Box)",

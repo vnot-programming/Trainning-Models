@@ -268,7 +268,7 @@ if os.path.exists(_mrcnn_csv):
 # ==============================================================================
 # 6. CSV REPORTS
 # ==============================================================================
-report_dir = os.path.join(WORKSPACE_DIR, "runs", "reports")
+report_dir = REPORTS_DIR
 os.makedirs(report_dir, exist_ok=True)
 
 # -- Detection comparison CSV

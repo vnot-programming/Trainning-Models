@@ -22,7 +22,7 @@ sys.path.insert(0, ROOT)
 from config_shared import (
     WORKSPACE_DIR, DET_YAML, SEG_YAML,
     EPOCHS, IMAGE_SIZE, YOLO_BATCH_SIZE, get_output_dir, compress_run,
-    save_yolo_visual_samples, parse_device,
+    save_yolo_visual_samples, parse_device, download_and_move_model, REPORTS_DIR
 )
 import argparse
 import torch
@@ -125,9 +125,13 @@ def _eval_seg(label, pt, yaml):
 
 print("\n" + "="*65 + "\n  YOLO11m Fine-tuning\n" + "="*65)
 
+# Download & Pindahkan model dasar terlebih dahulu
+det_model_path = download_and_move_model("yolo11m.pt")
+seg_model_path = download_and_move_model("yolo11m-seg.pt")
+
 # Detection — best.pt ini yang akan digunakan oleh hybrid/main.py sebagai prompt
-best_det = _train("yolo11m.pt",     DET_YAML, "yolo11m",    "YOLO11m Detection (Primary)")
-best_seg = _train("yolo11m-seg.pt", SEG_YAML, "yolo11m_seg","YOLO11m-Seg Segmentation")
+best_det = _train(det_model_path,     DET_YAML, "yolo11m",    "YOLO11m Detection (Primary)")
+best_seg = _train(seg_model_path, SEG_YAML, "yolo11m_seg","YOLO11m-Seg Segmentation")
 
 # Simpan path best_det ke file agar hybrid/main.py bisa membacanya
 det_path_file = os.path.join(get_output_dir("yolo11m"), "weights", "best_path.txt")
@@ -135,7 +139,7 @@ with open(det_path_file, "w") as f:
     f.write(best_det)
 print(f"[Info] Path YOLO11m best.pt disimpan ke: {det_path_file}")
 
-report_dir = os.path.join(WORKSPACE_DIR, "runs", "reports")
+report_dir = REPORTS_DIR
 os.makedirs(report_dir, exist_ok=True)
 
 # Detection CSV

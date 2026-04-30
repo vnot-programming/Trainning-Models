@@ -143,7 +143,7 @@ best_seg = _train(SEG_PT, SEG_YAML, "yolov9c_seg", "YOLOv9c-Seg Segmentation")
 # ── Evaluasi ──────────────────────────────────────────────────────────────────
 rows = [_eval("YOLOv9c-Seg (Fine-tuned)", best_seg, SEG_YAML, "segment")]
 
-report_dir = os.path.join(WORKSPACE_DIR, "runs", "reports")
+report_dir = REPORTS_DIR
 os.makedirs(report_dir, exist_ok=True)
 csv_path = os.path.join(report_dir, "report_yolov9c_seg.csv")
 fields = ["Model", "Task", "Size(MB)", "mAP50-95", "mAP50",

@@ -234,7 +234,7 @@ del model; gc.collect(); torch.cuda.empty_cache()
 # ==============================================================================
 # 5. CSV REPORTS
 # ==============================================================================
-report_dir = os.path.join(WORKSPACE_DIR, "runs", "reports")
+report_dir = REPORTS_DIR
 os.makedirs(report_dir, exist_ok=True)
 
 # --- Segmentation Performance CSV ---

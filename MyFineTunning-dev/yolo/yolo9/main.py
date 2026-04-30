@@ -22,7 +22,7 @@ sys.path.insert(0, ROOT)
 from config_shared import (
     WORKSPACE_DIR, DET_YAML, SEG_YAML,
     EPOCHS, IMAGE_SIZE, YOLO_BATCH_SIZE, get_output_dir, compress_run,
-    save_yolo_visual_samples, parse_device,
+    save_yolo_visual_samples, parse_device, download_and_move_model, REPORTS_DIR
 )
 import argparse
 import torch
@@ -124,10 +124,14 @@ def _eval_seg(label, pt, yaml):
 
 
 print("\n" + "="*65 + "\n  YOLOv9m Fine-tuning\n" + "="*65)
-best_det = _train("yolov9m.pt",     DET_YAML, "yolov9m",    "YOLOv9m Detection")
-best_seg = _train("yolov9c-seg.pt", SEG_YAML, "yolov9c_seg","YOLOv9c-Seg Segmentation")
+# Download & Pindahkan model dasar terlebih dahulu
+det_model_path = download_and_move_model("yolov9m.pt")
+seg_model_path = download_and_move_model("yolov9c-seg.pt")
 
-report_dir = os.path.join(WORKSPACE_DIR, "runs", "reports")
+best_det = _train(det_model_path,     DET_YAML, "yolov9m",    "YOLOv9m Detection")
+best_seg = _train(seg_model_path, SEG_YAML, "yolov9c_seg","YOLOv9c-Seg Segmentation")
+
+report_dir = REPORTS_DIR
 os.makedirs(report_dir, exist_ok=True)
 
 # Detection CSV
