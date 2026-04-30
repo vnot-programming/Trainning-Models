@@ -13,6 +13,7 @@ import os
 import sys
 from datetime import datetime
 from telegram_utils import send_telegram_msg
+from dataset_setup import setup_all_datasets
 
 os.environ["TORCHDYNAMO_DISABLE"]     = "1"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -47,25 +48,19 @@ print("  MyFineTunning — Setup & Verifikasi")
 print("=" * 65)
 
 # ==============================================================================
-# 1. VERIFIKASI DATASET
+# 1. DATASET — Auto-download jika belum ada
 # ==============================================================================
-print("\n[Setup] Verifikasi dataset...")
-errors = []
-
-for label, path in [
-    ("DET dataset",  DET_DATASET_LOCATION),
-    ("SEG dataset",  SEG_DATASET_LOCATION),
-    ("DET YAML",     DET_YAML),
-    ("SEG YAML",     SEG_YAML),
-]:
-    if os.path.exists(path):
-        print(f"  ✅ {label}: {path}")
-    else:
-        print(f"  ❌ {label} TIDAK DITEMUKAN: {path}")
-        errors.append(path)
-
-if errors:
-    print(f"\n❌ {len(errors)} path tidak ditemukan. Edit config_shared.py")
+print("\n[Setup] Memeriksa ketersediaan dataset...")
+try:
+    _datasets = setup_all_datasets()
+    # Update config_shared paths jika lokasi hasil download berbeda
+    DET_DATASET_LOCATION = _datasets["det_location"]
+    SEG_DATASET_LOCATION = _datasets["seg_location"]
+    DET_YAML             = _datasets["det_yaml"]
+    SEG_YAML             = _datasets["seg_yaml"]
+except RuntimeError as _e:
+    print(f"\n❌ Dataset gagal disiapkan: {_e}")
+    send_telegram_msg(f"❌ <b>Setup Gagal</b>\nDataset tidak tersedia:\n<code>{_e}</code>")
     sys.exit(1)
 
 # ==============================================================================

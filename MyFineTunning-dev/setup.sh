@@ -142,3 +142,12 @@ if ! command -v tmux &> /dev/null; then
     echo "  ⚠️  Peringatan: 'tmux' belum terinstall. Jalankan: sudo apt update && sudo apt install tmux -y"
 fi
 echo "============================================================"
+
+# ==============================================================================
+# AUTO-RUN main.py (Setup workspace + verifikasi/download dataset)
+# ==============================================================================
+echo ""
+echo "============================================================"
+echo "  🚀 Menjalankan main.py (setup workspace & dataset)..."
+echo "============================================================"
+python3 "$SCRIPT_DIR/main.py"
