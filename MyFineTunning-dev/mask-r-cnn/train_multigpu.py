@@ -240,6 +240,24 @@ def save_best_model(model, path: str, val_loss: float) -> None:
     print(f"  ✅ Best model disimpan (val_loss={val_loss:.4f}) → {path}")
 
 
+def save_checkpoint(epoch: int, model, optimizer, scheduler,
+                    val_loss: float, path: str) -> None:
+    """
+    Simpan checkpoint training (last.pt) agar bisa dilanjutkan jika terputus.
+    Hanya dipanggil dari rank 0.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    state = model.module.state_dict() if isinstance(model, DDP) else model.state_dict()
+    torch.save({
+        "epoch":           epoch,
+        "model_state":     state,
+        "optimizer_state": optimizer.state_dict(),
+        "scheduler_state": scheduler.state_dict(),
+        "val_loss":        val_loss,
+    }, path)
+    print(f"  💾 Checkpoint disimpan: epoch {epoch} → {path}")
+
+
 # ==============================================================================
 # TRAINING WORKER (1 proses per GPU)
 # ==============================================================================
@@ -258,6 +276,8 @@ def train_worker(local_rank: int, gpu_ids: list, best_pt_path: str):
     """
     global_gpu = gpu_ids[local_rank]
     device     = torch.device(f"cuda:{global_gpu}")
+    last_pt    = os.path.join(os.path.dirname(best_pt_path), "last.pt")
+    checkpoint_pt = os.path.join(os.path.dirname(best_pt_path), "last_checkpoint.pt")
 
     # ── Init proses group DDP ────────────────────────────────────────────────
     dist.init_process_group(
@@ -289,9 +309,25 @@ def train_worker(local_rank: int, gpu_ids: list, best_pt_path: str):
     scheduler = StepLR(optimizer, step_size=LR_STEP, gamma=LR_GAMMA)
 
     best_val_loss = float("inf")
+    start_epoch   = 1
+
+    # ── Resume dari checkpoint jika ada ─────────────────────────────────────
+    if os.path.exists(checkpoint_pt):
+        if local_rank == 0:
+            print(f"\n[RESUME] Melanjutkan dari checkpoint: {checkpoint_pt}")
+        ckpt = torch.load(checkpoint_pt, map_location=device)
+        # Load model state ke DDP module
+        (model.module if isinstance(model, DDP) else model).load_state_dict(ckpt["model_state"])
+        optimizer.load_state_dict(ckpt["optimizer_state"])
+        scheduler.load_state_dict(ckpt["scheduler_state"])
+        start_epoch   = ckpt["epoch"] + 1
+        best_val_loss = ckpt["val_loss"]
+        if local_rank == 0:
+            print(f"  ✅ Melanjutkan dari epoch {start_epoch}/{EPOCHS}  "
+                  f"(best_val_loss={best_val_loss:.4f})")
 
     # ── Training Loop ────────────────────────────────────────────────────────
-    for epoch in range(1, EPOCHS + 1):
+    for epoch in range(start_epoch, EPOCHS + 1):
         train_sampler.set_epoch(epoch)   # Penting untuk shuffling DDP
 
         avg_train = run_train_epoch(
@@ -312,6 +348,12 @@ def train_worker(local_rank: int, gpu_ids: list, best_pt_path: str):
                 f"Val Loss: {avg_val_sync:.4f} | "
                 f"LR: {scheduler.get_last_lr()[0]:.6f}"
             )
+            # Simpan checkpoint setiap epoch (last.pt full checkpoint)
+            save_checkpoint(epoch, model, optimizer, scheduler,
+                            avg_val_sync, checkpoint_pt)
+            # Simpan last.pt (weights only, untuk eval cepat)
+            save_best_model(model, last_pt, avg_val_sync)
+
             if avg_val_sync < best_val_loss:
                 best_val_loss = avg_val_sync
                 save_best_model(model, best_pt_path, best_val_loss)

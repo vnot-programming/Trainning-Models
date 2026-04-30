@@ -54,13 +54,23 @@ def _flush(label):
 def _train(model_pt, yaml_path, run_name, label):
     out_dir = get_output_dir(run_name)
     best_pt = os.path.join(out_dir, "weights", "best.pt")
+    last_pt = os.path.join(out_dir, "weights", "last.pt")
+
     if os.path.exists(best_pt):
-        print(f"\n[SKIP] {label}: {best_pt}"); return best_pt
-    print(f"\n{'='*60}\n  {label}\n{'='*60}")
-    model = YOLO(model_pt)
-    model.train(data=yaml_path, epochs=EPOCHS, imgsz=IMAGE_SIZE, batch=YOLO_BATCH_SIZE,
-                project=os.path.dirname(out_dir), name=os.path.basename(out_dir),
-                exist_ok=True, device=DEVICE)
+        print(f"\n[SKIP] {label}: training sudah selesai.\n  best.pt: {best_pt}")
+        return best_pt
+
+    if os.path.exists(last_pt):
+        print(f"\n[RESUME] {label}: melanjutkan dari last.pt\n  {last_pt}")
+        model = YOLO(last_pt)
+        model.train(resume=True)
+    else:
+        print(f"\n{'='*60}\n  {label}\n{'='*60}")
+        model = YOLO(model_pt)
+        model.train(data=yaml_path, epochs=EPOCHS, imgsz=IMAGE_SIZE, batch=YOLO_BATCH_SIZE,
+                    project=os.path.dirname(out_dir), name=os.path.basename(out_dir),
+                    exist_ok=True, device=DEVICE)
+
     result = str(model.trainer.best)
     del model; _flush(label)
     return result
