@@ -24,6 +24,7 @@ from config_shared import (
     EPOCHS, IMAGE_SIZE, YOLO_BATCH_SIZE, get_output_dir, compress_run,
     save_yolo_visual_samples, parse_device, download_and_move_model, REPORTS_DIR
 )
+from telegram_utils import get_yolo_callbacks, send_telegram_msg
 import argparse
 import torch
 from ultralytics import YOLO
@@ -63,6 +64,10 @@ def _train(model_pt, yaml_path, run_name, label):
     else:
         print(f"\n{'='*60}\n  {label}\n{'='*60}")
         model = YOLO(model_pt)
+        # Tambahkan Telegram Callbacks
+        for k, v in get_yolo_callbacks(label).items():
+            model.add_callback(k, v)
+
         model.train(data=yaml_path, epochs=EPOCHS, imgsz=IMAGE_SIZE, batch=YOLO_BATCH_SIZE,
                     project=os.path.dirname(out_dir), name=os.path.basename(out_dir),
                     exist_ok=True, device=DEVICE)
@@ -185,4 +190,5 @@ compress_run("yolo11m")
 compress_run("yolo11m_seg")
 
 print("\n✅ YOLO11m selesai.")
+send_telegram_msg(f"✅ <b>YOLO11m Pipeline Finished</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>")
 print(f"\n[Next] Lanjutkan ke: cd ../../mask-r-cnn && python -u main.py")

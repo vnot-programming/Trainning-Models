@@ -52,6 +52,7 @@ sys.path.insert(0, _TRAIN_ENGINE)
 # ==============================================================================
 # Import from config_shared
 from config_shared import WORKSPACE_DIR, SEG_DATASET_LOCATION, REPORTS_DIR, VISUALS_DIR
+from telegram_utils import send_telegram_msg
 NUM_CLASSES         = 7          # Jumlah kelas tanpa background
 EPOCHS              = 100
 BATCH_SIZE_PER_GPU  = 4          # Batch per GPU (total = BATCH_SIZE_PER_GPU × n_gpu)
@@ -207,6 +208,12 @@ def run_train_epoch(model, loader, optimizer, device, epoch, total_epochs, rank)
                 f"Batch [{batch_idx + 1}/{len(loader)}]  "
                 f"Loss: {losses.item():.4f}"
             )
+            # Heartbeat notification (10-min interval via force=False)
+            msg = (f"📈 <b>Progress Update</b> (Mask R-CNN)\n"
+                   f"Epoch: {epoch}/{total_epochs}\n"
+                   f"Batch: {batch_idx + 1}/{len(loader)}\n"
+                   f"Loss: {losses.item():.4f}")
+            send_telegram_msg(msg, force=False)
 
     return total_loss / max(len(loader), 1)
 
@@ -701,6 +708,19 @@ if __name__ == "__main__":
         os.environ.setdefault("MASTER_ADDR", "127.0.0.1")
         os.environ.setdefault("MASTER_PORT", "29502")   # Port berbeda dari YOLO DDP
 
+        # ── Paksa bersihkan VRAM sebelum DDP spawn ──────────────────────────
+        # Mask R-CNN butuh ruang penuh di setiap GPU untuk RPN + RoIAlign.
+        # Jika dijalankan setelah YOLO, sisa tensor bisa sebabkan OOM.
+        import gc as _gc
+        import torch as _torch_clean
+        if _torch_clean.cuda.is_available():
+            _torch_clean.cuda.empty_cache()
+            _torch_clean.cuda.synchronize()
+            _gc.collect()
+            free_gb  = _torch_clean.cuda.mem_get_info(0)[0] / 1e9
+            total_gb = _torch_clean.cuda.mem_get_info(0)[1] / 1e9
+            print(f"[MemClean] VRAM bebas sebelum DDP spawn: {free_gb:.2f} GB / {total_gb:.2f} GB")
+
         # ── Spawn satu proses per GPU ────────────────────────────────────────
         mp.spawn(
             train_worker,
@@ -748,3 +768,4 @@ if __name__ == "__main__":
     print(f"   Report      : {csv_path}")
     print(f"   Visualisasi : {VISUAL_DIR}")
     print(f"{'='*60}")
+    send_telegram_msg(f"✅ <b>Mask R-CNN Pipeline Finished</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>")

@@ -29,6 +29,7 @@ from config_shared import (
     WORKSPACE_DIR, SEG_DATASET_LOCATION, DET_YAML, SEG_YAML,
     IMAGE_SIZE, get_output_dir, compress_visuals,
 )
+from telegram_utils import send_telegram_msg
 import torch
 import cv2, numpy as np
 import matplotlib; matplotlib.use("Agg")
@@ -474,3 +475,4 @@ print(f"  Visuals    : {visual_dir}/ ({len(sample_imgs)*2} gambar)")
 print(f"               {len(sample_imgs)} hybrid + {len(sample_imgs)} comparison grid")
 print(f"  Download   : {WORKSPACE_DIR}/runs/visuals.tar.gz")
 print("="*65)
+send_telegram_msg(f"🏁 <b>ALL PIPELINES FINISHED!</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>\nAll models trained and evaluated.")

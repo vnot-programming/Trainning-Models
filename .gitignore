@@ -1,0 +1,20 @@
+# Root .gitignore for Computer-Vision
+
+# Project specific ignores
+MyFineTunning-dev/__pycache__/
+MyFineTunning-dev/.venv/
+MyFineTunning-dev/.env
+MyFineTunning-dev/datasets/*
+!MyFineTunning-dev/datasets/.gitkeep
+MyFineTunning-dev/models/*
+!MyFineTunning-dev/models/.gitkeep
+
+# Data files (reports, visuals, logs)
+MyFineTunning-dev/data-files/MyFineTunning-*/
+MyFineTunning-dev/SetupReport.log
+*.log
+
+# General
+.DS_Store
+.vscode/
+.idea/

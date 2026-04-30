@@ -4,8 +4,16 @@
 # ==============================================================================
 #
 # Cara pakai:
-#   bash setup.sh            ← Setup standar (gunakan .venv baru)
-#   bash setup.sh --reuse    ← Reuse .venv dari MyTrainEngine jika ada
+#
+# 1. Background Execution (TMUX):
+#    tmux new-session -d -s setup_session "cd ~/Computer-Vision/MyFineTunning-dev && bash setup.sh 2>&1 | tee SetupReport.log"
+#
+# 2. Direct Execution:
+#    cd ~/Computer-Vision/MyFineTunning-dev && bash setup.sh
+#
+# 3. Mode Options:
+#    bash setup.sh            ← Standard (New .venv)
+#    bash setup.sh --reuse    ← Reuse MyTrainEngine .venv
 #
 # Setelah setup:
 #   source .venv/bin/activate
@@ -62,14 +70,12 @@ echo "[Setup] Python: $(which python3) — $(python3 --version)"
 # ------------------------------------------------------------------------------
 pip install --upgrade pip --quiet
 
-# ------------------------------------------------------------------------------
-# Cek apakah torch sudah terinstall (RunPOD biasanya sudah ada)
-# ------------------------------------------------------------------------------
-if python3 -c "import torch; print(f'[Setup] torch {torch.__version__} sudah tersedia (CUDA: {torch.cuda.is_available()})')" 2>/dev/null; then
-    echo "[Setup] Melewati instalasi torch (sudah ada)."
+# Cek apakah torch sudah terinstall dan kompatibel
+if python3 -c "import torch; exit(0 if torch.cuda.is_available() else 1)" 2>/dev/null; then
+    echo "[Setup] torch dengan dukungan CUDA sudah tersedia."
 else
-    echo "[Setup] torch belum ada — install dari PyPI..."
-    pip install torch torchvision --quiet
+    echo "[Setup] torch belum ada atau CUDA tidak terdeteksi — install versi kompatibel (cu121)..."
+    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
 fi
 
 # ------------------------------------------------------------------------------
@@ -105,11 +111,34 @@ echo "  ✅ Setup selesai!"
 echo ""
 echo "  Aktifkan env  : source $VENV_DIR/bin/activate"
 echo "  Jalankan setup: python main.py"
+echo "  Konfigurasi  : config_shared.py"
 echo ""
-echo "  Urutan training (satu per satu):"
-echo "  1. cd yolo/yolo8  && python -u main.py --device 1,2 2>&1 | tee yolov8_train.log"
-echo "  2. cd yolo/yolo9  && python -u main.py --device 1,2 2>&1 | tee yolov9_train.log"
-echo "  3. cd yolo/yolo11 && python -u main.py --device 1,2 2>&1 | tee yolo11_train.log"
-echo "  4. cd mask-r-cnn  && python -u main.py --device 0   2>&1 | tee maskrcnn_train.log"
-echo "  5. cd hybrid      && python -u main.py               2>&1 | tee hybrid_eval.log"
+echo "  Urutan training (Default menggunakan GPU 0 | Jika Multi maka Paralel Aktif):"
+echo "  1. YOLO8   : cd yolo/yolo8  && python -u main.py 2>&1 | tee yolo8training.log"
+echo "  2. YOLO9   : cd yolo/yolo9  && python -u main.py 2>&1 | tee yolo9training.log"
+echo "  3. YOLO11  : cd yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log"
+echo "  4. MaskRCNN: cd mask-r-cnn  && python -u train_multigpu.py 2>&1 | tee maskrcnntraining.log"
+echo "  5. Hybrid  : cd hybrid      && python -u main.py 2>&1 | tee hybridtraining.log"
+echo ""
+echo "  💡 Tips GPU: Tambahkan '--device 1,2' jika ingin menggunakan GPU nomor 1 dan 2 saja."
+echo ""
+echo "  🛠️ Background Execution (tmux):"
+echo "  - YOLO8 :"
+echo "    tmux new-session -d -s yolo8training \"source $VENV_DIR/bin/activate && cd $SCRIPT_DIR/yolo/yolo8 && python -u main.py 2>&1 | tee yolo8training.log\""
+echo ""
+echo "  - YOLO9 :"
+echo "    tmux new-session -d -s yolo9training \"source $VENV_DIR/bin/activate && cd $SCRIPT_DIR/yolo/yolo9 && python -u main.py 2>&1 | tee yolo9training.log\""
+echo ""
+echo "  - YOLO11:"
+echo "    tmux new-session -d -s yolo11training \"source $VENV_DIR/bin/activate && cd $SCRIPT_DIR/yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log\""
+echo ""
+echo "  - MaskRCNN:"
+echo "    tmux new-session -d -s maskrcnntraining \"source $VENV_DIR/bin/activate && cd $SCRIPT_DIR/mask-r-cnn && python -u train_multigpu.py 2>&1 | tee maskrcnntraining.log\""
+echo ""
+echo "  - Hybrid:"
+echo "    tmux new-session -d -s hybridtraining \"source $VENV_DIR/bin/activate && cd $SCRIPT_DIR/hybrid && python -u main.py 2>&1 | tee hybridtraining.log\""
+echo ""
+if ! command -v tmux &> /dev/null; then
+    echo "  ⚠️  Peringatan: 'tmux' belum terinstall. Jalankan: sudo apt update && sudo apt install tmux -y"
+fi
 echo "============================================================"

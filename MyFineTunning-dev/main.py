@@ -12,6 +12,7 @@ Cara pakai:
 import os
 import sys
 from datetime import datetime
+from telegram_utils import send_telegram_msg
 
 os.environ["TORCHDYNAMO_DISABLE"]     = "1"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -102,15 +103,25 @@ print(f"""
   MASKRCNN_BATCH    : {MASKRCNN_BATCH_SIZE}  (Single GPU cuda:0)
   WORKSPACE_DIR     : {WORKSPACE_DIR}
 
-[Setup] Urutan eksekusi yang BENAR (jalankan satu per satu):
-  1. cd yolo/yolo8   && python -u main.py 2>&1 | tee yolov8_train.log
-  2. cd yolo/yolo9   && python -u main.py 2>&1 | tee yolov9_train.log
-  3. cd yolo/yolo11  && python -u main.py 2>&1 | tee yolo11_train.log
-  4. cd mask-r-cnn   && python -u main.py 2>&1 | tee maskrcnn_train.log
-  5. cd hybrid       && python -u main.py 2>&1 | tee hybrid_eval.log
+[Setup] Urutan training (Default menggunakan GPU 0 | Jika Multi maka Paralel Aktif):
+  1. YOLO8   : cd yolo/yolo8  && python -u main.py 2>&1 | tee yolo8training.log
+  2. YOLO9   : cd yolo/yolo9  && python -u main.py 2>&1 | tee yolo9training.log
+  3. YOLO11  : cd yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log
+  4. MaskRCNN: cd mask-r-cnn  && python -u train_multigpu.py 2>&1 | tee maskrcnntraining.log
+  5. Hybrid  : cd hybrid      && python -u main.py 2>&1 | tee hybridtraining.log
+
+  💡 Tips GPU: Tambahkan '--device 1,2' jika ingin menggunakan GPU nomor 1 dan 2 saja.
+
+  🛠️ Background Execution (tmux):
+  - YOLO8 : tmux new-session -d -s yolo8training "source .venv/bin/activate && cd yolo/yolo8 && python -u main.py 2>&1 | tee yolo8training.log"
+  - YOLO9 : tmux new-session -d -s yolo9training "source .venv/bin/activate && cd yolo/yolo9 && python -u main.py 2>&1 | tee yolo9training.log"
+  - YOLO11: tmux new-session -d -s yolo11training "source .venv/bin/activate && cd yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log"
+  - MaskRCNN: tmux new-session -d -s maskrcnntraining "source .venv/bin/activate && cd . && python -u mask-r-cnn/train_multigpu.py 2>&1 | tee maskrcnntraining.log"
+  - Hybrid: tmux new-session -d -s hybridtraining "source .venv/bin/activate && cd hybrid && python -u main.py 2>&1 | tee hybridtraining.log"
 
   Setiap script menghasilkan CSV report di:
   {REPORTS_DIR}
 """)
 
 print("✅ Setup selesai. Siap menjalankan fine-tuning per model.")
+send_telegram_msg(f"✅ <b>Setup Selesai!</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>\nSiap menjalankan training pipeline.")

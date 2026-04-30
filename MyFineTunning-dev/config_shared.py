@@ -37,8 +37,11 @@ if os.path.exists(_WORKSPACE_ID_FILE):
 else:
     _TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-# Path workspace lokal (akan dibackup via rclone)
-_BASE_DIR     = os.environ.get("WORKSPACE_BASE", _FINETUNING_ROOT)
+# Path workspace lokal — di dalam data-files/ agar output terpusat
+_BASE_DIR     = os.environ.get(
+    "WORKSPACE_BASE",
+    os.path.join(_FINETUNING_ROOT, "data-files")
+)
 WORKSPACE_DIR = os.path.join(_BASE_DIR, f"MyFineTunning-{_TIMESTAMP}")
 
 # ==============================================================================
@@ -68,12 +71,12 @@ SEG_YAML = os.path.join(SEG_DATASET_LOCATION, "data.yaml")
 # ==============================================================================
 # HYPERPARAMETER
 # ==============================================================================
-EPOCHS              = 100
+EPOCHS              = 2 # 100
 IMAGE_SIZE          = 640
 NUM_CLASSES         = 7
-YOLO_BATCH_SIZE     = 64   # DDP total (dibagi ke semua GPU oleh Ultralytics)
-MASKRCNN_BATCH_SIZE = 4    # Single GPU cuda:0
-NUM_WORKERS         = 16
+YOLO_BATCH_SIZE     = 10   # 64    # DDP total (dibagi ke semua GPU oleh Ultralytics)
+MASKRCNN_BATCH_SIZE = 2    # 4     # Single GPU cuda:0
+NUM_WORKERS         = 4    # 16
 
 
 # ==============================================================================
