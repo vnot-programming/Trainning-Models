@@ -17,6 +17,7 @@ MyFineTunning-dev/SetupReport.log
 MyFineTunning-dev/*.log
 *.log
 backups/*
+MyFineTunning-dev/mask-r-cnn/__pycache__/
 MyFineTunning-dev/mask-r-cnn/main.py
 MyFineTunning-dev/mask-r-cnn/maskrcnn_eval.py
 MyFineTunning-dev/mask-r-cnn/maskrcnn_train.log
@@ -34,12 +35,10 @@ MyFineTunning-dev/yolo/yolo9/reporter-yolo9.py
 MyFineTunning-dev/yolo/yolo9/yolo9training.log
 MyFineTunning-dev/yolo/yolo9/yolo26n.pt
 
-MyFineTunning-dev/yolo/yolo1/yolo11training.log
-MyFineTunning-dev/yolo/yolo1/yolo26n.pt
+MyFineTunning-dev/yolo/yolo11/yolo11training.log
+MyFineTunning-dev/yolo/yolo11/yolo26n.pt
+MyFineTunning-dev/rclone_local/
 # General
 .DS_Store
 .vscode/
 .idea/
-MyFineTunning-dev/rclone_local/
-MyFineTunning-dev/yolo/yolo11/yolo26n.pt
-MyFineTunning-dev/mask-r-cnn/__pycache__/
