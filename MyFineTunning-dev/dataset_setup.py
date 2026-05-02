@@ -14,6 +14,23 @@ Fungsi publik:
     setup_detection_dataset(key) -> (dataset_location, yaml_path)
     setup_segmentation_dataset(key) -> (dataset_location, yaml_path)
     setup_all_datasets() -> dict
+
+# Object Detection
+!pip install roboflow
+from roboflow import Roboflow
+rf = Roboflow(api_key="F0VtV8b5YBdJHZbasy0w")
+project = rf.workspace("wbc-laboratory").project("me-bottle-isempty-ku3")
+version = project.version(8)
+dataset = version.download("coco")
+
+# Instance Segmentation
+!pip install roboflow
+from roboflow import Roboflow
+rf = Roboflow(api_key="F0VtV8b5YBdJHZbasy0w")
+project = rf.workspace("wbc-laboratory").project("segpoligon-me-bottle-isempty3")
+version = project.version(7)
+dataset = version.download("coco-segmentation")
+                
 """
 
 import os
@@ -24,15 +41,25 @@ _PROJECT_ROOT = Path(__file__).resolve().parent
 _KEY_NAME     = "ROBOFLOW_KU_KEY1"
 
 # Roboflow project info
+# _DET_WORKSPACE  = "wbc-laboratory"
+# _DET_PROJECT    = "me-bottle-isempty-ku3"
+# _DET_VERSION    = 7
+# _DET_FORMAT     = "yolov11"
+
+# _SEG_WORKSPACE  = "wbc-laboratory"
+# _SEG_PROJECT    = "segpoligon-me-bottle-isempty3"
+# _SEG_VERSION    = 5
+# _SEG_FORMAT     = "yolov11"
+
 _DET_WORKSPACE  = "wbc-laboratory"
 _DET_PROJECT    = "me-bottle-isempty-ku3"
-_DET_VERSION    = 7
-_DET_FORMAT     = "yolov11"
+_DET_VERSION    = 8
+_DET_FORMAT     = "coco"
 
 _SEG_WORKSPACE  = "wbc-laboratory"
 _SEG_PROJECT    = "segpoligon-me-bottle-isempty3"
-_SEG_VERSION    = 5
-_SEG_FORMAT     = "yolov11"
+_SEG_VERSION    = 7
+_SEG_FORMAT     = "coco-segmentation"
 
 
 # ==============================================================================
