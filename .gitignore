@@ -37,7 +37,7 @@ MyFineTunning-dev/yolo/yolo9/yolo26n.pt
 
 MyFineTunning-dev/yolo/yolo11/yolo11training.log
 MyFineTunning-dev/yolo/yolo11/yolo26n.pt
-MyFineTunning-dev/rclone_local/
+MyFineTunning-dev/rclone_local/*
 # General
 .DS_Store
 .vscode/
