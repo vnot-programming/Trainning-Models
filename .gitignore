@@ -42,3 +42,4 @@ MyFineTunning-dev/rclone_local/*
 .DS_Store
 .vscode/
 .idea/
+.workspace_id
