@@ -1,3 +1,4 @@
+```
 /workspace/MyFineTunning-20260423_023800/
 ├── runs/
 │   ├── yolov8m/           → dikompres → yolov8m.tar.gz ✅ setelah selesai
@@ -5,7 +6,7 @@
 │   ├── reports/           ← CSV dari semua model (tidak dikompres, kecil)
 │   └── visuals/           ← PNG dari hybrid
 └── .workspace_id          ← file penanda timestamp (dibaca semua sub-script)
-
+```
 ```bash
 # Gunakan GPU 1 dan 2 (GPU 0 idle untuk Mask R-CNN nanti)
 cd /root/MyFineTunning/yolo/yolo8
