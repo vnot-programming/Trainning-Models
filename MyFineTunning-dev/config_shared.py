@@ -47,11 +47,12 @@ WORKSPACE_DIR = os.path.join(_BASE_DIR, f"MyFineTunning-{_TIMESTAMP}")
 # ==============================================================================
 # PATHS — Project Structure
 # ==============================================================================
-DATASETS_DIR   = os.path.join(_FINETUNING_ROOT, "datasets")
-MODELS_DIR     = os.path.join(_FINETUNING_ROOT, "models")
-DATA_FILES_DIR = os.path.join(_FINETUNING_ROOT, "data-files")
-REPORTS_DIR    = os.path.join(DATA_FILES_DIR, "reports")
-VISUALS_DIR    = os.path.join(DATA_FILES_DIR, "visuals")
+DATASETS_DIR      = os.path.join(_FINETUNING_ROOT, "datasets")
+MODELS_DIR        = os.path.join(_FINETUNING_ROOT, "models")
+DATA_FILES_DIR    = os.path.join(_FINETUNING_ROOT, "data-files")
+REPORTS_DIR       = os.path.join(WORKSPACE_DIR, "reports")
+VISUALS_DIR       = os.path.join(WORKSPACE_DIR, "visuals")
+IMAGE_SAMPLES_DIR = os.path.join(WORKSPACE_DIR, "image_samples")
 
 # ==============================================================================
 # PATHS — Dataset
@@ -74,9 +75,9 @@ SEG_YAML = os.path.join(SEG_DATASET_LOCATION, "data.yaml")
 EPOCHS              = 2 # 100
 IMAGE_SIZE          = 640
 NUM_CLASSES         = 7
-YOLO_BATCH_SIZE     = 10   # 64    # DDP total (dibagi ke semua GPU oleh Ultralytics)
-MASKRCNN_BATCH_SIZE = 2    # 4     # Single GPU cuda:0
-NUM_WORKERS         = 4    # 16
+YOLO_BATCH_SIZE     = 32   # 64    # DDP total (dibagi ke semua GPU oleh Ultralytics)
+MASKRCNN_BATCH_SIZE = 8    # 4     # Single GPU cuda:0
+NUM_WORKERS         = 10    # 16
 
 
 # ==============================================================================
@@ -143,60 +144,110 @@ def compress_run(model_key: str) -> str:
         return ""
 
 
+# Konstanta Warna Spesifik Tiap Model (Format BGR untuk OpenCV)
+MODEL_COLORS = {
+    "yolov8m":     (255,   0,   0),   # Biru
+    "yolov8m_seg": (255,   0,   0),
+    "yolov9m":     (  0,   0, 255),   # Merah
+    "yolov9c_seg": (  0,   0, 255),
+    "yolo11m":     (  0, 255,   0),   # Hijau
+    "yolo11m_seg": (  0, 255,   0),
+    "maskrcnn":    (255,   0, 255),   # Magenta/Ungu
+    "hybrid":      (  0, 165, 255),   # Orange
+}
+
 def save_yolo_visual_samples(
     model_pt: str,
     model_key: str,
-    img_dir: str,
-    n: int = 5,
+    img_dir: str,          # Parameter ini tetap ada demi backward compatibility, tapi kita akan pakai IMAGE_SAMPLES_DIR
+    n: int = 10,           # Diubah jadi 10 default
     conf: float = 0.5,
 ) -> None:
     """
-    Ambil n gambar random dari img_dir, jalankan prediksi YOLO,
-    simpan hasilnya ke runs/visuals/{model_key}_XX_{basename}.png.
-
-    Parameters
-    ----------
-    model_pt  : str  — Path ke file best.pt
-    model_key : str  — Prefix nama file output, misal "yolov8m"
-    img_dir   : str  — Direktori gambar (test/images atau valid/images)
-    n         : int  — Jumlah sampel random (default 5)
-    conf      : float — Confidence threshold prediksi
+    Render gambar dari IMAGE_SAMPLES_DIR secara berurutan, jalankan prediksi YOLO,
+    gambar custom bounding box/mask dengan warna tema model, lalu simpan hasilnya.
     """
-    import random, gc
+    import gc
     from ultralytics import YOLO
 
     visual_dir = VISUALS_DIR
     os.makedirs(visual_dir, exist_ok=True)
 
-    # Cari gambar yang ada
-    if not os.path.isdir(img_dir):
-        print(f"[Visual] ⚠️  img_dir tidak ditemukan: {img_dir}")
+    # Gunakan IMAGE_SAMPLES_DIR yang telah dipersiapkan oleh main.py
+    target_img_dir = IMAGE_SAMPLES_DIR
+    if not os.path.isdir(target_img_dir):
+        print(f"[Visual] ⚠️  IMAGE_SAMPLES_DIR tidak ditemukan: {target_img_dir}")
         return
 
-    all_imgs = [os.path.join(img_dir, f) for f in os.listdir(img_dir)
-                if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+    # Ambil semua gambar sampel yang ada, urutkan (image1, image2, ...)
+    all_imgs = sorted([os.path.join(target_img_dir, f) for f in os.listdir(target_img_dir)
+                       if f.lower().endswith((".jpg", ".jpeg", ".png"))])
+    
     if not all_imgs:
-        print(f"[Visual] ⚠️  Tidak ada gambar di: {img_dir}")
+        print(f"[Visual] ⚠️  Tidak ada gambar sampel di: {target_img_dir}")
         return
 
-    samples = random.sample(all_imgs, min(n, len(all_imgs)))
-    print(f"\n[Visual] {model_key} — {len(samples)} sampel dari {img_dir}")
+    samples = all_imgs[:n]
+    print(f"\n[Visual] {model_key} — {len(samples)} sampel dari {target_img_dir}")
+
+    # Ambil warna tema untuk model ini (fallback ke cyan jika tidak dikenali)
+    theme_color = MODEL_COLORS.get(model_key, (255, 255, 0))
 
     try:
-        import cv2, numpy as np, matplotlib
-        matplotlib.use("Agg")   # Non-interactive backend
-        import matplotlib.pyplot as plt
+        import cv2, numpy as np
 
         model = YOLO(model_pt)
         for idx, img_path in enumerate(samples, 1):
             base = os.path.splitext(os.path.basename(img_path))[0]
-            result = model.predict(img_path, conf=conf, verbose=False)
-            img_plot = result[0].plot()   # BGR numpy array
+            result = model.predict(img_path, conf=conf, verbose=False)[0]
+            
+            # Original Image
+            img_bgr = result.orig_img.copy()
+            overlay = img_bgr.copy()
+            H, W = img_bgr.shape[:2]
+            
+            names = result.names  # Dictionary class index ke nama class
+            
+            # Jika ada segmentation masks
+            if result.masks is not None:
+                masks = result.masks.data.cpu().numpy()
+                boxes_cls = result.boxes.cls.cpu().numpy().astype(int)
+                for i, mask in enumerate(masks):
+                    if mask.shape != (H, W):
+                        mask = cv2.resize(mask.astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST)
+                    bool_mask = (mask > 0.5).astype(np.uint8)
+                    colored_mask = np.zeros_like(overlay)
+                    colored_mask[bool_mask == 1] = theme_color
+                    cv2.addWeighted(colored_mask, 0.45, overlay, 1.0, 0, overlay)
 
-            # Simpan langsung via cv2 (tanpa matplotlib overhead)
+            # Gambar Bounding Boxes dan Label
+            if result.boxes is not None:
+                boxes_xyxy = result.boxes.xyxy.cpu().numpy()
+                boxes_conf = result.boxes.conf.cpu().numpy()
+                boxes_cls  = result.boxes.cls.cpu().numpy().astype(int)
+                
+                for i in range(len(boxes_xyxy)):
+                    x1, y1, x2, y2 = map(int, boxes_xyxy[i])
+                    confidence = float(boxes_conf[i])
+                    cls_id = int(boxes_cls[i])
+                    
+                    # Dapatkan nama class
+                    cls_name = names.get(cls_id, f"cls{cls_id}")
+                    
+                    # Gambar kotak
+                    cv2.rectangle(overlay, (x1, y1), (x2, y2), theme_color, 2)
+                    
+                    # Teks Label
+                    label_txt = f"{cls_name} {confidence:.2f}"
+                    (tw, th), _ = cv2.getTextSize(label_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
+                    # Background text
+                    cv2.rectangle(overlay, (x1, y1 - th - 6), (x1 + tw + 4, y1), theme_color, -1)
+                    # Text putih
+                    cv2.putText(overlay, label_txt, (x1 + 2, y1 - 3),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
+
             out_path = os.path.join(visual_dir, f"{model_key}_{idx:02d}_{base}.png")
-            import cv2 as _cv2
-            _cv2.imwrite(out_path, img_plot)
+            cv2.imwrite(out_path, overlay)
             print(f"  [{idx}/{len(samples)}] → {out_path}")
 
         del model

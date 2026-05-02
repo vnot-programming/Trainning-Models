@@ -10,6 +10,24 @@ import time
 # python3 telegram_utils.py
 
 # Konfigurasi Telegram (Dikelola via .env)
+def _load_dotenv():
+    # Cari .env di root project
+    root = os.path.dirname(os.path.abspath(__file__))
+    env_path = os.path.join(root, ".env")
+    if not os.path.exists(env_path):
+        return
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(dotenv_path=env_path, override=False)
+    except ImportError:
+        # Manual fallback jika python-dotenv belum terinstall
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip())
+
 _load_dotenv()
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID")
@@ -60,7 +78,11 @@ def get_yolo_callbacks(model_name: str):
     def on_train_epoch_end(trainer):
         epoch = trainer.epoch + 1
         total = trainer.args.epochs
-        loss  = trainer.loss_items[0] if trainer.loss_items else 0
+        try:
+            # YOLO loss_items can be a tensor. Safe extraction of the first element (box loss typically)
+            loss = float(trainer.loss_items[0]) if trainer.loss_items is not None else 0.0
+        except Exception:
+            loss = 0.0
         msg = (f"📈 <b>Progress Update</b>\nModel: {model_name}\nEpoch: {epoch}/{total}\nLoss: {loss:.4f}")
         send_telegram_msg(msg, force=False)
 

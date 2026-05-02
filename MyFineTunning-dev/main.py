@@ -7,6 +7,10 @@ Jalankan ini SEKALI sebelum menjalankan sub-modul fine-tuning per model.
 
 Cara pakai:
     python main.py
+atau
+    source /home/my/Computer-Vision/MyFineTunning-dev/.venv/bin/activate
+    python /home/my/Computer-Vision/MyFineTunning-dev/main.py
+
 """
 
 import os
@@ -40,7 +44,7 @@ from config_shared import (
     WORKSPACE_DIR, DET_DATASET_LOCATION, SEG_DATASET_LOCATION,
     DET_YAML, SEG_YAML, EPOCHS, IMAGE_SIZE, NUM_CLASSES,
     YOLO_BATCH_SIZE, MASKRCNN_BATCH_SIZE,
-    DATASETS_DIR, MODELS_DIR, REPORTS_DIR, VISUALS_DIR
+    DATASETS_DIR, MODELS_DIR, REPORTS_DIR, VISUALS_DIR, IMAGE_SAMPLES_DIR
 )
 
 print("=" * 65)
@@ -71,7 +75,7 @@ workspace_folders = [
     "runs/yolov8m",
     "runs/yolov8m_seg",
     "runs/yolov9m",
-    "runs/yolov9m_seg",
+    "runs/yolov9c_seg",
     "runs/yolo11m",
     "runs/yolo11m_seg",
     "runs/maskrcnn/weights",
@@ -81,10 +85,36 @@ for folder in workspace_folders:
     os.makedirs(full, exist_ok=True)
     print(f"  📁 {full}")
 
-global_folders = [DATASETS_DIR, MODELS_DIR, REPORTS_DIR, VISUALS_DIR]
+global_folders = [DATASETS_DIR, MODELS_DIR, REPORTS_DIR, VISUALS_DIR, IMAGE_SAMPLES_DIR]
 for folder in global_folders:
     os.makedirs(folder, exist_ok=True)
     print(f"  📁 {folder}")
+
+print("\n[Setup] Menyiapkan 10 gambar sampel untuk visualisasi (IMAGE_SAMPLES_DIR)...")
+import random
+import shutil
+img_dir_test = os.path.join(SEG_DATASET_LOCATION, "test", "images")
+img_dir_valid = os.path.join(SEG_DATASET_LOCATION, "valid", "images")
+
+# Utamakan test, jika tidak ada gunakan valid
+source_img_dir = img_dir_test if os.path.isdir(img_dir_test) else img_dir_valid
+suffix = "test" if source_img_dir == img_dir_test else "valid"
+
+if os.path.isdir(source_img_dir):
+    all_imgs = [os.path.join(source_img_dir, f) for f in os.listdir(source_img_dir)
+                if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+    if len(all_imgs) >= 10:
+        samples = random.sample(all_imgs, 10)
+        for i, img_path in enumerate(samples, 1):
+            ext = os.path.splitext(img_path)[1]
+            new_name = f"image{i}-{suffix}{ext}"
+            dest_path = os.path.join(IMAGE_SAMPLES_DIR, new_name)
+            shutil.copy2(img_path, dest_path)
+        print(f"  ✅ 10 gambar berhasil disalin dan di-rename ke {IMAGE_SAMPLES_DIR}")
+    else:
+        print(f"  ⚠️ Gambar di {source_img_dir} kurang dari 10.")
+else:
+    print(f"  ⚠️ Folder sumber tidak ditemukan: {source_img_dir}")
 
 # ==============================================================================
 # 3. RINGKASAN KONFIGURASI

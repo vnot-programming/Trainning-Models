@@ -19,15 +19,24 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, ROOT)
 
+# GPU Fan Manager
+try:
+    from gpu_fan_manager import start_fan_manager
+    start_fan_manager()
+except ImportError:
+    print("[Warning] gpu_fan_manager.py not found in ROOT.")
+
 from config_shared import (
-    WORKSPACE_DIR, DET_YAML, SEG_YAML,
+    WORKSPACE_DIR, DET_YAML, SEG_YAML, MODELS_DIR,
     EPOCHS, IMAGE_SIZE, YOLO_BATCH_SIZE, get_output_dir, compress_run,
     save_yolo_visual_samples, parse_device, download_and_move_model, REPORTS_DIR
 )
 from telegram_utils import get_yolo_callbacks, send_telegram_msg
 import argparse
 import torch
-from ultralytics import YOLO
+from ultralytics import YOLO, settings
+
+settings.update({'weights_dir': MODELS_DIR})
 
 # --- Argumen CLI ---
 parser = argparse.ArgumentParser(description="YOLOv8m Fine-tuning")
@@ -45,6 +54,16 @@ else:
     DEVICE = list(range(n)) if n > 1 else (0 if n == 1 else "cpu")
 
 print(f"[Device] YOLOv8m → {DEVICE}")
+
+
+def get_gpu_report_str(device):
+    if device == "cpu":
+        return "1x CPU"
+    from collections import Counter
+    ids = [device] if isinstance(device, int) else device
+    gpu_names = [torch.cuda.get_device_name(i) for i in ids]
+    counts = Counter(gpu_names)
+    return ", ".join([f"{count}x {name}" for name, count in counts.items()])
 
 
 def _flush(label):
@@ -134,6 +153,7 @@ def _eval_seg(label, pt, yaml):
             "mAP50-95(Mask)":  mask_map,
             "Latency(ms)":     total_ms,
             "FPS":             fps,
+            "GPUs":            get_gpu_report_str(DEVICE),
         }
     except Exception as e:
         print(f"  ⚠️ {label}: {e}")
@@ -166,7 +186,7 @@ print(f"\n✅ Det Report : {det_csv}")
 # Segmentation CSV
 seg_row    = _eval_seg("YOLOv8m-Seg (Fine-tuned)", best_seg, SEG_YAML)
 seg_fields = ["Model", "Model Size (MB)", "mAP50-95(Box)",
-              "mAP50-95(Mask)", "Latency(ms)", "FPS"]
+              "mAP50-95(Mask)", "Latency(ms)", "FPS", "GPUs"]
 seg_csv = os.path.join(report_dir, "report_yolov8m_seg.csv")
 with open(seg_csv, "w", newline="", encoding="utf-8") as f:
     w = csv.DictWriter(f, fieldnames=seg_fields); w.writeheader(); w.writerow(seg_row)

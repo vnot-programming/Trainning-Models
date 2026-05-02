@@ -25,9 +25,17 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 
+# GPU Fan Manager
+try:
+    from gpu_fan_manager import start_fan_manager
+    start_fan_manager()
+except ImportError:
+    print("[Warning] gpu_fan_manager.py not found in ROOT.")
+
 from config_shared import (
     WORKSPACE_DIR, SEG_DATASET_LOCATION, DET_YAML, SEG_YAML,
     IMAGE_SIZE, get_output_dir, compress_visuals,
+    IMAGE_SAMPLES_DIR, MODEL_COLORS
 )
 from telegram_utils import send_telegram_msg
 import torch
@@ -141,14 +149,15 @@ except Exception as e:
 # ==============================================================================
 # 3. PILIH 5 GAMBAR SAMPEL RANDOM
 # ==============================================================================
-img_dir = os.path.join(SEG_DATASET_LOCATION, "test", "images")
-if not os.path.isdir(img_dir):
-    img_dir = os.path.join(SEG_DATASET_LOCATION, "valid", "images")
+target_img_dir = IMAGE_SAMPLES_DIR
+if not os.path.isdir(target_img_dir):
+    print(f"[Visual] ⚠️  IMAGE_SAMPLES_DIR tidak ditemukan: {target_img_dir}")
+    sys.exit(1)
 
-all_imgs    = [os.path.join(img_dir, f) for f in os.listdir(img_dir)
-               if f.lower().endswith((".jpg", ".jpeg", ".png"))]
-sample_imgs = random.sample(all_imgs, min(5, len(all_imgs)))
-print(f"\n[Sampel] {len(sample_imgs)} gambar dari {img_dir}")
+all_imgs = sorted([os.path.join(target_img_dir, f) for f in os.listdir(target_img_dir)
+                   if f.lower().endswith((".jpg", ".jpeg", ".png"))])
+sample_imgs = all_imgs[:10]
+print(f"\n[Sampel] {len(sample_imgs)} gambar dari {target_img_dir}")
 
 # ==============================================================================
 # 4. HYBRID PIPELINE: YOLO11m → SAM2 → 5 visual hybrid
@@ -349,6 +358,74 @@ def _render_yolo(model_path, img_path, fallback):
         return cv2.cvtColor(fallback, cv2.COLOR_BGR2RGB)
 
 
+# Panel titles and model keys for colors
+PANELS = [
+    ("YOLOv8m-Seg",            "yolo8m_seg"),
+    ("YOLOv9c-Seg",            "yolo9c_seg"),
+    ("YOLO11m-Seg",            "yolo11m_seg"),
+    ("Mask R-CNN",             "maskrcnn"),
+    ("Hybrid (YOLO11m+SAM2)",  "hybrid"),
+]
+
+def _draw_box_mask_label(overlay, m, bx, sc, cls_id, names_dict, theme_color, is_maskrcnn=False):
+    if m is not None:
+        col_m = np.zeros_like(overlay)
+        col_m[m] = theme_color
+        cv2.addWeighted(col_m, 0.45, overlay, 1.0, 0, overlay)
+    
+    x1, y1, x2, y2 = map(int, bx)
+    cv2.rectangle(overlay, (x1, y1), (x2, y2), theme_color, 2)
+    
+    if is_maskrcnn:
+        from config_shared import NUM_CLASSES
+        from train_multigpu import CLASS_NAMES if 'CLASS_NAMES' in globals() else [] # Fallback
+        c_name = f"cls{cls_id}"
+        # We need to import CLASS_NAMES. Since it's in train_multigpu.py, maybe we can read data.yaml directly.
+        # But for now let's just use the dictionary if available.
+        if names_dict:
+            c_name = names_dict.get(cls_id - 1, f"cls{cls_id}")
+    else:
+        c_name = names_dict.get(cls_id, f"cls{cls_id}")
+        
+    label_txt = f"{c_name} {sc:.2f}"
+    (tw, th), _ = cv2.getTextSize(label_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
+    cv2.rectangle(overlay, (x1, y1 - th - 6), (x1 + tw + 4, y1), theme_color, -1)
+    cv2.putText(overlay, label_txt, (x1 + 2, y1 - 3),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
+
+def _render_yolo(model_path, img_path, fallback, model_key):
+    if not model_path or not os.path.exists(model_path):
+        return cv2.cvtColor(fallback, cv2.COLOR_BGR2RGB)
+    try:
+        theme_color = MODEL_COLORS.get(model_key, (255, 255, 0))
+        m = YOLO(model_path)
+        r = m.predict(img_path, conf=0.5, verbose=False, imgsz=IMAGE_SIZE)[0]
+        
+        overlay = r.orig_img.copy()
+        H, W = overlay.shape[:2]
+        names = r.names
+        
+        if r.boxes is not None:
+            boxes = r.boxes.xyxy.cpu().numpy()
+            confs = r.boxes.conf.cpu().numpy()
+            clss = r.boxes.cls.cpu().numpy().astype(int)
+            masks = r.masks.data.cpu().numpy() if r.masks is not None else [None]*len(boxes)
+            
+            for i in range(len(boxes)):
+                mk = masks[i]
+                bool_m = None
+                if mk is not None:
+                    if mk.shape != (H, W):
+                        mk = cv2.resize(mk.astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST)
+                    bool_m = mk > 0.5
+                _draw_box_mask_label(overlay, bool_m, boxes[i], confs[i], clss[i], names, theme_color)
+                
+        del m; gc.collect(); torch.cuda.empty_cache()
+        return cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+    except Exception as e:
+        print(f"  ⚠️  render YOLO gagal: {e}")
+        return cv2.cvtColor(fallback, cv2.COLOR_BGR2RGB)
+
 def _render_maskrcnn(best_pt, img_path, fallback):
     if not best_pt or not os.path.exists(best_pt):
         return cv2.cvtColor(fallback, cv2.COLOR_BGR2RGB)
@@ -357,6 +434,17 @@ def _render_maskrcnn(best_pt, img_path, fallback):
         from models.maskrcnn_builder import build_mask_rcnn as _build
         from PIL import Image as _PILImg
         import torchvision.transforms.functional as _TF
+        import yaml
+        
+        # Load class names from SEG_YAML
+        names_dict = {}
+        if os.path.exists(SEG_YAML):
+            with open(SEG_YAML, "r") as f:
+                d = yaml.safe_load(f)
+                names_dict = {i: v for i, v in enumerate(d.get("names", []))}
+                
+        theme_color = MODEL_COLORS.get("maskrcnn", (255, 0, 255))
+        
         _mm = _build(num_classes=NUM_CLASSES+1, use_parallel=False, device=DEVICE)
         _mm.load_state_dict(torch.load(best_pt, map_location=DEVICE))
         _mm.eval()
@@ -368,25 +456,32 @@ def _render_maskrcnn(best_pt, img_path, fallback):
         scores = preds["scores"].cpu().numpy()
         masks  = preds["masks"].cpu().numpy()
         boxes  = preds["boxes"].cpu().numpy().astype(int)
+        labels = preds["labels"].cpu().numpy().astype(int)
+        
         overlay = canvas.copy()
-        for i, (sc, mk, bx) in enumerate(zip(scores, masks, boxes)):
+        H, W = overlay.shape[:2]
+        
+        for i, (sc, mk, bx, lbl) in enumerate(zip(scores, masks, boxes, labels)):
             if sc < 0.5: continue
-            color = _CLASS_COLORS[i % len(_CLASS_COLORS)]
-            m = (mk[0] > 0.5).astype(np.uint8)
-            col_m = np.zeros_like(overlay); col_m[m==1] = color
-            cv2.addWeighted(col_m, 0.45, overlay, 1.0, 0, overlay)
-            cv2.rectangle(overlay, (bx[0], bx[1]), (bx[2], bx[3]), color, 2)
+            bool_m = None
+            if mk is not None:
+                m = mk[0]
+                if m.shape != (H, W):
+                    m = cv2.resize(m.astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST)
+                bool_m = m > 0.5
+            _draw_box_mask_label(overlay, bool_m, bx, sc, lbl, names_dict, theme_color, is_maskrcnn=True)
+            
         del _mm; gc.collect(); torch.cuda.empty_cache()
         return cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
     except Exception as e:
         print(f"  ⚠️  render MaskRCNN gagal: {e}")
         return cv2.cvtColor(fallback, cv2.COLOR_BGR2RGB)
 
-
 def _render_hybrid_panel(yolo_path, sam_mdl, img_path, fallback):
     if not yolo_path or not os.path.exists(yolo_path) or sam_mdl is None:
         return cv2.cvtColor(fallback, cv2.COLOR_BGR2RGB)
     try:
+        theme_color = MODEL_COLORS.get("hybrid", (0, 165, 255))
         _yd = YOLO(yolo_path)
         _dr = _yd.predict(img_path, conf=0.5, verbose=False, imgsz=IMAGE_SIZE)
         _bx = (_dr[0].boxes.xyxy.cpu().numpy()
@@ -394,25 +489,24 @@ def _render_hybrid_panel(yolo_path, sam_mdl, img_path, fallback):
         if len(_bx) == 0:
             del _yd; return cv2.cvtColor(fallback, cv2.COLOR_BGR2RGB)
         _sr = sam_mdl.predict(_dr[0].orig_img, bboxes=_bx, verbose=False)
-        canvas  = _dr[0].orig_img.copy()
-        overlay = canvas.copy()
+        overlay  = _dr[0].orig_img.copy()
+        names = _dr[0].names
+        
         _masks  = (_sr[0].masks.data.cpu().numpy()
                    if _sr and _sr[0].masks is not None else [])
         _cls    = _dr[0].boxes.cls.cpu().numpy().astype(int)
         _confs  = _dr[0].boxes.conf.cpu().numpy()
-        H, W    = canvas.shape[:2]
+        H, W    = overlay.shape[:2]
+        
         for i in range(len(_cls)):
-            color = _CLASS_COLORS[_cls[i] % len(_CLASS_COLORS)]
+            bool_m = None
             if i < len(_masks):
                 mk = _masks[i]
                 if mk.shape != (H, W):
-                    mk = cv2.resize(mk.astype(np.float32), (W, H),
-                                    interpolation=cv2.INTER_NEAREST)
-                bn = (mk > 0.5).astype(np.uint8)
-                cm = np.zeros_like(overlay); cm[bn==1] = color
-                cv2.addWeighted(cm, 0.45, overlay, 1.0, 0, overlay)
-            x1,y1,x2,y2 = map(int, _bx[i])
-            cv2.rectangle(overlay, (x1,y1), (x2,y2), color, 2)
+                    mk = cv2.resize(mk.astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST)
+                bool_m = mk > 0.5
+            _draw_box_mask_label(overlay, bool_m, _bx[i], _confs[i], _cls[i], names, theme_color)
+            
         del _yd; gc.collect(); torch.cuda.empty_cache()
         return cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
     except Exception as e:
@@ -420,40 +514,37 @@ def _render_hybrid_panel(yolo_path, sam_mdl, img_path, fallback):
         return cv2.cvtColor(fallback, cv2.COLOR_BGR2RGB)
 
 
-# Panel titles
-PANELS = [
-    ("YOLOv8m\n(Detection)",             "yolo8m_det"),
-    ("YOLOv9m\n(Detection)",             "yolo9m_det"),
-    ("YOLO11m\n(Detection)",             "yolo11m_det"),
-    ("Mask R-CNN\n(Segmentation)",       "maskrcnn"),
-    ("Hybrid\n(YOLO11m + SAM2)",         "hybrid"),
-]
-
 for idx, img_path in enumerate(sample_imgs, 1):
     img_name = os.path.splitext(os.path.basename(img_path))[0]
     fallback = cv2.imread(img_path)
     print(f"\n[Grid] [{idx}/{len(sample_imgs)}] {img_name}")
 
     panels_img = [
-        _render_yolo(paths["yolo8m_det"],  img_path, fallback),
-        _render_yolo(paths["yolo9m_det"],  img_path, fallback),
-        _render_yolo(paths["yolo11m_det"], img_path, fallback),
+        _render_yolo(paths["yolo8m_seg"],  img_path, fallback, "yolov8m_seg"),
+        _render_yolo(paths["yolo9c_seg"],  img_path, fallback, "yolov9c_seg"),
+        _render_yolo(paths["yolo11m_seg"], img_path, fallback, "yolo11m_seg"),
         _render_maskrcnn(paths["maskrcnn"],img_path, fallback),
         _render_hybrid_panel(paths["yolo11m_det"], sam_model, img_path, fallback),
     ]
 
-    fig, axes = plt.subplots(1, 5, figsize=(30, 7))
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+    axes = axes.flatten()
     fig.suptitle(f"Perbandingan 5 Model — {img_name}",
                  fontsize=14, fontweight="bold")
-    for ax, (img, (title, _)) in zip(axes, zip(panels_img, PANELS)):
-        ax.imshow(img)
-        ax.set_title(title, fontsize=10, fontweight="bold", pad=6)
-        ax.axis("off")
-    plt.tight_layout()
+                 
+    for i in range(5):
+        axes[i].imshow(panels_img[i])
+        axes[i].set_title(PANELS[i][0], fontsize=12, fontweight="bold", pad=8)
+        axes[i].axis("off")
+        
+    axes[5].axis("off") # Panel ke-6 kosong
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
     out_png = os.path.join(visual_dir, f"comparison_{idx:02d}_{img_name}.png")
     plt.savefig(out_png, dpi=200, bbox_inches="tight")
     plt.close()
     print(f"  ✅ {out_png}")
+    gc.collect(); torch.cuda.empty_cache()
     gc.collect(); torch.cuda.empty_cache()
 
 del yolo_det, sam_model

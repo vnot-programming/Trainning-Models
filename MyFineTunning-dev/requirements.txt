@@ -19,7 +19,9 @@ pyyaml>=6.0.1
 
 # Utility
 tqdm>=4.66.0
+nvitop
+pycocotools
 
 # Dataset management
-roboflow>=1.1.0
-python-dotenv>=1.0.0
+roboflow
+python-dotenv

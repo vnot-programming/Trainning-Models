@@ -51,20 +51,22 @@ sys.path.insert(0, _TRAIN_ENGINE)
 # KONFIGURASI — Ubah sesuai kebutuhan
 # ==============================================================================
 # Import from config_shared
-from config_shared import WORKSPACE_DIR, SEG_DATASET_LOCATION, REPORTS_DIR, VISUALS_DIR
+from config_shared import (
+    WORKSPACE_DIR, SEG_DATASET_LOCATION, REPORTS_DIR, VISUALS_DIR,
+    IMAGE_SAMPLES_DIR, MODEL_COLORS, NUM_CLASSES, EPOCHS,
+    MASKRCNN_BATCH_SIZE, NUM_WORKERS, compress_run
+)
 from telegram_utils import send_telegram_msg
-NUM_CLASSES         = 7          # Jumlah kelas tanpa background
-EPOCHS              = 100
-BATCH_SIZE_PER_GPU  = 4          # Batch per GPU (total = BATCH_SIZE_PER_GPU × n_gpu)
-NUM_WORKERS         = 8          # Worker per proses DDP
+
+BATCH_SIZE_PER_GPU  = MASKRCNN_BATCH_SIZE
 LR                  = 0.005
 LR_STEP             = 5
 LR_GAMMA            = 0.5
 CONF_THRESH_VISUAL  = 0.5
 N_VISUAL_SAMPLES    = 5
-LOG_EVERY_N_BATCH   = 20
+LOG_EVERY_N_BATCH   = 5
 
-OUTPUT_KEY     = "maskrcnn_multigpu"
+OUTPUT_KEY     = "maskrcnn"
 OUTPUT_DIR     = os.path.join(WORKSPACE_DIR, "runs", OUTPUT_KEY, "weights")
 REPORT_DIR     = REPORTS_DIR
 VISUAL_DIR     = VISUALS_DIR
@@ -76,39 +78,7 @@ CLASS_NAMES = ["dishwasher", "milk", "mineral", "non_mineral",
 # ==============================================================================
 # ARGPARSE
 # ==============================================================================
-parser = argparse.ArgumentParser(description="Mask R-CNN Multi-GPU DDP Training")
-parser.add_argument(
-    "--gpus", type=str, default="1,2",
-    help="GPU index yang digunakan, pisahkan koma. Default: '1,2'. "
-         "Contoh: '1,2' untuk GPU 1 dan 2, '1' untuk single GPU 1."
-)
-args = parser.parse_args()
 
-GPU_IDS = [int(g.strip()) for g in args.gpus.split(",") if g.strip()]
-WORLD_SIZE = len(GPU_IDS)
-
-print(f"\n{'='*60}")
-print(f"  Mask R-CNN Multi-GPU DDP Training")
-print(f"{'='*60}")
-print(f"  GPU yang digunakan : {GPU_IDS}")
-print(f"  World size         : {WORLD_SIZE}")
-print(f"  Epochs             : {EPOCHS}")
-print(f"  Batch/GPU          : {BATCH_SIZE_PER_GPU}")
-print(f"  Total batch        : {BATCH_SIZE_PER_GPU * WORLD_SIZE}")
-print(f"  Dataset            : {SEG_DATASET_LOCATION}")
-print(f"  Output             : {OUTPUT_DIR}")
-print(f"{'='*60}\n")
-
-# Validasi GPU tersedia
-if not torch.cuda.is_available():
-    print("❌ CUDA tidak tersedia. Script ini membutuhkan GPU.")
-    sys.exit(1)
-
-n_gpu_avail = torch.cuda.device_count()
-for g in GPU_IDS:
-    if g >= n_gpu_avail:
-        print(f"❌ GPU {g} tidak tersedia. Sistem hanya punya {n_gpu_avail} GPU (0–{n_gpu_avail-1}).")
-        sys.exit(1)
 
 # ==============================================================================
 # DATASET
@@ -200,13 +170,13 @@ def run_train_epoch(model, loader, optimizer, device, epoch, total_epochs, rank)
         optimizer.step()
 
         total_loss += losses.item()
-        torch.cuda.empty_cache()
 
         if rank == 0 and (batch_idx + 1) % LOG_EVERY_N_BATCH == 0:
             print(
                 f"  Epoch [{epoch}/{total_epochs}]  "
                 f"Batch [{batch_idx + 1}/{len(loader)}]  "
-                f"Loss: {losses.item():.4f}"
+                f"Loss: {losses.item():.4f}",
+                flush=True
             )
             # Heartbeat notification (10-min interval via force=False)
             msg = (f"📈 <b>Progress Update</b> (Mask R-CNN)\n"
@@ -231,7 +201,6 @@ def run_val_epoch(model, loader, device):
             targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
             loss_dict = model(images, targets)
             val_loss  += sum(loss for loss in loss_dict.values()).item()
-            torch.cuda.empty_cache()
 
     return val_loss / max(len(loader), 1)
 
@@ -618,24 +587,24 @@ def run_visualization(best_pt: str, device: torch.device) -> None:
 
     os.makedirs(VISUAL_DIR, exist_ok=True)
 
-    img_dir = os.path.join(SEG_DATASET_LOCATION, "test", "images")
-    if not os.path.isdir(img_dir):
-        img_dir = os.path.join(SEG_DATASET_LOCATION, "valid", "images")
+    target_img_dir = IMAGE_SAMPLES_DIR
+    if not os.path.isdir(target_img_dir):
+        print(f"[Visual] ⚠️  IMAGE_SAMPLES_DIR tidak ditemukan: {target_img_dir}")
+        return
 
-    all_imgs = [os.path.join(img_dir, f) for f in os.listdir(img_dir)
-                if f.lower().endswith((".jpg", ".jpeg", ".png"))]
-    samples  = random.sample(all_imgs, min(N_VISUAL_SAMPLES, len(all_imgs)))
+    all_imgs = sorted([os.path.join(target_img_dir, f) for f in os.listdir(target_img_dir)
+                       if f.lower().endswith((".jpg", ".jpeg", ".png"))])
+    samples  = all_imgs[:10]
+    
+    if not samples:
+        print(f"[Visual] ⚠️  Tidak ada gambar di: {target_img_dir}")
+        return
 
     vis_model = build_model(device)
     vis_model.load_state_dict(torch.load(best_pt, map_location=device))
     vis_model.eval()
 
-    # Palet warna per kelas (BGR)
-    COLORS = [
-        (255,  56,  56), (255, 157,  51), ( 50, 205,  50),
-        ( 30, 144, 255), (238, 130, 238), (255, 215,   0),
-        (  0, 206, 209), (255,  99,  71),
-    ]
+    theme_color = MODEL_COLORS.get("maskrcnn", (255, 0, 255))
 
     print(f"\n[Visual] Mask R-CNN DDP — {len(samples)} sampel")
     for idx, img_path in enumerate(samples, 1):
@@ -660,7 +629,6 @@ def run_visualization(best_pt: str, device: torch.device) -> None:
                 continue
 
             cls_id   = int(lbl.item())
-            color    = COLORS[cls_id % len(COLORS)]
             # Mask R-CNN: label 0 = background, kelas mulai dari 1
             cls_name = CLASS_NAMES[cls_id - 1] if 1 <= cls_id <= NUM_CLASSES else f"cls{cls_id}"
             conf_str = f"{score.item():.2f}"
@@ -672,17 +640,17 @@ def run_visualization(best_pt: str, device: torch.device) -> None:
                 m = _cv2.resize(m.astype(np.uint8), (W, H),
                                 interpolation=cv2.INTER_NEAREST).astype(bool)
             colored = np.zeros_like(overlay)
-            colored[m] = color
+            colored[m] = theme_color
             cv2.addWeighted(colored, 0.45, overlay, 1.0, 0, overlay)
 
             # Bounding box
             x1, y1, x2, y2 = map(int, box.tolist())
-            cv2.rectangle(overlay, (x1, y1), (x2, y2), color, 2)
+            cv2.rectangle(overlay, (x1, y1), (x2, y2), theme_color, 2)
 
             # Label teks dengan nama kelas
             label_txt = f"{cls_name} {conf_str}"
             (tw, th), _ = cv2.getTextSize(label_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
-            cv2.rectangle(overlay, (x1, y1 - th - 6), (x1 + tw + 4, y1), color, -1)
+            cv2.rectangle(overlay, (x1, y1 - th - 6), (x1 + tw + 4, y1), theme_color, -1)
             cv2.putText(overlay, label_txt, (x1 + 2, y1 - 3),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
 
@@ -697,6 +665,49 @@ def run_visualization(best_pt: str, device: torch.device) -> None:
 # ENTRYPOINT
 # ==============================================================================
 if __name__ == "__main__":
+    # ── Parse Argumen ────────────────────────────────────────────────────────
+    parser = argparse.ArgumentParser(description="Mask R-CNN Multi-GPU DDP Training")
+    parser.add_argument(
+        "--gpus", type=str, default="0",
+        help="GPU index yang digunakan, pisahkan koma. Default: '0'. "
+             "Contoh: '1,2' untuk GPU 1 dan 2, '0' untuk single GPU 0."
+    )
+    args = parser.parse_args()
+
+    GPU_IDS = [int(g.strip()) for g in args.gpus.split(",") if g.strip()]
+    WORLD_SIZE = len(GPU_IDS)
+
+    # ── Header Print ─────────────────────────────────────────────────────────
+    print(f"\n{'='*60}")
+    print(f"  Mask R-CNN Multi-GPU DDP Training")
+    print(f"{'='*60}")
+    print(f"  GPU yang digunakan : {GPU_IDS}")
+    print(f"  World size         : {WORLD_SIZE}")
+    print(f"  Epochs             : {EPOCHS}")
+    print(f"  Batch/GPU          : {BATCH_SIZE_PER_GPU}")
+    print(f"  Total batch        : {BATCH_SIZE_PER_GPU * WORLD_SIZE}")
+    print(f"  Dataset            : {SEG_DATASET_LOCATION}")
+    print(f"  Output             : {OUTPUT_DIR}")
+    print(f"{'='*60}\n")
+
+    # ── Validasi GPU ─────────────────────────────────────────────────────────
+    if not torch.cuda.is_available():
+        print("❌ CUDA tidak tersedia. Script ini membutuhkan GPU.")
+        sys.exit(1)
+
+    n_gpu_avail = torch.cuda.device_count()
+    for g in GPU_IDS:
+        if g >= n_gpu_avail:
+            print(f"❌ GPU {g} tidak tersedia. Sistem hanya punya {n_gpu_avail} GPU (0–{n_gpu_avail-1}).")
+            sys.exit(1)
+
+    # GPU Fan Manager (Main process only)
+    try:
+        from gpu_fan_manager import start_fan_manager
+        start_fan_manager()
+    except ImportError:
+        print("[Warning] gpu_fan_manager.py not found in FINETUNING_ROOT.")
+
     best_pt = os.path.join(OUTPUT_DIR, "best.pt")
 
     # ── Cek skip ────────────────────────────────────────────────────────────
@@ -743,24 +754,34 @@ if __name__ == "__main__":
     # ── CSV Report ───────────────────────────────────────────────────────────
     os.makedirs(REPORT_DIR, exist_ok=True)
     csv_path = os.path.join(REPORT_DIR, "report_maskrcnn_ddp_seg.csv")
-    fields   = ["Model", "GPUs", "Model Size (MB)", "mAP50-95(Box)",
-                "mAP50-95(Mask)", "Latency(ms)", "FPS"]
+    fields   = ["Model", "Model Size (MB)", "mAP50-95(Box)",
+                "mAP50-95(Mask)", "Latency(ms)", "FPS", "GPUs"]
+
+    # Ambil nama merk GPU & hitung jumlahnya (e.g. "2x NVIDIA RTX 3060")
+    from collections import Counter
+    gpu_names = [torch.cuda.get_device_name(i) for i in GPU_IDS]
+    counts = Counter(gpu_names)
+    gpu_report_str = ", ".join([f"{count}x {name}" for name, count in counts.items()])
+
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
         w.writerow({
             "Model":           "Mask R-CNN ResNet-50 FPN-v2 (DDP Fine-tuned)",
-            "GPUs":            str(GPU_IDS),
             "Model Size (MB)": size_mb,
             "mAP50-95(Box)":   map_box,
             "mAP50-95(Mask)":  map_mask,
             "Latency(ms)":     lat_ms,
             "FPS":             fps_val,
+            "GPUs":            gpu_report_str,
         })
     print(f"\n✅ Report: {csv_path}")
 
     # ── Visualisasi ──────────────────────────────────────────────────────────
     run_visualization(best_pt, eval_device)
+
+    # ── Kompres folder hasil training ───────────────────────────────────────
+    compress_run(OUTPUT_KEY)
 
     print(f"\n{'='*60}")
     print(f"✅ Mask R-CNN DDP selesai.")
