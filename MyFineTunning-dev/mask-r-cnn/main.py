@@ -46,8 +46,8 @@ if torch.cuda.is_available():
     free, total = torch.cuda.mem_get_info(0)
     print(f"[MemCheck] {free/1e9:.2f} GB bebas / {total/1e9:.2f} GB total")
 
-from models.maskrcnn_builder import build_mask_rcnn
-from models.maskrcnn_trainer import train_mask_rcnn
+from maskrcnn_builder import build_mask_rcnn
+from maskrcnn_trainer import train_mask_rcnn
 
 out_dir = get_output_dir("maskrcnn")
 best_pt = os.path.join(out_dir, "weights", "best.pt")
@@ -82,7 +82,7 @@ if os.path.exists(best_pt):
     _eval_samples = _random.sample(_eval_imgs, min(5, len(_eval_imgs)))
 
     # Load model untuk timing
-    from models.maskrcnn_builder import build_mask_rcnn as _build_eval
+    from maskrcnn_builder import build_mask_rcnn as _build_eval
     from torchvision.transforms import functional as _TF
     _eval_model = _build_eval(num_classes=NUM_CLASSES+1, use_parallel=False, device=DEVICE)
     _eval_model.load_state_dict(torch.load(best_pt, map_location=DEVICE))
@@ -147,7 +147,7 @@ if os.path.exists(best_pt):
     print(f"\n[Visual] Mask R-CNN — {len(samples)} sampel")
 
     # Reload model untuk inferensi
-    from models.maskrcnn_builder import build_mask_rcnn as _build
+    from maskrcnn_builder import build_mask_rcnn as _build
     vis_model = _build(num_classes=NUM_CLASSES+1, use_parallel=False, device=DEVICE)
     vis_model.load_state_dict(torch.load(best_pt, map_location=DEVICE))
     vis_model.eval()

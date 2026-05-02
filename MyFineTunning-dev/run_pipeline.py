@@ -9,57 +9,26 @@ Menjalankan training pipeline secara BERURUTAN (sequential):
 Setiap model:
   1. Dijalankan dalam tmux session terpisah
   2. Script ini menunggu sampai tmux session selesai (training done)
-  3. Membersihkan GPU memory sebelum memulai model berikutnya
+  3. Cooldown + verifikasi GPU idle sebelum model berikutnya
+  4. Kill proses GPU zombie jika VRAM tidak turun
 
-Cara pakai:
-  source /root/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && python3 run_pipeline.py 2>&1 | tee PipelineReport.log
+Cara pakai (WAJIB dalam tmux agar tahan terhadap terminal close):
 
-Atau via tmux (recommended):
-  tmux new-session -d -s pipeline "source /root/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /root/Trainning-Models/MyFineTunning-dev && python3 run_pipeline.py 2>&1 | tee PipelineReport.log"
+  tmux new-session -d -s pipeline \
+    "source ~/Computer-Vision/MyFineTunning-dev/.venv/bin/activate && \
+     cd ~/Computer-Vision/MyFineTunning-dev && \
+     python3 run_pipeline.py 2>&1 | tee PipelineReport.log"
+
+Monitor:
+  tmux attach -t pipeline
+
+Jika listrik mati / pipeline crash:
+  Jalankan ulang perintah yang sama — model yang sudah selesai (best.pt)
+  otomatis di-skip, yang terputus (last.pt) otomatis resume.
 
 Opsi:
-  --skip yolo8,yolo9     ← Skip model tertentu
+  --skip yolo8,yolo9     ← Skip model tertentu (skip seluruh eksekusi termasuk eval)
   --only maskrcnn        ← Jalankan hanya model tertentu
-
-Contoh:
-Ran command: `tmux kill-session -t yolo8training`
-Edited config_shared.py
-Viewed main.py:4-23
-Edited main.py
-Created run_pipeline.py
-
-Script `run_pipeline.py` sudah dibuat! Berikut cara pakainya:
-
-### Cara Jalankan (via tmux, recommended):
-```bash
-tmux new-session -d -s pipeline "cd /root/Trainning-Models/MyFineTunning-dev && python3 run_pipeline.py 2>&1 | tee PipelineReport.log"
-```
-
-### Fitur:
-| Fitur | Penjelasan |
-|---|---|
-| **Sequential** | YOLO8 → YOLO9 → YOLO11 → MaskRCNN berurutan |
-| **Memory Cleanup** | `torch.cuda.empty_cache()` + gc + cek zombie proses di antara setiap model |
-| **GPU Monitoring** | Cetak status VRAM setiap 30 detik selama training |
-| **Telegram** | Notifikasi saat setiap model selesai dan ringkasan akhir |
-| **Ringkasan** | Tabel durasi setiap model di akhir pipeline |
-
-### Opsi Tambahan:
-```bash
-# Skip model tertentu
-python3 run_pipeline.py --skip yolo8,yolo9
-
-# Jalankan hanya model tertentu
-python3 run_pipeline.py --only maskrcnn
-```
-
-### Monitor:
-```bash
-tmux attach -t pipeline     # Lihat output pipeline
-tmux ls                      # Lihat semua session aktif
-nvitop                       # Monitor GPU real-time
-```
-
 """
 
 import subprocess
@@ -67,45 +36,21 @@ import time
 import os
 import sys
 import gc
+import signal
 import argparse
 from datetime import datetime, timedelta
 
 # ==============================================================================
-# KONFIGURASI PIPELINE
+# PATH SETUP — Import dari config_shared (TIDAK ADA HARDCODED PATH)
 # ==============================================================================
-VENV_ACTIVATE = "source /root/Trainning-Models/MyFineTunning-dev/.venv/bin/activate"
-BASE_DIR = "/root/Trainning-Models/MyFineTunning-dev"
+ROOT = os.path.abspath(os.path.dirname(__file__))
+sys.path.insert(0, ROOT)
 
-TRAINING_JOBS = [
-    {
-        "name": "yolo8",
-        "session": "yolo8training",
-        "workdir": f"{BASE_DIR}/yolo/yolo8",
-        "script": "main.py",
-        "logfile": "yolo8training.log",
-    },
-    {
-        "name": "yolo9",
-        "session": "yolo9training",
-        "workdir": f"{BASE_DIR}/yolo/yolo9",
-        "script": "main.py",
-        "logfile": "yolo9training.log",
-    },
-    {
-        "name": "yolo11",
-        "session": "yolo11training",
-        "workdir": f"{BASE_DIR}/yolo/yolo11",
-        "script": "main.py",
-        "logfile": "yolo11training.log",
-    },
-    {
-        "name": "maskrcnn",
-        "session": "masktraining",
-        "workdir": f"{BASE_DIR}/mask-r-cnn",
-        "script": "train_multigpu.py",
-        "logfile": "masktraining.log",
-    },
-]
+from config_shared import (
+    _FINETUNING_ROOT, PIPELINE_JOBS, VENV_ACTIVATE_PATH,
+    GPU_IDLE_THRESHOLD_MIB, GPU_CLEANUP_TIMEOUT,
+    GPU_CLEANUP_POLL_SEC, GPU_COOLDOWN_SEC,
+)
 
 # Interval polling (detik) — seberapa sering cek apakah tmux session masih aktif
 POLL_INTERVAL = 30
@@ -125,7 +70,6 @@ def log(msg):
 def send_telegram(msg):
     """Kirim notifikasi Telegram (silent fail jika tidak dikonfigurasi)."""
     try:
-        sys.path.insert(0, BASE_DIR)
         from telegram_utils import send_telegram_msg
         send_telegram_msg(msg)
     except Exception:
@@ -172,46 +116,108 @@ def print_gpu_status(label=""):
         print(f"    GPU {gpu['index']}: [{bar}] {gpu['used_mb']:>6} / {gpu['total_mb']:>6} MiB ({pct:.0f}%)", flush=True)
 
 
-def flush_gpu_memory():
-    """Bersihkan GPU memory secara agresif."""
-    log("🧹 Membersihkan GPU memory...")
-
-    # 1. Python garbage collection
-    gc.collect()
-
-    # 2. PyTorch CUDA cache (jika torch tersedia di environment ini)
-    try:
-        import torch
-        if torch.cuda.is_available():
-            for i in range(torch.cuda.device_count()):
-                with torch.cuda.device(i):
-                    torch.cuda.empty_cache()
-                    torch.cuda.ipc_collect()
-            log("   ✅ torch.cuda.empty_cache() berhasil")
-    except ImportError:
-        pass
-
-    # 3. Kill proses GPU zombie yang mungkin tertinggal
+# ==============================================================================
+# GPU MEMORY MANAGEMENT — nvidia-smi based (bukan torch.cuda.empty_cache)
+# ==============================================================================
+def kill_gpu_zombies():
+    """
+    Kill semua proses yang menahan GPU VRAM (kecuali proses pipeline sendiri).
+    Menggunakan nvidia-smi untuk deteksi PID → SIGKILL.
+    """
+    log("   🔪 Mencoba kill proses GPU zombie...")
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader"],
             capture_output=True, text=True, timeout=10
         )
         pids = [p.strip() for p in result.stdout.strip().split("\n") if p.strip()]
-        if pids:
-            log(f"   ⚠️  Ditemukan {len(pids)} proses GPU masih berjalan: {pids}")
-            log(f"   ℹ️  Proses akan dibiarkan (bukan milik pipeline ini)")
+        my_pid = str(os.getpid())
+        killed = 0
+
+        for pid in pids:
+            if pid == my_pid:
+                continue
+            log(f"   🔪 Killing GPU process PID={pid}")
+            try:
+                os.kill(int(pid), signal.SIGKILL)
+                killed += 1
+            except ProcessLookupError:
+                pass  # Proses sudah mati
+            except PermissionError:
+                # Fallback: gunakan kill command
+                subprocess.run(["kill", "-9", pid], capture_output=True)
+                killed += 1
+
+        if killed:
+            time.sleep(5)  # Tunggu driver release VRAM
+            log(f"   ✅ Killed {killed} proses GPU zombie")
         else:
-            log("   ✅ Tidak ada proses GPU yang tertinggal")
-    except Exception:
-        pass
-
-    # 4. Tunggu sebentar agar memory benar-benar dibebaskan oleh driver
-    time.sleep(5)
-
-    print_gpu_status("Setelah Cleanup")
+            log("   ℹ️ Tidak ada proses GPU zombie ditemukan")
+    except Exception as e:
+        log(f"   ⚠️ Gagal kill GPU zombies: {e}")
 
 
+def ensure_gpu_idle(threshold_mib=GPU_IDLE_THRESHOLD_MIB,
+                    timeout=GPU_CLEANUP_TIMEOUT,
+                    poll_sec=GPU_CLEANUP_POLL_SEC):
+    """
+    Tunggu sampai SEMUA GPU memiliki VRAM terpakai ≤ threshold_mib.
+
+    Flow:
+      1. Poll nvidia-smi setiap poll_sec detik
+      2. Jika setelah 30s masih tinggi → kill proses GPU zombie
+      3. Jika setelah timeout masih tinggi → force proceed + Telegram warning
+
+    Returns:
+        True jika GPU idle tercapai, False jika timeout (force proceed).
+    """
+    log(f"🧹 Verifikasi GPU idle (threshold: ≤{threshold_mib} MiB, timeout: {timeout}s)...")
+
+    # Pembersihan ringan di proses pipeline (untuk jaga-jaga)
+    gc.collect()
+
+    start = time.time()
+    kill_attempted = False
+
+    while time.time() - start < timeout:
+        gpu_info = get_gpu_memory()
+        if not gpu_info:
+            log("   ⚠️ Tidak bisa baca GPU info, skip verifikasi")
+            return True
+
+        max_used = max(g['used_mb'] for g in gpu_info)
+
+        if max_used <= threshold_mib:
+            log(f"   ✅ GPU idle! (max used: {max_used} MiB ≤ {threshold_mib} MiB)")
+            print_gpu_status("GPU Idle — Verified")
+            return True
+
+        elapsed = int(time.time() - start)
+        log(f"   ⏳ GPU belum idle: {max_used} MiB (elapsed: {elapsed}s)")
+
+        # Setelah 30 detik masih tidak idle, coba kill zombie proses
+        if elapsed >= 30 and not kill_attempted:
+            kill_attempted = True
+            kill_gpu_zombies()
+
+        time.sleep(poll_sec)
+
+    # Timeout — force proceed dengan warning
+    gpu_info = get_gpu_memory()
+    max_used = max(g['used_mb'] for g in gpu_info) if gpu_info else "?"
+    log(f"   ⚠️ TIMEOUT ({timeout}s)! GPU masih: {max_used} MiB. Force proceed...")
+    send_telegram(
+        f"⚠️ <b>GPU cleanup timeout!</b>\n"
+        f"VRAM: <code>{max_used} MiB</code>\n"
+        f"Force proceed ke model berikutnya."
+    )
+    print_gpu_status("GPU Cleanup — Timeout")
+    return False
+
+
+# ==============================================================================
+# TMUX SESSION MANAGEMENT
+# ==============================================================================
 def is_tmux_session_alive(session_name):
     """Cek apakah tmux session masih aktif."""
     result = subprocess.run(
@@ -242,7 +248,7 @@ def start_training(job):
 
     # Bangun command untuk tmux
     cmd = (
-        f'{VENV_ACTIVATE} && '
+        f'source {VENV_ACTIVATE_PATH} && '
         f'cd {workdir} && '
         f'python -u {script} 2>&1 | tee {logfile}'
     )
@@ -315,7 +321,7 @@ def main():
     only_list = [s.strip().lower() for s in args.only.split(",") if s.strip()]
 
     # Filter jobs berdasarkan --skip / --only
-    jobs = TRAINING_JOBS
+    jobs = list(PIPELINE_JOBS)  # Copy dari config_shared
     if only_list:
         jobs = [j for j in jobs if j["name"].lower() in only_list]
     elif skip_list:
@@ -330,6 +336,10 @@ def main():
     print("  🏗️  Sequential Training Pipeline", flush=True)
     print(f"  Started: {timestamp()}", flush=True)
     print(f"  Models : {', '.join(j['name'].upper() for j in jobs)}", flush=True)
+    print(f"  Root   : {_FINETUNING_ROOT}", flush=True)
+    print(f"  GPU Idle Threshold : ≤{GPU_IDLE_THRESHOLD_MIB} MiB", flush=True)
+    print(f"  GPU Cleanup Timeout: {GPU_CLEANUP_TIMEOUT}s", flush=True)
+    print(f"  Cooldown           : {GPU_COOLDOWN_SEC}s", flush=True)
     print("=" * 65, flush=True)
     print(flush=True)
 
@@ -373,10 +383,12 @@ def main():
             f"Progress: {idx}/{len(jobs)}"
         )
 
-        # Bersihkan memory sebelum model berikutnya
+        # Bersihkan GPU sebelum model berikutnya
         if idx < len(jobs):
             print(flush=True)
-            flush_gpu_memory()
+            log(f"💤 Cooldown {GPU_COOLDOWN_SEC}s sebelum verifikasi GPU...")
+            time.sleep(GPU_COOLDOWN_SEC)
+            ensure_gpu_idle()
             print(flush=True)
 
     # ==============================================================================

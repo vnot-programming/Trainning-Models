@@ -54,12 +54,12 @@ _KEY_NAME     = "ROBOFLOW_KU_KEY1"
 _DET_WORKSPACE  = "wbc-laboratory"
 _DET_PROJECT    = "me-bottle-isempty-ku3"
 _DET_VERSION    = 8
-_DET_FORMAT     = "coco"
+_DET_FORMAT     = "yolov11"
 
 _SEG_WORKSPACE  = "wbc-laboratory"
 _SEG_PROJECT    = "segpoligon-me-bottle-isempty3"
 _SEG_VERSION    = 7
-_SEG_FORMAT     = "coco-segmentation"
+_SEG_FORMAT     = "yolov11"
 
 
 # ==============================================================================

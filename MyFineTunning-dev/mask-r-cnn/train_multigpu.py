@@ -83,7 +83,7 @@ CLASS_NAMES = ["dishwasher", "milk", "mineral", "non_mineral",
 # ==============================================================================
 # DATASET
 # ==============================================================================
-from models.maskrcnn_dataset import RoboflowSegToMaskRCNN, collate_fn
+from maskrcnn_dataset import RoboflowSegToMaskRCNN, collate_fn
 
 
 def build_dataloaders(rank: int, world_size: int):
@@ -237,7 +237,7 @@ def save_checkpoint(epoch: int, model, optimizer, scheduler,
 # ==============================================================================
 # TRAINING WORKER (1 proses per GPU)
 # ==============================================================================
-def train_worker(local_rank: int, gpu_ids: list, best_pt_path: str):
+def train_worker(local_rank: int, gpu_ids: list, best_pt_path: str, world_size: int):
     """
     Dijalankan oleh setiap proses DDP.
 
@@ -259,7 +259,7 @@ def train_worker(local_rank: int, gpu_ids: list, best_pt_path: str):
     dist.init_process_group(
         backend="nccl",
         init_method="env://",
-        world_size=WORLD_SIZE,
+        world_size=world_size,
         rank=local_rank,
     )
     torch.cuda.set_device(global_gpu)
@@ -277,7 +277,7 @@ def train_worker(local_rank: int, gpu_ids: list, best_pt_path: str):
         print(f"[Mask R-CNN] Parameter trainable: {n_params:,}")
 
     # ── DataLoaders ─────────────────────────────────────────────────────────
-    train_loader, val_loader, train_sampler = build_dataloaders(local_rank, WORLD_SIZE)
+    train_loader, val_loader, train_sampler = build_dataloaders(local_rank, world_size)
 
     # ── Optimizer & Scheduler ────────────────────────────────────────────────
     params    = [p for p in model.parameters() if p.requires_grad]
@@ -735,7 +735,7 @@ if __name__ == "__main__":
         # ── Spawn satu proses per GPU ────────────────────────────────────────
         mp.spawn(
             train_worker,
-            args=(GPU_IDS, best_pt),
+            args=(GPU_IDS, best_pt, WORLD_SIZE),
             nprocs=WORLD_SIZE,
             join=True,
         )

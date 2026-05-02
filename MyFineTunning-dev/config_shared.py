@@ -59,26 +59,79 @@ IMAGE_SAMPLES_DIR = os.path.join(WORKSPACE_DIR, "image_samples")
 # ==============================================================================
 DET_DATASET_LOCATION = os.environ.get(
     "DET_DATASET",
-    os.path.join(DATASETS_DIR, "me-bottle-isempty-ku3-7")
+    os.path.join(DATASETS_DIR, "me-bottle-isempty-ku3-8")
 )
 SEG_DATASET_LOCATION = os.environ.get(
     "SEG_DATASET",
-    os.path.join(DATASETS_DIR, "segpoligon-me-bottle-isempty3-5")
+    os.path.join(DATASETS_DIR, "segpoligon-me-bottle-isempty3-7")
 )
 
 DET_YAML = os.path.join(DET_DATASET_LOCATION, "data.yaml")
 SEG_YAML = os.path.join(SEG_DATASET_LOCATION, "data.yaml")
 
 # ==============================================================================
-# HYPERPARAMETER
+# PATHS — Pipeline (untuk run_pipeline.py)
 # ==============================================================================
-EPOCHS              = 2 # 100
+VENV_ACTIVATE_PATH = os.path.join(_FINETUNING_ROOT, ".venv", "bin", "activate")
+
+PIPELINE_JOBS = [
+    {
+        "name": "yolo8",
+        "session": "yolo8training",
+        "workdir": os.path.join(_FINETUNING_ROOT, "yolo", "yolo8"),
+        "script": "main.py",
+        "logfile": "yolo8training.log",
+    },
+    {
+        "name": "yolo9",
+        "session": "yolo9training",
+        "workdir": os.path.join(_FINETUNING_ROOT, "yolo", "yolo9"),
+        "script": "main.py",
+        "logfile": "yolo9training.log",
+    },
+    {
+        "name": "yolo11",
+        "session": "yolo11training",
+        "workdir": os.path.join(_FINETUNING_ROOT, "yolo", "yolo11"),
+        "script": "main.py",
+        "logfile": "yolo11training.log",
+    },
+    {
+        "name": "maskrcnn",
+        "session": "masktraining",
+        "workdir": os.path.join(_FINETUNING_ROOT, "mask-r-cnn"),
+        "script": "train_multigpu.py",
+        "logfile": "train_multigpu.log",
+    },
+]
+
+# ==============================================================================
+# GPU Memory Cleanup Config (untuk run_pipeline.py)
+# ==============================================================================
+GPU_IDLE_THRESHOLD_MIB = 500    # Max VRAM terpakai agar dianggap idle
+GPU_CLEANUP_TIMEOUT    = 120    # Timeout (detik) menunggu GPU idle
+GPU_CLEANUP_POLL_SEC   = 5      # Interval polling nvidia-smi saat cleanup
+GPU_COOLDOWN_SEC       = 15     # Jeda (detik) setelah training selesai
+
+# ==============================================================================
+# HYPERPARAMETER Test
+# ==============================================================================
+EPOCHS              = 1 # 100
 IMAGE_SIZE          = 640
 NUM_CLASSES         = 7
-YOLO_BATCH_SIZE     = 32   # 64    # DDP total (dibagi ke semua GPU oleh Ultralytics)
+YOLO_BATCH_SIZE     = 16   # 64    # DDP total (dibagi ke semua GPU oleh Ultralytics)
 MASKRCNN_BATCH_SIZE = 8    # 4     # Single GPU cuda:0
 NUM_WORKERS         = 10    # 16
 
+# ==============================================================================
+# HYPERPARAMETER RunPOD
+# ==============================================================================
+# EPOCHS              = 100
+# IMAGE_SIZE          = 640
+# NUM_CLASSES         = 7
+# YOLO_BATCH_SIZE     = 160   # DDP total (dibagi ke semua GPU oleh Ultralytics)
+# MASKRCNN_BATCH_SIZE = 16    # 4
+# NUM_WORKERS         = 32    # 16
 
 # ==============================================================================
 # HELPERS
