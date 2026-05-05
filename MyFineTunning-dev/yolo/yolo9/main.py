@@ -188,9 +188,18 @@ with open(seg_csv, "w", newline="", encoding="utf-8") as f:
     w = csv.DictWriter(f, fieldnames=seg_fields); w.writeheader(); w.writerow(seg_row)
 print(f"✅ Seg Report : {seg_csv}")
 
+# # ------ Visualisasi sampel per model ------
+# _img_dir = os.path.join(os.path.dirname(DET_YAML), "test", "images")
+# if not os.path.isdir(_img_dir):
+#     _img_dir = os.path.join(os.path.dirname(DET_YAML), "valid", "images")
+
+# ------ Visualisasi sampel per model ------
 _img_dir = os.path.join(os.path.dirname(DET_YAML), "test", "images")
 if not os.path.isdir(_img_dir):
     _img_dir = os.path.join(os.path.dirname(DET_YAML), "valid", "images")
+_seg_img_dir = _img_dir.replace(os.path.dirname(DET_YAML), os.path.dirname(SEG_YAML))
+if not os.path.isdir(_seg_img_dir):
+    _seg_img_dir = _img_dir  # fallback ke det dir
 
 save_yolo_visual_samples(best_det, "yolov9m",
     _img_dir)

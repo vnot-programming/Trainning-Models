@@ -197,6 +197,7 @@ with open(seg_csv, "w", newline="", encoding="utf-8") as f:
     w = csv.DictWriter(f, fieldnames=seg_fields); w.writeheader(); w.writerow(seg_row)
 print(f"✅ Seg Report : {seg_csv}")
 
+# ------ Visualisasi sampel per model ------
 _img_dir = os.path.join(os.path.dirname(DET_YAML), "test", "images")
 if not os.path.isdir(_img_dir):
     _img_dir = os.path.join(os.path.dirname(DET_YAML), "valid", "images")

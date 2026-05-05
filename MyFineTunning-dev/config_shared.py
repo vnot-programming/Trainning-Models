@@ -70,7 +70,7 @@ DET_YAML = os.path.join(DET_DATASET_LOCATION, "data.yaml")
 SEG_YAML = os.path.join(SEG_DATASET_LOCATION, "data.yaml")
 
 # ==============================================================================
-# HYPERPARAMETER
+# HYPERPARAMETER Testing (Bisa diubah sesuai kebutuhan, tapi pastikan konsisten untuk semua model)
 # ==============================================================================
 EPOCHS              = 2 # 100
 IMAGE_SIZE          = 640
@@ -78,6 +78,16 @@ NUM_CLASSES         = 7
 YOLO_BATCH_SIZE     = 32   # 64    # DDP total (dibagi ke semua GPU oleh Ultralytics)
 MASKRCNN_BATCH_SIZE = 8    # 4     # Single GPU cuda:0
 NUM_WORKERS         = 10    # 16
+
+# # ==============================================================================
+# # HYPERPARAMETER Fine-tuning (Bisa diubah sesuai kebutuhan, tapi pastikan konsisten untuk semua model)
+# # ==============================================================================
+# EPOCHS              = 100
+# IMAGE_SIZE          = 640
+# NUM_CLASSES         = 7
+# YOLO_BATCH_SIZE     = 160   # DDP total (dibagi ke semua GPU oleh Ultralytics)
+# MASKRCNN_BATCH_SIZE = 16    # 4
+# NUM_WORKERS         = 32    # 16
 
 
 # ==============================================================================

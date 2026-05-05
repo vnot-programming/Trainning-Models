@@ -10,6 +10,12 @@ Cara pakai:
 atau
     source /home/my/Computer-Vision/MyFineTunning-dev/.venv/bin/activate
     python /home/my/Computer-Vision/MyFineTunning-dev/main.py
+tmux new-session -d -s main_session "cd /root/Trainning-Models/MyFineTunning-dev && python3 main.py 2>&1 | tee MainReport.log"
+
+YOLO8 = tmux new-session -d -s yolo8training "source /root/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /root/Trainning-Models/MyFineTunning-dev/yolo/yolo8 && python -u main.py 2>&1 | tee yolo8training.log"
+YOLO9 = tmux new-session -d -s yolo9training "source /root/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /root/Trainning-Models/MyFineTunning-dev/yolo/yolo9 && python -u main.py 2>&1 | tee yolo9training.log"
+YOLO11 = tmux new-session -d -s yolo11training "source /root/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /root/Trainning-Models/MyFineTunning-dev/yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log"
+MaskRCNN = tmux new-session -d -s masktraining "source /root/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /root/Trainning-Models/MyFineTunning-dev/mask-r-cnn && python -u train_multigpu.py 2>&1 | tee masktraining.log"
 
 """
 

@@ -4,7 +4,7 @@
 run_pipeline.py
 ===============
 Menjalankan training pipeline secara BERURUTAN (sequential):
-  YOLO8 → YOLO9 → YOLO11 → MaskRCNN
+  YOLO8 → YOLO9 → YOLO11 → MaskRCNN → Hybrid Evaluation
 
 Setiap model:
   1. Dijalankan dalam tmux session terpisah
@@ -38,7 +38,7 @@ tmux new-session -d -s pipeline "cd /root/Trainning-Models/MyFineTunning-dev && 
 ### Fitur:
 | Fitur | Penjelasan |
 |---|---|
-| **Sequential** | YOLO8 → YOLO9 → YOLO11 → MaskRCNN berurutan |
+| **Sequential** | YOLO8 → YOLO9 → YOLO11 → MaskRCNN → Hybrid berurutan |
 | **Memory Cleanup** | `torch.cuda.empty_cache()` + gc + cek zombie proses di antara setiap model |
 | **GPU Monitoring** | Cetak status VRAM setiap 30 detik selama training |
 | **Telegram** | Notifikasi saat setiap model selesai dan ringkasan akhir |
@@ -83,6 +83,7 @@ TRAINING_JOBS = [
         "workdir": f"{BASE_DIR}/yolo/yolo8",
         "script": "main.py",
         "logfile": "yolo8training.log",
+        "args": "",
     },
     {
         "name": "yolo9",
@@ -90,6 +91,7 @@ TRAINING_JOBS = [
         "workdir": f"{BASE_DIR}/yolo/yolo9",
         "script": "main.py",
         "logfile": "yolo9training.log",
+        "args": "",
     },
     {
         "name": "yolo11",
@@ -97,6 +99,7 @@ TRAINING_JOBS = [
         "workdir": f"{BASE_DIR}/yolo/yolo11",
         "script": "main.py",
         "logfile": "yolo11training.log",
+        "args": "",
     },
     {
         "name": "maskrcnn",
@@ -104,6 +107,15 @@ TRAINING_JOBS = [
         "workdir": f"{BASE_DIR}/mask-r-cnn",
         "script": "train_multigpu.py",
         "logfile": "masktraining.log",
+        "args": "",
+    },
+    {
+        "name": "hybrid",
+        "session": "hybrideval",
+        "workdir": f"{BASE_DIR}/hybrid",
+        "script": "main.py",
+        "logfile": "hybrid_eval.log",
+        "args": "",
     },
 ]
 
@@ -235,23 +247,28 @@ def start_training(job):
     workdir = job["workdir"]
     script = job["script"]
     logfile = job["logfile"]
+    extra_args = job.get("args", "")
 
     # Kill session lama jika ada
     kill_tmux_session(session)
     time.sleep(1)
 
     # Bangun command untuk tmux
+    script_cmd = f'python -u {script}'
+    if extra_args:
+        script_cmd += f' {extra_args}'
+
     cmd = (
         f'{VENV_ACTIVATE} && '
         f'cd {workdir} && '
-        f'python -u {script} 2>&1 | tee {logfile}'
+        f'{script_cmd} 2>&1 | tee {logfile}'
     )
 
     tmux_cmd = ["tmux", "new-session", "-d", "-s", session, cmd]
 
     log(f"🚀 Memulai: {session}")
     log(f"   Dir   : {workdir}")
-    log(f"   Script: {script}")
+    log(f"   Script: {script} {extra_args}")
     log(f"   Log   : {workdir}/{logfile}")
 
     result = subprocess.run(tmux_cmd, capture_output=True, text=True)
@@ -407,6 +424,22 @@ def main():
     )
 
     print_gpu_status("Akhir Pipeline")
+
+    # ==============================================================================
+    # UPLOAD KE GDRIVE
+    # ==============================================================================
+    print(flush=True)
+    print("=" * 65, flush=True)
+    print("  ☁️ MEMULAI UPLOAD KE GDRIVE", flush=True)
+    print("=" * 65, flush=True)
+    send_telegram("☁️ <b>Memulai Upload ke GDrive...</b>\nMenjalankan sinkronisasi via RClone.")
+    
+    upload_result = subprocess.run(["bash", "rclone_sync.sh", "upload"], cwd=BASE_DIR)
+    
+    if upload_result.returncode == 0:
+        send_telegram("🏁 <b>Upload Selesai!</b>\nSemua data hasil pipeline & kompresi berhasil diamankan ke cloud.")
+    else:
+        send_telegram("⚠️ <b>Upload Selesai dengan Error!</b>\nMohon periksa log RClone untuk melihat detail gagalnya upload.")
 
 
 if __name__ == "__main__":

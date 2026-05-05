@@ -6,11 +6,14 @@
 # Cara pakai:
 #
 # 1. Background Execution (TMUX):
-#    tmux new-session -d -s setup_session "cd ~/Computer-Vision/MyFineTunning-dev && bash setup.sh 2>&1 | tee SetupReport.log"
+#    tmux new-session -d -s setup_session "cd /root/Trainning-Models/MyFineTunning-dev && bash setup.sh 2>&1 | tee SetupReport.log"
+#    atau
+#    tmux new-session -d -s setup_session "cd C:\Users\Server\Documents\~S3\Tunning\MyFineTunning-20260502_134510-RunPOD && bash setup.sh 2>&1 | tee SetupReport.log"
 #
 # 2. Direct Execution:
-#    cd ~/Computer-Vision/MyFineTunning-dev && bash setup.sh
-#
+#    cd /Trainning-Models/MyFineTunning-dev && bash setup.sh
+#    atau
+#    cd /mnt/c/Users/Server/Documents/~S3/Tunning/MyFineTunning-20260502_134510-RunPOD && bash setup.sh
 # 3. Mode Options:
 #    bash setup.sh            ← Standard (New .venv)
 #    bash setup.sh --reuse    ← Reuse MyTrainEngine .venv

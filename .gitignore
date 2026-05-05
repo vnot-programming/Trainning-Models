@@ -4,6 +4,7 @@
 MyFineTunning-dev/__pycache__/
 MyFineTunning-dev/.venv/
 MyFineTunning-dev/.env
+MyFineTunning-dev/rclone.conf
 MyFineTunning-dev/datasets/*
 !MyFineTunning-dev/datasets/.gitkeep
 MyFineTunning-dev/models/*

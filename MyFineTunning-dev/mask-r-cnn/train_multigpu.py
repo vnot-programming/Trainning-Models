@@ -28,6 +28,13 @@ import os, sys, gc, csv, time, random, argparse
 # ─── CRITICAL: matikan dynamo SEBELUM torch di-import ────────────────────────
 os.environ["TORCHDYNAMO_DISABLE"]     = "1"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
+# ─── Batasi thread per proses agar tidak crash saat DDP multi-GPU ─────────────
+# Tanpa ini: 5 GPU × 32 workers × 96 OpenBLAS threads = ~15.000+ threads → crash
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS",      "1")
+os.environ.setdefault("OMP_NUM_THREADS",       "1")
+os.environ.setdefault("NUMEXPR_MAX_THREADS",   "1")
 # ─────────────────────────────────────────────────────────────────────────────
 
 import torch
@@ -88,6 +95,14 @@ from models.maskrcnn_dataset import RoboflowSegToMaskRCNN, collate_fn
 
 def build_dataloaders(rank: int, world_size: int):
     """Buat DataLoader dengan DistributedSampler untuk proses DDP rank `rank`."""
+    # Auto-scale workers: total workers = world_size × workers_per_gpu
+    # Batasi agar total tidak melebihi CPU cores dan tidak meledakkan thread
+    cpu_count = os.cpu_count() or 4
+    max_workers_per_gpu = max(1, min(NUM_WORKERS, cpu_count // world_size, 8))
+    if rank == 0 and max_workers_per_gpu != NUM_WORKERS:
+        print(f"[DataLoader] NUM_WORKERS auto-scaled: {NUM_WORKERS} → {max_workers_per_gpu}/GPU "
+              f"(total: {max_workers_per_gpu * world_size}, CPUs: {cpu_count})")
+
     train_ds = RoboflowSegToMaskRCNN(
         images_dir=os.path.join(SEG_DATASET_LOCATION, "train", "images"),
         labels_dir=os.path.join(SEG_DATASET_LOCATION, "train", "labels"),
@@ -108,7 +123,7 @@ def build_dataloaders(rank: int, world_size: int):
         train_ds,
         batch_size=BATCH_SIZE_PER_GPU,
         sampler=train_sampler,
-        num_workers=NUM_WORKERS,
+        num_workers=max_workers_per_gpu,
         collate_fn=collate_fn,
         pin_memory=True,
     )
@@ -116,7 +131,7 @@ def build_dataloaders(rank: int, world_size: int):
         val_ds,
         batch_size=BATCH_SIZE_PER_GPU,
         sampler=val_sampler,
-        num_workers=NUM_WORKERS,
+        num_workers=max_workers_per_gpu,
         collate_fn=collate_fn,
         pin_memory=True,
     )
@@ -237,7 +252,7 @@ def save_checkpoint(epoch: int, model, optimizer, scheduler,
 # ==============================================================================
 # TRAINING WORKER (1 proses per GPU)
 # ==============================================================================
-def train_worker(local_rank: int, gpu_ids: list, best_pt_path: str):
+def train_worker(local_rank: int, world_size: int, gpu_ids: list, best_pt_path: str):
     """
     Dijalankan oleh setiap proses DDP.
 
@@ -259,7 +274,7 @@ def train_worker(local_rank: int, gpu_ids: list, best_pt_path: str):
     dist.init_process_group(
         backend="nccl",
         init_method="env://",
-        world_size=WORLD_SIZE,
+        world_size=world_size,
         rank=local_rank,
     )
     torch.cuda.set_device(global_gpu)
@@ -277,7 +292,7 @@ def train_worker(local_rank: int, gpu_ids: list, best_pt_path: str):
         print(f"[Mask R-CNN] Parameter trainable: {n_params:,}")
 
     # ── DataLoaders ─────────────────────────────────────────────────────────
-    train_loader, val_loader, train_sampler = build_dataloaders(local_rank, WORLD_SIZE)
+    train_loader, val_loader, train_sampler = build_dataloaders(local_rank, world_size)
 
     # ── Optimizer & Scheduler ────────────────────────────────────────────────
     params    = [p for p in model.parameters() if p.requires_grad]
@@ -668,13 +683,18 @@ if __name__ == "__main__":
     # ── Parse Argumen ────────────────────────────────────────────────────────
     parser = argparse.ArgumentParser(description="Mask R-CNN Multi-GPU DDP Training")
     parser.add_argument(
-        "--gpus", type=str, default="0",
-        help="GPU index yang digunakan, pisahkan koma. Default: '0'. "
+        "--gpus", type=str, default="all",
+        help="GPU index yang digunakan, pisahkan koma. Default: 'all' (semua GPU). "
              "Contoh: '1,2' untuk GPU 1 dan 2, '0' untuk single GPU 0."
     )
     args = parser.parse_args()
 
-    GPU_IDS = [int(g.strip()) for g in args.gpus.split(",") if g.strip()]
+    # Auto-detect semua GPU jika --gpus tidak dispesifikasi atau "all"
+    if args.gpus.strip().lower() == "all":
+        n_gpus = torch.cuda.device_count()
+        GPU_IDS = list(range(n_gpus))
+    else:
+        GPU_IDS = [int(g.strip()) for g in args.gpus.split(",") if g.strip()]
     WORLD_SIZE = len(GPU_IDS)
 
     # ── Header Print ─────────────────────────────────────────────────────────
@@ -735,7 +755,7 @@ if __name__ == "__main__":
         # ── Spawn satu proses per GPU ────────────────────────────────────────
         mp.spawn(
             train_worker,
-            args=(GPU_IDS, best_pt),
+            args=(WORLD_SIZE, GPU_IDS, best_pt),
             nprocs=WORLD_SIZE,
             join=True,
         )
