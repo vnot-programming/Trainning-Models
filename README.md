@@ -1,20 +1,20 @@
 # 🤖 Computer Vision Training Models
 
-[![Version](https://img.shields.io/badge/version-v0.1.0--dev-orange?style=for-the-badge)](https://github.com/vnot-programming/Trainning-Models/releases/tag/v0.1.0-dev)
-[![Status](https://img.shields.io/badge/Status-Pre--Release-yellow?style=for-the-badge)](https://github.com/vnot-programming/Trainning-Models/releases)
+[![Version](https://img.shields.io/badge/version-v0.1.1-blue?style=for-the-badge)](https://github.com/vnot-programming/Trainning-Models/releases/tag/v0.1.1)
+[![Status](https://img.shields.io/badge/Status-Release-green?style=for-the-badge)](https://github.com/vnot-programming/Trainning-Models/releases)
 
 Repository for Fine-Tuning models and Computer Vision experiments.
 
 ## 🚀 Current Release
-- **Release Title:** `MyFineTunning_20260424_233716`
-- **Version Tag:** `v0.1.0-dev`
-- **Type:** Pre-Release (Development)
+- **Release Title:** `MyFineTunning_20260505_000000`
+- **Version Tag:** `v0.1.1`
+- **Type:** Release (Stable)
 
 ## 📦 Downloads & Assets
 > [!TIP]
 > You can download the latest model weights and assets from the release page below.
 
-🔗 **[Download Latest Release Assets](https://github.com/vnot-programming/Trainning-Models/releases/tag/v0.1.0-dev)**
+🔗 **[Download Latest Release Assets](https://github.com/vnot-programming/Trainning-Models/releases/tag/v0.1.1)**
 
 ---
 
