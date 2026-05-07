@@ -1,0 +1,12 @@
+Image,YOLO_ms,SAM2_ms,Total_ms,FPS,Detections,Notes
+image1-test,1009.63,394.25,1403.88,0.71,1,Sample dari main.py (outlier - pertama kali load)
+image2-test,12.15,97.63,109.77,9.11,1,Normal detection
+image3-test,12.21,93.79,106.00,9.43,1,Normal detection
+image4-test,12.56,96.69,109.25,9.15,1,Normal detection
+image5-test,12.00,95.95,107.95,9.26,1,Normal detection
+image6-test,12.46,97.08,109.54,9.13,1,Normal detection
+image7-test,12.45,97.63,110.09,9.08,1,Normal detection
+image8-test,12.76,95.40,108.16,9.25,1,Normal detection
+image9-test,14.47,99.40,113.87,8.78,1,Normal detection
+image10-test,14.25,99.21,113.46,8.81,1,Normal detection
+AVERAGE,112.39,107.70,216.20,4.62,1,Calculated average (excluding image1 outlier)

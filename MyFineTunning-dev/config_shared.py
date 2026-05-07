@@ -70,7 +70,11 @@ DET_YAML = os.path.join(DET_DATASET_LOCATION, "data.yaml")
 SEG_YAML = os.path.join(SEG_DATASET_LOCATION, "data.yaml")
 
 # ==============================================================================
+<<<<<<< HEAD
 # PATHS — Pipeline (untuk run_pipeline.py)
+=======
+# HYPERPARAMETER Testing (Bisa diubah sesuai kebutuhan, tapi pastikan konsisten untuk semua model)
+>>>>>>> main
 # ==============================================================================
 VENV_ACTIVATE_PATH = os.path.join(_FINETUNING_ROOT, ".venv", "bin", "activate")
 
@@ -123,15 +127,25 @@ YOLO_BATCH_SIZE     = 16   # 64    # DDP total (dibagi ke semua GPU oleh Ultraly
 MASKRCNN_BATCH_SIZE = 8    # 4     # Single GPU cuda:0
 NUM_WORKERS         = 10    # 16
 
+<<<<<<< HEAD
 # ==============================================================================
 # HYPERPARAMETER RunPOD
 # ==============================================================================
+=======
+# # ==============================================================================
+# # HYPERPARAMETER Fine-tuning (Bisa diubah sesuai kebutuhan, tapi pastikan konsisten untuk semua model)
+# # ==============================================================================
+>>>>>>> main
 # EPOCHS              = 100
 # IMAGE_SIZE          = 640
 # NUM_CLASSES         = 7
 # YOLO_BATCH_SIZE     = 160   # DDP total (dibagi ke semua GPU oleh Ultralytics)
 # MASKRCNN_BATCH_SIZE = 16    # 4
 # NUM_WORKERS         = 32    # 16
+<<<<<<< HEAD
+=======
+
+>>>>>>> main
 
 # ==============================================================================
 # HELPERS

@@ -427,6 +427,7 @@ def main():
 
     print_gpu_status("Akhir Pipeline")
 
+<<<<<<< HEAD
     # # ==============================================================================
     # # UPLOAD KE GDRIVE
     # # ==============================================================================
@@ -442,6 +443,23 @@ def main():
     #     send_telegram("🏁 <b>Upload Selesai!</b>\nSemua data hasil pipeline & kompresi berhasil diamankan ke cloud.")
     # else:
     #     send_telegram("⚠️ <b>Upload Selesai dengan Error!</b>\nMohon periksa log RClone untuk melihat detail gagalnya upload.")
+=======
+    # ==============================================================================
+    # UPLOAD KE GDRIVE
+    # ==============================================================================
+    print(flush=True)
+    print("=" * 65, flush=True)
+    print("  ☁️ MEMULAI UPLOAD KE GDRIVE", flush=True)
+    print("=" * 65, flush=True)
+    send_telegram("☁️ <b>Memulai Upload ke GDrive...</b>\nMenjalankan sinkronisasi via RClone.")
+    
+    upload_result = subprocess.run(["bash", "rclone_sync.sh", "upload"], cwd=BASE_DIR)
+    
+    if upload_result.returncode == 0:
+        send_telegram("🏁 <b>Upload Selesai!</b>\nSemua data hasil pipeline & kompresi berhasil diamankan ke cloud.")
+    else:
+        send_telegram("⚠️ <b>Upload Selesai dengan Error!</b>\nMohon periksa log RClone untuk melihat detail gagalnya upload.")
+>>>>>>> main
 
 
 if __name__ == "__main__":

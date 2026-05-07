@@ -6,12 +6,20 @@
 # Cara pakai:
 #
 # 1. Background Execution (TMUX):
+<<<<<<< HEAD
 #    tmux new-session -d -s setup_session "cd /home/my/Trainning-Models/MyFineTunning-dev && bash setup.sh 2>&1 | tee SetupReport.log"
+=======
+#    tmux new-session -d -s setup_session "cd /root/Trainning-Models/MyFineTunning-dev && bash setup.sh 2>&1 | tee SetupReport.log"
+>>>>>>> main
 #    atau
 #    tmux new-session -d -s setup_session "cd C:\Users\Server\Documents\~S3\Tunning\MyFineTunning-20260502_134510-RunPOD && bash setup.sh 2>&1 | tee SetupReport.log"
 #
 # 2. Direct Execution:
+<<<<<<< HEAD
 #    cd /home/my/Trainning-Models/MyFineTunning-dev && bash setup.sh
+=======
+#    cd /Trainning-Models/MyFineTunning-dev && bash setup.sh
+>>>>>>> main
 #    atau
 #    cd /mnt/c/Users/Server/Documents/~S3/Tunning/MyFineTunning-20260502_134510-RunPOD && bash setup.sh
 # 3. Mode Options:
