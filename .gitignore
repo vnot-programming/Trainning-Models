@@ -4,6 +4,7 @@
 MyFineTunning-dev/__pycache__/
 MyFineTunning-dev/.venv/
 MyFineTunning-dev/.env
+MyFineTunning-dev/rclone.conf
 MyFineTunning-dev/datasets/*
 !MyFineTunning-dev/datasets/.gitkeep
 MyFineTunning-dev/models/*
@@ -38,8 +39,15 @@ MyFineTunning-dev/yolo/yolo9/yolo26n.pt
 MyFineTunning-dev/yolo/yolo11/yolo11training.log
 MyFineTunning-dev/yolo/yolo11/yolo26n.pt
 MyFineTunning-dev/rclone_local/*
+MyFineTunning-dev/hybrid/*.pt
+.workspace_id
+
 # General
 .DS_Store
 .vscode/
 .idea/
-.workspace_id
+/home/my/Trainning-Models/.agents
+/home/my/Trainning-Models/.instructions
+/home/my/Trainning-Models/.prompts
+/home/my/Trainning-Models/.instructions.md
+/home/my/Trainning-Models/AGENTS.md
