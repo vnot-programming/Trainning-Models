@@ -252,11 +252,7 @@ def save_checkpoint(epoch: int, model, optimizer, scheduler,
 # ==============================================================================
 # TRAINING WORKER (1 proses per GPU)
 # ==============================================================================
-<<<<<<< HEAD
 def train_worker(local_rank: int, gpu_ids: list, best_pt_path: str, world_size: int):
-=======
-def train_worker(local_rank: int, world_size: int, gpu_ids: list, best_pt_path: str):
->>>>>>> main
     """
     Dijalankan oleh setiap proses DDP.
 
@@ -759,11 +755,7 @@ if __name__ == "__main__":
         # ── Spawn satu proses per GPU ────────────────────────────────────────
         mp.spawn(
             train_worker,
-<<<<<<< HEAD
             args=(GPU_IDS, best_pt, WORLD_SIZE),
-=======
-            args=(WORLD_SIZE, GPU_IDS, best_pt),
->>>>>>> main
             nprocs=WORLD_SIZE,
             join=True,
         )
@@ -783,7 +775,7 @@ if __name__ == "__main__":
     os.makedirs(REPORT_DIR, exist_ok=True)
     csv_path = os.path.join(REPORT_DIR, "report_maskrcnn_ddp_seg.csv")
     fields   = ["Model", "Model Size (MB)", "mAP50-95(Box)",
-                "mAP50-95(Mask)", "Latency(ms)", "FPS", "GPUs"]
+                "mAP50-95(Mask)", "Latency (ms)", "FPS", "GPUs", "Evaluator"]
 
     # Ambil nama merk GPU & hitung jumlahnya (e.g. "2x NVIDIA RTX 3060")
     from collections import Counter
@@ -799,9 +791,10 @@ if __name__ == "__main__":
             "Model Size (MB)": size_mb,
             "mAP50-95(Box)":   map_box,
             "mAP50-95(Mask)":  map_mask,
-            "Latency(ms)":     lat_ms,
+            "Latency (ms)":     lat_ms,
             "FPS":             fps_val,
             "GPUs":            gpu_report_str,
+            "Evaluator":       "COCOeval",
         })
     print(f"\n✅ Report: {csv_path}")
 

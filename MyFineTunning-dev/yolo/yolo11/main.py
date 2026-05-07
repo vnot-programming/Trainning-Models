@@ -126,12 +126,16 @@ def _eval_det(label, pt, yaml):
             "Preprocess (ms)": pre,
             "Inference (ms)":  inf,
             "Postprocess (ms)":post,
+            "Latency (ms)": round(pre+inf+post, 2),
+            "FPS": round(1000/(pre+inf+post), 2) if pre+inf+post>0 else "N/A",
+            "GPUs": get_gpu_report_str(DEVICE),
+            "Evaluator":       "Ultralytics",
         }
     except Exception as e:
         print(f"  ⚠️ {label}: {e}")
         return {"Model": label, **{k: "ERR" for k in [
             "Model Size (MB)", "mAP50-95", "mAP50", "Precision", "Recall",
-            "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)"]}}
+            "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"]}}
 
 
 def _eval_seg(label, pt, yaml):
@@ -156,15 +160,16 @@ def _eval_seg(label, pt, yaml):
             "Model Size (MB)": round(os.path.getsize(pt)/1e6, 2),
             "mAP50-95(Box)":   box_map,
             "mAP50-95(Mask)":  mask_map,
-            "Latency(ms)":     total_ms,
+            "Latency (ms)":     total_ms,
             "FPS":             fps,
             "GPUs":            get_gpu_report_str(DEVICE),
+        "Evaluator":       "Ultralytics",
         }
     except Exception as e:
         print(f"  ⚠️ {label}: {e}")
         return {"Model": label, **{k: "ERR" for k in [
             "Model Size (MB)", "mAP50-95(Box)", "mAP50-95(Mask)",
-            "Latency(ms)", "FPS"]}}
+            "Latency (ms)", "FPS", "GPUs", "Evaluator"]}}
 
 
 def _coco_eval_seg(label, pt, yaml):
@@ -238,7 +243,7 @@ def _coco_eval_seg(label, pt, yaml):
             "Model Size (MB)": round(os.path.getsize(pt)/1e6, 2),
             "mAP50-95(Box)":   box_mAP50_95,
             "mAP50-95(Mask)":  mAP50_95,
-            "Latency(ms)":     total_ms,
+            "Latency (ms)":     total_ms,
             "FPS":             fps,
             "GPUs":            get_gpu_report_str(DEVICE),
             "Evaluator":       "COCOeval",
@@ -352,7 +357,21 @@ def _coco_eval_det(label, pt, yaml):
                     # Only match predictions with GT from same image
                     if pred["image"] != gt_img_path:
                         continue
-                    iou = compute_iou(pred["pred_box"], gt_box)
+                    # IoU calculation
+                    x1 = max(pred["pred_box"][0], gt_box[0])
+                    y1 = max(pred["pred_box"][1], gt_box[1])
+                    x2 = min(pred["pred_box"][2], gt_box[2])
+                    y2 = min(pred["pred_box"][3], gt_box[3])
+                    
+                    inter_w = max(0, x2 - x1)
+                    inter_h = max(0, y2 - y1)
+                    inter_area = inter_w * inter_h
+                    
+                    pred_area = (pred["pred_box"][2] - pred["pred_box"][0]) * (pred["pred_box"][3] - pred["pred_box"][1])
+                    gt_area = (gt_box[2] - gt_box[0]) * (gt_box[3] - gt_box[1])
+                    union_area = pred_area + gt_area - inter_area
+                    
+                    iou = inter_area / union_area if union_area > 0 else 0
                     if iou > max_iou:
                         max_iou = iou
                         best_gt_key = (gt_img_path, gt_idx)
@@ -385,6 +404,9 @@ def _coco_eval_det(label, pt, yaml):
             "Preprocess (ms)": pre,
             "Inference (ms)":  inf,
             "Postprocess (ms)":post,
+            "Latency (ms)": round(pre+inf+post, 2),
+            "FPS": round(1000/(pre+inf+post), 2) if pre+inf+post>0 else "N/A",
+            "GPUs": get_gpu_report_str(0),
             "Evaluator":       "COCOeval",
         }
     except Exception as e:
@@ -425,9 +447,7 @@ else:
     evaluator_used_det = "COCOeval"
     det_row["Model"] = "YOLO11m (Fine-tuned COCOeval)"
 
-det_fields = ["Model", "Model Size (MB)", "mAP50-95", "mAP50",
-              "Precision", "Recall",
-              "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)", "Evaluator"]
+det_fields = ["Model", "Model Size (MB)", "mAP50-95", "mAP50", "Precision", "Recall", "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"]
 det_csv = os.path.join(report_dir, "report_yolo11m_det_coco.csv")
 with open(det_csv, "w", newline="", encoding="utf-8") as f:
     w = csv.DictWriter(f, fieldnames=det_fields)
@@ -450,8 +470,7 @@ else:
     # Update label untuk menunjukkan COCOeval
     seg_row["Model"] = "YOLO11m-Seg (Fine-tuned COCOeval)"
 
-seg_fields = ["Model", "Model Size (MB)", "mAP50-95(Box)",
-              "mAP50-95(Mask)", "Latency(ms)", "FPS", "GPUs", "Evaluator"]
+seg_fields = ["Model", "Model Size (MB)", "mAP50-95(Box)", "mAP50-95(Mask)", "Latency (ms)", "FPS", "GPUs", "Evaluator"]
 seg_csv = os.path.join(report_dir, "report_yolo11m_seg_coco.csv")
 with open(seg_csv, "w", newline="", encoding="utf-8") as f:
     w = csv.DictWriter(f, fieldnames=seg_fields); w.writeheader(); w.writerow(seg_row)

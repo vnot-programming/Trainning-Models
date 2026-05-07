@@ -14,13 +14,10 @@ Output:
   - hybrid_detailed_predictions.csv (prediksi per gambar)
 
 Cara menjalankan:
-<<<<<<< HEAD
     cd hybrid && python3 -u main.py 2>&1 | tee hybrid_map_eval.log
     
-  tmux new-session -d -s run_pipeline "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev/hybrid && python3 -u main.py 2>&1 | tee hybrid_final_test.log"
-=======
-    python -u evaluate_hybrid_map.py 2>&1 | tee hybrid_map_eval.log
->>>>>>> main
+  tmux new-session -d -s hybrideval "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev/hybrid && python3 -u main.py 2>&1 | tee hybrideval.log"
+    python -u Trainning-Models/MyFineTunning-dev/main.py 2>&1 | tee hybrid_map_eval.log
 """
 
 import os, sys, csv, gc, time, yaml
@@ -34,7 +31,10 @@ sys.path.insert(0, ROOT)
 
 from config_shared import (
     WORKSPACE_DIR, SEG_YAML, DET_YAML, IMAGE_SIZE,
-    get_output_dir, REPORTS_DIR
+    get_output_dir, REPORTS_DIR, DATA_FILES_DIR
+)
+from coco_eval_utils import (
+    build_coco_ground_truth, evaluate_coco_predictions, check_pycocotools
 )
 import torch
 import cv2
@@ -55,13 +55,6 @@ def get_gpu_report_str():
 # HELPER FUNCTIONS
 # ==============================================================================
 
-<<<<<<< HEAD
-=======
-# ==============================================================================
-# HELPER FUNCTIONS
-# ==============================================================================
-
->>>>>>> main
 def _flush(label: str):
     gc.collect()
     torch.cuda.empty_cache()
@@ -77,7 +70,6 @@ def load_yaml(path):
         return yaml.safe_load(f)
 
 
-<<<<<<< HEAD
 def resolve_dataset_path(base, relative_path):
     """Resolve a dataset path from YAML, normalizing relative and absolute entries."""
     if os.path.isabs(relative_path):
@@ -123,8 +115,6 @@ def infer_label_path_from_image_path(image_dir):
     return str(image_path.parent / "labels" / image_path.name)
 
 
-=======
->>>>>>> main
 def compute_iou(box1, box2):
     """Compute IoU between two boxes [x1, y1, x2, y2]."""
     x1 = max(box1[0], box2[0])
@@ -147,7 +137,6 @@ def compute_mask_iou(mask_pred, mask_gt):
     return intersection / union if union > 0 else 0.0
 
 
-<<<<<<< HEAD
 def mask_to_rle(mask):
     """Encode a binary mask into COCO RLE format."""
     import pycocotools.mask as maskUtils
@@ -469,230 +458,41 @@ def evaluate_hybrid_map():
     print(f"  ✅ YOLO11m loaded: {yolo11m_path}")
     
     try:
-=======
-def polygon_to_mask(polygon_points, img_h, img_w):
-    """Convert YOLO segmentation polygon (normalized) to binary mask."""
-    mask = np.zeros((img_h, img_w), dtype=np.uint8)
-    if not polygon_points or len(polygon_points) < 6:
-        return mask.astype(bool)
-    
-    # Convert normalized coordinates to pixel coordinates
-    points = np.array(polygon_points).reshape(-1, 2)
-    points[:, 0] *= img_w
-    points[:, 1] *= img_h
-    points = points.astype(np.int32)
-    
-    cv2.fillPoly(mask, [points], 1)
-    return mask.astype(bool)
-
-
-def load_ground_truth_labels(yaml_path, split="valid"):
-    """
-    Load ground truth dari dataset YAML.
-    Uses 'valid' folder (not 'val') to match your dataset structure.
-    Returns: dict {image_path: {'boxes': [[x1,y1,x2,y2], ...], 'clss': [cls1, ...]}}
-    """
-    cfg = load_yaml(yaml_path)
-    base = cfg.get("path", os.path.dirname(yaml_path))
-    
-    # Get split folder name from YAML, default to "valid"
-    split_folder = cfg.get(split, cfg.get("val", split))
-    
-    # Build paths
-    img_dir = os.path.join(base, "images", split_folder)
-    label_dir = os.path.join(base, "labels", split_folder)
-    
-    if not os.path.isdir(img_dir):
-        print(f"  ⚠️  Image dir tidak ditemukan: {img_dir}")
-        return {}
-    
-    gt_data = {}
-    valid_exts = (".jpg", ".jpeg", ".png", ".bmp")
-    
-    for img_file in sorted(os.listdir(img_dir)):
-        if not img_file.lower().endswith(valid_exts):
-            continue
-        
-        img_path = os.path.join(img_dir, img_file)
-        label_path = os.path.join(label_dir, os.path.splitext(img_file)[0] + ".txt")
-        
-        boxes, clss = [], []
-        
-        # Get image dimensions
-        img = cv2.imread(img_path)
-        if img is None:
-            continue
-        img_h, img_w = img.shape[:2]
-        
-        # Load labels
-        if os.path.exists(label_path):
-            with open(label_path, "r") as f:
-                for line in f:
-                    parts = line.strip().split()
-                    if len(parts) >= 5:
-                        cls = int(parts[0])
-                        # YOLO format: cls cx cy w h (normalized)
-                        cx, cy, w, h = map(float, parts[1:5])
-                        x1 = (cx - w/2) * img_w
-                        y1 = (cy - h/2) * img_h
-                        x2 = (cx + w/2) * img_w
-                        y2 = (cy + h/2) * img_h
-                        boxes.append([x1, y1, x2, y2])
-                        clss.append(cls)
-        
-        if boxes:  # Only add if there are annotations
-            gt_data[img_path] = {"boxes": boxes, "clss": clss}
-    
-    print(f"  ✅ Loaded {len(gt_data)} ground truth images dari {split_folder}")
-    return gt_data
-
-
-def load_ground_truth_masks(yaml_path, split="valid"):
-    """
-    Load ground truth masks untuk segmentasi.
-    Generates masks from YOLO polygon labels (not separate mask files).
-    Returns: dict {image_path: {'boxes': [...], 'clss': [...], 'masks': [mask1, mask2, ...]}}
-    """
-    cfg = load_yaml(yaml_path)
-    base = cfg.get("path", os.path.dirname(yaml_path))
-    
-    # Get split folder name
-    split_folder = cfg.get(split, cfg.get("val", split))
-    
-    # Build paths
-    img_dir = os.path.join(base, "images", split_folder)
-    label_dir = os.path.join(base, "labels", split_folder)
-    
-    if not os.path.isdir(img_dir):
-        print(f"  ⚠️  Image dir tidak ditemukan: {img_dir}")
-        return {}
-    
-    gt_data = {}
-    valid_exts = (".jpg", ".jpeg", ".png", ".bmp")
-    
-    for img_file in sorted(os.listdir(img_dir)):
-        if not img_file.lower().endswith(valid_exts):
-            continue
-        
-        img_path = os.path.join(img_dir, img_file)
-        label_path = os.path.join(label_dir, os.path.splitext(img_file)[0] + ".txt")
-        
-        boxes, clss, masks = [], [], []
-        
-        # Get image dimensions
-        img = cv2.imread(img_path)
-        if img is None:
-            continue
-        img_h, img_w = img.shape[:2]
-        
-        # Load labels with polygon points
-        if os.path.exists(label_path):
-            with open(label_path, "r") as f:
-                for line in f:
-                    parts = line.strip().split()
-                    if len(parts) >= 5:
-                        cls = int(parts[0])
-                        # Check if it's segmentation format (polygon) or detection format
-                        if len(parts) >= 7:  # Segmentation: cls x1 y1 x2 y2 ... xn yn
-                            polygon_points = list(map(float, parts[1:]))
-                            boxes.append([0, 0, img_w, img_h])  # Full image as box
-                            clss.append(cls)
-                            mask = polygon_to_mask(polygon_points, img_h, img_w)
-                            masks.append(mask)
-                        else:  # Detection format: cls cx cy w h
-                            cx, cy, w, h = map(float, parts[1:5])
-                            x1 = (cx - w/2) * img_w
-                            y1 = (cy - h/2) * img_h
-                            x2 = (cx + w/2) * img_w
-                            y2 = (cy + h/2) * img_h
-                            boxes.append([x1, y1, x2, y2])
-                            clss.append(cls)
-                            masks.append(None)  # No mask for detection format
-    
-        if boxes:
-            gt_data[img_path] = {"boxes": boxes, "clss": clss, "masks": masks}
-    
-    print(f"  ✅ Loaded {len(gt_data)} ground truth (seg) images dari {split_folder}")
-    return gt_data
-
-
-# ==============================================================================
-# MAIN EVALUATION
-# ==============================================================================
-
-def evaluate_hybrid_map():
-    """Evaluasi mAP untuk Hybrid Pipeline."""
-    
-    print("\n" + "="*65)
-    print("  Evaluasi mAP Hybrid Pipeline (YOLO11m + SAM2)")
-    print("="*65)
-    
-    # --- 1. Load Models ---
-    print("\n[1] Loading Models...")
-    yolo11m_path = os.path.join(get_output_dir("yolo11m"), "weights", "best.pt")
-    if not os.path.exists(yolo11m_path):
-        print(f"  ❌ YOLO11m best.pt tidak ditemukan: {yolo11m_path}")
-        return
-    
-    yolo_det = YOLO(yolo11m_path)
-    print(f"  ✅ YOLO11m loaded: {yolo11m_path}")
-    
-    try:
->>>>>>> main
         sam_model = SAM("sam2.1_b.pt")
         print("  ✅ SAM2 loaded")
     except Exception as e:
-        print(f"  ❌ SAM2 gagal dimuat: {e}")
+        print(f"  ❌ Gagal load SAM2: {e}")
         return
-    
+        
+    # Kalkulasi ukuran model dinamis
+    try:
+        yolo_mb = os.path.getsize(yolo11m_path) / 1e6
+        sam_mb = os.path.getsize("sam2.1_b.pt") / 1e6
+        total_mb = yolo_mb + sam_mb
+        model_size_str = f"{total_mb:.2f}"
+    except Exception:
+        model_size_str = "N/A (Multi)"
+        
     # --- 2. Load Ground Truth ---
     print("\n[2] Loading Ground Truth...")
-<<<<<<< HEAD
     
     # Load BOTH from SEG_YAML to ensure consistency
     # Segmentation ground truth (with masks generated from polygons)
     gt_seg = load_ground_truth_masks(SEG_YAML, split="valid")
-    
     if not gt_seg:
         print("  ⚠️  Tidak ada ground truth segmentasi. Evaluasi dibatalkan.")
         return
-    
-    # Detection ground truth from SAME dataset (SEG_YAML)
+        
+    # Detection ground truth (using the exact same images as segmentation)
     # This ensures we evaluate on the same images
     gt_det = load_ground_truth_labels(SEG_YAML, split="valid")
     
-=======
-    # Detection ground truth (using "valid" folder to match dataset structure)
-    gt_det = load_ground_truth_labels(DET_YAML, split="valid")
-    # Segmentation ground truth (using "valid" folder)
-    gt_seg = load_ground_truth_masks(SEG_YAML, split="valid")
-    
->>>>>>> main
     if not gt_det:
         print("  ⚠️  Tidak ada ground truth deteksi. Evaluasi dibatalkan.")
         return
-    
-<<<<<<< HEAD
+        
     print(f"  ✅ Using same dataset for detection & segmentation: {len(gt_det)} images")
     
-    # --- 3. Evaluate on validation set ---
-    print("\n[3] Evaluasi pada validation set...")
-    all_predictions = []
-    mask_count = 0
-    
-    # Get number of classes from YAML
-    det_cfg = load_yaml(DET_YAML)
-    num_classes = det_cfg.get("nc", 4)  # Default4 if not specified
-    
-    # Process ALL images from gt_seg (since we need masks)
-    print(f"  ℹ️  Processing {len(gt_seg)} images from segmentation dataset")
-    
-    for idx, img_path in enumerate(sorted(gt_seg.keys()), 1):
-        if idx % 10 == 0:
-            print(f"  Proses {idx}/{len(gt_seg)}...")
-        
-        gt_item = gt_det.get(img_path, {"boxes": [], "clss": []})
-=======
     # --- 3. Evaluate on validation set ---
     print("\n[3] Evaluasi pada validation set...")
     all_predictions = []
@@ -700,15 +500,29 @@ def evaluate_hybrid_map():
     # Get number of classes from YAML
     det_cfg = load_yaml(DET_YAML)
     num_classes = det_cfg.get("nc", 4)  # Default 4 if not specified
+    mask_count = 0
+    
+    # For dynamic latency measurement
+    total_yolo_pre, total_yolo_inf, total_yolo_post = 0.0, 0.0, 0.0
+    total_sam_pre, total_sam_inf, total_sam_post = 0.0, 0.0, 0.0
+    latency_measured_images = 0
     
     for idx, (img_path, gt_item) in enumerate(gt_det.items(), 1):
         if idx % 10 == 0:
-            print(f"  Proses {idx}/{len(gt_det)}...")
->>>>>>> main
+            print(f"  Proses {idx}/{len(gt_seg)}...")
+        
+        gt_item = gt_det.get(img_path, {"boxes": [], "clss": []})
         
         # YOLO Detection
         det_result = yolo_det.predict(img_path, conf=0.5, verbose=False, imgsz=IMAGE_SIZE)
-        if det_result and det_result[0].boxes is not None:
+        
+        # Accumulate YOLO speeds
+        yolo_speed = getattr(det_result[0], 'speed', {})
+        total_yolo_pre += yolo_speed.get('preprocess', 0.0)
+        total_yolo_inf += yolo_speed.get('inference', 0.0)
+        total_yolo_post += yolo_speed.get('postprocess', 0.0)
+        
+        if det_result and det_result[0].boxes is not None and len(det_result[0].boxes) > 0:
             pred_boxes = det_result[0].boxes.xyxy.cpu().numpy()
             pred_confs = det_result[0].boxes.conf.cpu().numpy()
             pred_clss = det_result[0].boxes.cls.cpu().numpy().astype(int)
@@ -722,6 +536,13 @@ def evaluate_hybrid_map():
         if len(pred_boxes) > 0:
             try:
                 sam_result = sam_model.predict(det_result[0].orig_img, bboxes=pred_boxes, verbose=False)
+                
+                # Accumulate SAM speeds
+                sam_speed = getattr(sam_result[0], 'speed', {})
+                total_sam_pre += sam_speed.get('preprocess', 0.0)
+                total_sam_inf += sam_speed.get('inference', 0.0)
+                total_sam_post += sam_speed.get('postprocess', 0.0)
+                
                 if sam_result and sam_result[0].masks is not None:
                     for m in sam_result[0].masks.data.cpu().numpy():
                         # Resize mask to original size
@@ -731,6 +552,7 @@ def evaluate_hybrid_map():
                             if m.shape != (h, w):
                                 m = cv2.resize(m.astype(np.float32), (w, h), interpolation=cv2.INTER_NEAREST)
                             pred_masks.append(m > 0.5)
+                            mask_count += 1
                         else:
                             pred_masks.append(None)
                 else:
@@ -738,252 +560,142 @@ def evaluate_hybrid_map():
             except Exception as e:
                 print(f"  ⚠️  SAM2 error pada {img_path}: {e}")
                 pred_masks = [None] * len(pred_boxes)
+                # Ensure we add something for speed if predict failed but we still want average
         else:
             pred_masks = []
+        
+        latency_measured_images += 1
         
         # Save predictions
         for i in range(len(pred_boxes)):
             all_predictions.append({
                 "image": img_path,
-                "pred_box": pred_boxes[i],
-                "pred_conf": pred_confs[i] if len(pred_confs) > i else 0.0,
-                "pred_cls": pred_clss[i] if len(pred_clss) > i else -1,
+                "pred_box": pred_boxes[i].tolist(),
+                "pred_conf": float(pred_confs[i]) if len(pred_confs) > i else 0.0,
+                "pred_cls": int(pred_clss[i]) if len(pred_clss) > i else -1,
                 "pred_mask": pred_masks[i] if i < len(pred_masks) else None,
                 "gt_boxes": gt_item["boxes"],
                 "gt_clss": gt_item["clss"],
-<<<<<<< HEAD
                 "gt_masks": gt_seg.get(img_path, {}).get("masks", []),
-=======
-                "gt_masks": gt_seg.get(img_path, {}).get("masks", []) if img_path in gt_seg else [],
->>>>>>> main
             })
         
         if idx % 50 == 0:
             _flush(f"eval {idx}")
-    
-<<<<<<< HEAD
+            
     print(f"  ✅ Evaluasi selesai: {len(all_predictions)} prediksi, {mask_count} masks dari {len(gt_seg)} gambar")
     
-    # --- 4. Calculate mAP (Box) using COCOeval ---
-    print("\n[4] Menghitung mAP Box (COCOeval)...")
-    
-    # Build COCO format for detection
-    det_categories = [{"id": i+1, "name": f"class_{i}"} for i in range(num_classes)]
-    det_images = []
-    det_annotations = []
-    det_image_ids = {}
-    ann_id = 1
-    
-    for idx, (img_path, gt_item) in enumerate(gt_det.items(), 1):
-        img = cv2.imread(img_path)
-        if img is None:
-            continue
-        h, w = img.shape[:2]
-        det_image_ids[img_path] = idx
-        det_images.append({
-            "id": idx,
-            "file_name": os.path.basename(img_path),
-            "height": h,
-            "width": w,
-        })
-        for box, cls in zip(gt_item["boxes"], gt_item["clss"]):
-            x1, y1, x2, y2 = box
-            det_annotations.append({
-                "id": ann_id,
-                "image_id": idx,
-                "category_id": cls + 1,
-                "bbox": [x1, y1, x2 - x1, y2 - y1],
-                "area": (x2 - x1) * (y2 - y1),
-                "iscrowd": 0,
-            })
-            ann_id += 1
-    
-    det_coco_gt = {
-        "info": {},
-        "licenses": [],
-        "images": det_images,
-        "annotations": det_annotations,
-        "categories": det_categories,
-        "type": "instances",
-    }
-    
-    # Build detection predictions
-    det_preds = []
-    for p in all_predictions:
-        if p["pred_cls"] < 0 or p["pred_cls"] >= num_classes:
-            continue
-        det_preds.append({
-            "image_id": det_image_ids.get(p["image"], -1),
-            "category_id": int(p["pred_cls"]) + 1,
-            "bbox": [p["pred_box"][0], p["pred_box"][1], 
-                     p["pred_box"][2] - p["pred_box"][0], 
-                     p["pred_box"][3] - p["pred_box"][1]],
-            "score": float(p["pred_conf"]),
-        })
-    
-    # Evaluate using COCOeval
-    mAP50_box = 0.0
-    mAP50_95_box = "N/A"
-    precision_box = 0.0
-    recall_box = 0.0
-    
-    try:
-        from pycocotools.coco import COCO
-        from pycocotools.cocoeval import COCOeval
+    # Calculate Latency & FPS Dynamically
+    if latency_measured_images > 0:
+        avg_yolo_pre = total_yolo_pre / latency_measured_images
+        avg_yolo_inf = total_yolo_inf / latency_measured_images
+        avg_yolo_post = total_yolo_post / latency_measured_images
         
-        det_coco = COCO()
-        det_coco.dataset = det_coco_gt
-        det_coco.createIndex()
+        avg_sam_pre = total_sam_pre / latency_measured_images
+        avg_sam_inf = total_sam_inf / latency_measured_images
+        avg_sam_post = total_sam_post / latency_measured_images
         
-        det_coco_preds = det_coco.loadRes(det_preds)
-        det_eval = COCOeval(det_coco, det_coco_preds, iouType="bbox")
-        det_eval.params.imgIds = list(det_image_ids.values())
-        det_eval.evaluate()
-        det_eval.accumulate()
-        det_eval.summarize()
+        final_pre = avg_yolo_pre + avg_sam_pre
+        final_inf = avg_yolo_inf + avg_sam_inf
+        final_post = avg_yolo_post + avg_sam_post
         
-        mAP50_box = float(det_eval.stats[1]) if det_eval.stats.size > 1 else 0.0
-        mAP50_95_box = float(det_eval.stats[0]) if det_eval.stats.size > 0 else 0.0
+        latency_ms = final_pre + final_inf + final_post
+        fps = 1000.0 / latency_ms if latency_ms > 0 else 0.0
+    else:
+        final_pre, final_inf, final_post, latency_ms, fps = 0.0, 0.0, 0.0, 0.0, 0.0
+    
+    print(f"  ✅ Kecepatan Dinamis (YOLO+SAM): Pre={final_pre:.2f}ms, Inf={final_inf:.2f}ms, Post={final_post:.2f}ms")
+    print(f"  ✅ Latency Total={latency_ms:.2f}ms, FPS={fps:.2f}")
+
+    # --- 4. Calculate mAP (Box) and mAP (Mask) using COCOeval ---
+    print("\n[4] Menghitung mAP COCOeval...")
+    if not check_pycocotools():
+        print("  ⚠️  pycocotools tidak tersedia. Gagal menghitung mAP dengan akurat.")
+        mAP50_box, mAP50_95_box, mAP50_mask, mAP50_95_mask = "N/A", "N/A", "N/A", "N/A"
+        precision_box, recall_box = "N/A", "N/A"
+    else:
+        # We need to construct predictions for `evaluate_coco_predictions`
+        # which expects: [{"image": path, "pred_box": [x,y,x,y], "pred_cls": cls, "pred_conf": conf, "pred_mask": mask}, ...]
+        coco_gt_dict, image_ids = build_coco_ground_truth(SEG_YAML, split="valid")
         
-        # Use COCOeval Precision & Recall (stats[3] = AP@IoU=0.50:0.95 per class)
-        # COCOeval.stats indices:
-        # [0]=mAP@0.5:0.95, [1]=mAP@0.5, [2]=mAP@0.75
-        # [3]=mAP@0.5:0.95 small, [4]=medium, [5]=large
-        # [6]=AR@0.5:0.95 maxDets=1, [7]=10, [8]=100
-        # For Precision & Recall, we use the overall mAP values as approximation
-        # since COCOeval doesn't directly output P/R
-        
-        # Alternative: Calculate P/R from TP, FP, FN using COCOeval's internal counts
-        # COCOeval computes these during evaluate(), but doesn't expose directly
-        # So we use a simplified calculation based on mAP50 as proxy
-        
-        # Better approach: Use detection scores to estimate P/R
-        if len(det_preds) > 0:
-            # Count predictions with confidence > 0.5 (typical threshold)
-            high_conf_preds = [p for p in all_predictions if p["pred_conf"] > 0.5]
-            total_preds = len(high_conf_preds)
-            
-            # Estimate TP from mAP50 (correlation: mAP50 ≈ P * R / (P + R) for balanced datasets)
-            # Simplified: Assume P ≈ R ≈ mAP50 for rough estimate
-            precision_box = mAP50_box  # Approximation: P ≈ mAP@0.5
-            recall_box = mAP50_box    # Approximation: R ≈ mAP@0.5
+        if coco_gt_dict is None:
+            print("  ⚠️  Gagal memuat ground truth COCO. mAP tidak dapat dihitung.")
+            mAP50_box, mAP50_95_box, mAP50_mask, mAP50_95_mask = "N/A", "N/A", "N/A", "N/A"
+            precision_box, recall_box = "N/A", "N/A"
         else:
-            precision_box = 0.0
-            recall_box = 0.0
-        
-        print(f"  ✅ mAP50 (Box): {mAP50_box:.4f}")
-        print(f"  ✅ mAP50-95 (Box): {mAP50_95_box:.4f}")
-        print(f"  ✅ Precision (est): {precision_box:.4f}, Recall (est): {recall_box:.4f}")
-        print(f"  ℹ️  Precision/Recall diestimasi dari mAP50 (COCOeval)")
-    except ImportError:
-        print("  ⚠️  pycocotools tidak tersedia untuk Box evaluation")
-        mAP50_box = 0.0
-        mAP50_95_box = "N/A"
-    
-    # --- 5. Calculate mAP (Mask) ---
-    print("\n[5] Menghitung mAP Mask...")
-    det_cfg = load_yaml(DET_YAML)
-    category_names = det_cfg.get("names", [f"class_{i}" for i in range(1, num_classes + 1)])
-    mAP50_mask, mAP50_95_mask = evaluate_coco_mask(gt_seg, all_predictions, category_names)
-    print(f"  ✅ mAP50 (Mask): {mAP50_mask}")
-    print(f"  ✅ mAP50-95 (Mask): {mAP50_95_mask}")
-    
+            print("  📊 COCOeval Deteksi (Box)...")
+            mAP50_box, mAP50_95_box = evaluate_coco_predictions(coco_gt_dict, image_ids, all_predictions, iou_type="bbox")
+            
+            # Simple Precision / Recall calc
+            tp, fp, fn = 0, 0, 0
+            for pred in sorted(all_predictions, key=lambda x: x["pred_conf"], reverse=True):
+                if pred["pred_conf"] < 0.5:
+                    continue # only count high conf for P/R or we use all? Usually confidence threshold.
+                matched = False
+                for gt_b, gt_c in zip(pred["gt_boxes"], pred["gt_clss"]):
+                    if gt_c == pred["pred_cls"] and compute_iou(pred["pred_box"], gt_b) >= 0.5:
+                        tp += 1
+                        matched = True
+                        break
+                if not matched:
+                    fp += 1
+            # GT total for FN
+            total_gt = sum(len(g["clss"]) for g in gt_det.values())
+            precision_box = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            recall_box = tp / total_gt if total_gt > 0 else 0.0
+
+            print("  📊 COCOeval Segmentasi (Mask)...")
+            mAP50_mask, mAP50_95_mask = evaluate_coco_predictions(coco_gt_dict, image_ids, all_predictions, iou_type="segm")
+
     # --- 6. Save Results ---
-    print("\n[6] Menyimpan hasil...")
+    print("\n[6] Menyimpan hasil CSV Hybrid (Evaluasi Mandiri)...")
     report_dir = REPORTS_DIR
     os.makedirs(report_dir, exist_ok=True)
     
-    # Get latency info (actual measurement)
-    try:
-        import time
-        # Measure YOLO11m latency
-        yolo_latency = 0.0
-        if os.path.exists(yolo11m_path):
-            test_img = list(gt_seg.keys())[0] if gt_seg else None
-            if test_img and os.path.exists(test_img):
-                # Warmup
-                _ = yolo_det.predict(test_img, conf=0.5, imgsz=IMAGE_SIZE, verbose=False)
-                # Measure
-                n_runs = 10
-                start = time.perf_counter()
-                for _ in range(n_runs):
-                    _ = yolo_det.predict(test_img, conf=0.5, imgsz=IMAGE_SIZE, verbose=False)
-                yolo_latency = ((time.perf_counter() - start) / n_runs) * 1000  # ms
-        
-        # Measure SAM2 latency
-        sam_latency = 0.0
-        if 'sam_model' in locals() and test_img:
-            try:
-                # Warmup
-                _ = sam_model.predict(cv2.imread(test_img), bboxes=np.array([[0,0,100,100]]), verbose=False)
-                # Measure
-                n_runs = 5
-                start = time.perf_counter()
-                for _ in range(n_runs):
-                    _ = sam_model.predict(cv2.imread(test_img), bboxes=np.array([[0,0,100,100]]), verbose=False)
-                sam_latency = ((time.perf_counter() - start) / n_runs) * 1000  # ms
-            except:
-                sam_latency = 15.0  # fallback estimate
-        
-        latency_ms = yolo_latency + sam_latency
-        fps = 1000.0 / latency_ms if latency_ms > 0 else 0.0
-        print(f"  ✅ Latency: YOLO={yolo_latency:.2f}ms, SAM2={sam_latency:.2f}ms, Total={latency_ms:.2f}ms")
-    except Exception as e:
-        print(f"  ⚠️  Latency measurement failed: {e}")
-        latency_ms = 35.46  # fallback
-        fps = 1000.0 / latency_ms
-    
-    # Get GPU report string (dynamic)
-    gpu_report_str = get_gpu_report_str()
-    
-    # === DETECTION REPORT ===
+    det_fields = ["Model", "Model Size (MB)", "mAP50-95", "mAP50", "Precision", "Recall", 
+                  "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"]
     det_csv = os.path.join(report_dir, "report_hybrid_det_coco.csv")
     with open(det_csv, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Model", "Model Size (MB)", "mAP50-95", "mAP50", 
-                         "Precision", "Recall", "Latency (ms)", "FPS", "GPUs", "Evaluator"])
-        # Approximate model size
-        model_size = os.path.getsize(yolo11m_path) / (1024 * 1024) if os.path.exists(yolo11m_path) else 40.53
-        writer.writerow([
-            "YOLO11m+SAM2 (Detection)",
-            f"{model_size:.2f}",
-            f"{mAP50_95_box:.4f}" if isinstance(mAP50_95_box, float) else "N/A",
-            f"{mAP50_box:.4f}",
-            f"{precision_box:.4f}",  # Estimated from COCOeval
-            f"{recall_box:.4f}",   # Estimated from COCOeval
-            f"{latency_ms:.2f}",
-            f"{fps:.2f}",
-            gpu_report_str,  # Dynamic GPU detection
-            "COCOeval"
-        ])
-    
+        writer = csv.DictWriter(f, fieldnames=det_fields)
+        writer.writeheader()
+        writer.writerow({
+            "Model": "Hybrid (YOLO11m+SAM2)",
+            "Model Size (MB)": model_size_str,
+            "mAP50-95": mAP50_95_box if mAP50_95_box != "N/A" else "ERR",
+            "mAP50": mAP50_box if mAP50_box != "N/A" else "ERR",
+            "Precision": f"{precision_box:.4f}" if isinstance(precision_box, float) else precision_box,
+            "Recall": f"{recall_box:.4f}" if isinstance(recall_box, float) else recall_box,
+            "Preprocess (ms)": f"{final_pre:.2f}",
+            "Inference (ms)": f"{final_inf:.2f}",
+            "Postprocess (ms)": f"{final_post:.2f}",
+            "Latency (ms)": f"{latency_ms:.2f}",
+            "FPS": f"{fps:.2f}",
+            "GPUs": get_gpu_report_str(),
+            "Evaluator": "COCOeval"
+        })
     print(f"  ✅ Detection report: {det_csv}")
     
-    # === SEGMENTATION REPORT ===
+    seg_fields = ["Model", "Model Size (MB)", "mAP50-95(Box)", "mAP50-95(Mask)", "Latency (ms)", "FPS", "GPUs", "Evaluator"]
     seg_csv = os.path.join(report_dir, "report_hybrid_seg_coco.csv")
     with open(seg_csv, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Model", "Model Size (MB)", "mAP50-95(Box)", "mAP50-95(Mask)", 
-                         "Latency (ms)", "FPS", "GPUs", "Evaluator"])
-        writer.writerow([
-            "YOLO11m+SAM2 (Segmentation)",
-            f"{model_size:.2f}",
-            f"{mAP50_95_box:.4f}" if isinstance(mAP50_95_box, float) else "N/A",
-            f"{mAP50_95_mask:.4f}" if isinstance(mAP50_95_mask, float) else "N/A",
-            f"{latency_ms:.2f}",
-            f"{fps:.2f}",
-            gpu_report_str,  # Dynamic GPU detection
-            "COCOeval"
-        ])
-    
+        writer = csv.DictWriter(f, fieldnames=seg_fields)
+        writer.writeheader()
+        writer.writerow({
+            "Model": "Hybrid (YOLO11m+SAM2)",
+            "Model Size (MB)": model_size_str,
+            "mAP50-95(Box)": mAP50_95_box if mAP50_95_box != "N/A" else "ERR",
+            "mAP50-95(Mask)": mAP50_95_mask if mAP50_95_mask != "N/A" else "ERR",
+            "Latency (ms)": f"{latency_ms:.2f}",
+            "FPS": f"{fps:.2f}",
+            "GPUs": get_gpu_report_str(),
+            "Evaluator": "COCOeval"
+        })
     print(f"  ✅ Segmentation report: {seg_csv}")
     
-    # === DETAILED PREDICTIONS (unchanged) ===
     detail_csv = os.path.join(report_dir, "hybrid_detailed_predictions.csv")
     with open(detail_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["Image", "Pred_Class", "Confidence", "GT_Class", "IoU", "Has_Mask"])
-        for p in all_predictions[:100]:  # Limit 100 rows for readability
+        for p in all_predictions[:100]:
             max_iou = 0
             gt_cls_matched = -1
             for gt_box, gt_cls in zip(p["gt_boxes"], p["gt_clss"]):
@@ -999,21 +711,19 @@ def evaluate_hybrid_map():
                 f"{max_iou:.4f}",
                 "Yes" if p["pred_mask"] is not None else "No"
             ])
-    
     print(f"  ✅ Details: {detail_csv}")
     
-    # --- 7. Gabungkan Semua Laporan ---
-    print("\n[7] Menggabungkan laporan evaluasi...")
+    # --- 7. Gabungkan Laporan ---
+    print("\n[7] Menggabungkan Laporan (Aggregator)...")
     
-    # Define all report files
-    det_reports = [
+    det_available = [
         ("report_yolo11m_det_coco.csv", "YOLO11m (Fine-tuned)"),
         ("report_yolov9m_det_coco.csv", "YOLOv9m (Fine-tuned)"),
         ("report_yolov8m_det_coco.csv", "YOLOv8m (Fine-tuned)"),
         ("report_hybrid_det_coco.csv", "Hybrid (YOLO11m+SAM2)"),
     ]
     
-    seg_reports = [
+    seg_available = [
         ("report_yolo11m_seg_coco.csv", "YOLO11m-Seg (Fine-tuned)"),
         ("report_yolov9c_seg_coco.csv", "YOLOv9c-Seg (Fine-tuned)"),
         ("report_yolov8m_seg_coco.csv", "YOLOv8m-Seg (Fine-tuned)"),
@@ -1021,339 +731,108 @@ def evaluate_hybrid_map():
         ("report_maskrcnn_ddp_seg.csv", "Mask R-CNN (DDP Fine-tuned)"),
     ]
     
-    # Check file availability
-    def check_files(report_list):
-        available = []
-        missing = []
-        for fname, label in report_list:
-            fpath = os.path.join(report_dir, fname)
-            if os.path.exists(fpath):
-                available.append((fname, label, fpath))
-            else:
-                missing.append((fname, label))
-        return available, missing
-    
-    det_available, det_missing = check_files(det_reports)
-    seg_available, seg_missing = check_files(seg_reports)
-    
-    # Report missing files
-    if det_missing:
-        print(f"  ⚠️  Detection reports missing: {[f[0] for f in det_missing]}")
-    if seg_missing:
-        print(f"  ⚠️  Segmentation reports missing: {[f[0] for f in seg_missing]}")
-    
-    # Combine Detection Reports
     combined_det_csv = os.path.join(report_dir, "report_evaluasi_detection.csv")
-    if det_available:
-        print(f"\n  📊 Menggabungkan {len(det_available)} detection reports...")
+    det_missing = []
+    det_rows_all = []
+    for fname, model_label in det_available:
+        csv_path = os.path.join(report_dir, fname)
+        if os.path.exists(csv_path):
+            with open(csv_path, "r", encoding="utf-8") as fin:
+                reader = csv.DictReader(fin)
+                for row in reader:
+                    det_rows_all.append(row)
+        else:
+            det_missing.append((fname, model_label))
+            
+    if det_rows_all:
         with open(combined_det_csv, "w", newline="", encoding="utf-8") as fout:
-            writer = csv.writer(fout)
-            # Write header from first file
-            with open(det_available[0][2], "r", encoding="utf-8") as fin:
-                reader = csv.reader(fin)
-                header = next(reader)
-                writer.writerow(header)
-            
-            # Write all rows
-            for fname, label, fpath in det_available:
-                with open(fpath, "r", encoding="utf-8") as fin:
-                    reader = csv.reader(fin)
-                    next(reader)  # Skip header
-                    for row in reader:
-                        writer.writerow(row)
-        
+            writer = csv.DictWriter(fout, fieldnames=det_fields)
+            writer.writeheader()
+            writer.writerows(det_rows_all)
         print(f"  ✅ Combined Detection: {combined_det_csv}")
-    else:
-        print(f"  ❌ Tidak ada detection report yang tersedia")
-        combined_det_csv = None
     
-    # Combine Segmentation Reports
     combined_seg_csv = os.path.join(report_dir, "report_evaluasi_segmentation.csv")
-    if seg_available:
-        print(f"\n  📊 Menggabungkan {len(seg_available)} segmentation reports...")
-        with open(combined_seg_csv, "w", newline="", encoding="utf-8") as fout:
-            writer = csv.writer(fout)
-            # Write header from first file
-            with open(seg_available[0][2], "r", encoding="utf-8") as fin:
-                reader = csv.reader(fin)
-                header = next(reader)
-                writer.writerow(header)
+    seg_missing = []
+    seg_rows_all = []
+    for fname, model_label in seg_available:
+        csv_path = os.path.join(report_dir, fname)
+        if os.path.exists(csv_path):
+            with open(csv_path, "r", encoding="utf-8") as fin:
+                reader = csv.DictReader(fin)
+                for row in reader:
+                    seg_rows_all.append(row)
+        else:
+            seg_missing.append((fname, model_label))
             
-            # Write all rows
-            for fname, label, fpath in seg_available:
-                with open(fpath, "r", encoding="utf-8") as fin:
-                    reader = csv.reader(fin)
-                    next(reader)  # Skip header
-                    for row in reader:
-                        writer.writerow(row)
-        
+    if seg_rows_all:
+        with open(combined_seg_csv, "w", newline="", encoding="utf-8") as fout:
+            writer = csv.DictWriter(fout, fieldnames=seg_fields)
+            writer.writeheader()
+            writer.writerows(seg_rows_all)
         print(f"  ✅ Combined Segmentation: {combined_seg_csv}")
-    else:
-        print(f"  ❌ Tidak ada segmentation report yang tersedia")
-        combined_seg_csv = None
+
+    # --- 8. Narrative Reports ---
+    print("\n[8] Update Laporan Naratif (Markdown)...")
     
-    # --- 8. Buat Laporan Narasi ---
-    print("\n[8] Membuat laporan narasi evaluasi...")
+    # Deteksi Markdown (Global)
+    md_det_global = os.path.join(DATA_FILES_DIR, "report_evaluasi_detection.md")
     
+    # Deteksi Markdown (Narrative)
     narrative_dir = os.path.join(report_dir, "narrative_reports")
     os.makedirs(narrative_dir, exist_ok=True)
+    md_det_narr = os.path.join(narrative_dir, "Laporan_Evaluasi_Detection_(Box)_-_Semua_Models.md")
     
-    # Detection Narrative
-    det_narrative_path = os.path.join(narrative_dir, "Laporan_Evaluasi_Detection_(Box)_-_Semua_Models.md")
-    with open(det_narrative_path, "w", encoding="utf-8") as f:
-        f.write("# LAPORAN EVALUASI DETECTION (BOX) - SEMUA MODELS\n\n")
-        f.write(f"**Tanggal:** {time.strftime('%d %B %Y, %H:%M:%S')}  \n")
-        f.write(f"**Workspace:** `{WORKSPACE_DIR}`  \n\n")
-        
-        f.write("## RINGKASAN MODEL\n\n")
-        if det_available:
-            for fname, label, fpath in det_available:
-                with open(fpath, "r", encoding="utf-8") as fin:
-                    reader = csv.DictReader(fin)
-                    for row in reader:
-                        f.write(f"### {row.get('Model', label)}\n\n")
-                        f.write(f"- **Model Size:** {row.get('Model Size (MB)', 'N/A')} MB  \n")
-                        f.write(f"- **mAP50-95:** {row.get('mAP50-95', 'N/A')}  \n")
-                        f.write(f"- **mAP50:** {row.get('mAP50', 'N/A')}  \n")
-                        f.write(f"- **Precision:** {row.get('Precision', 'N/A')}  \n")
-                        f.write(f"- **Recall:** {row.get('Recall', 'N/A')}  \n")
-                        f.write(f"- **Latency:** {row.get('Latency (ms)', 'N/A')} ms  \n")
-                        f.write(f"- **FPS:** {row.get('FPS', 'N/A')}  \n")
-                        f.write(f"- **GPUs:** {row.get('GPUs', 'N/A')}  \n")
-                        f.write(f"- **Evaluator:** {row.get('Evaluator', 'N/A')}  \n\n")
-        else:
-            f.write("*Tidak ada data detection yang tersedia.*\n\n")
-        
-        f.write("## KESIMPULAN\n\n")
-        f.write("Evaluasi detection menggunakan berbagai arsitektur YOLO (v8, v9, v11)  \n")
-        f.write("dan Hybrid Pipeline (YOLO11m + SAM2) serta Mask R-CNN untuk perbandingan.  \n")
-        f.write("Semua model dievaluasi menggunakan COCOeval (pycocotools) untuk konsistensi.\n")
+    det_md_content = """# Laporan Evaluasi Detection (Box) - Semua Model
+## Mono: COCOeval (pycocotools)
+
+Evaluator: COCOeval (standar industri)
+
+---
+
+## 📊 Tabel Perbandingan mAP Detection (Box)
+
+| Model | mAP50 | mAP50-95 (Box) | Precision | Recall | Preprocess (ms) | Inference (ms) | Postprocess (ms) | Latency (ms) | FPS | GPUs | Evaluator |
+|-------|--------|-------------------|-----------|--------|-----------------|----------------|------------------|---------------|-----|------|-----------|
+"""
+    if det_rows_all:
+        for r in det_rows_all:
+            det_md_content += f"| **{r.get('Model', '')}** | {r.get('mAP50', '')} | {r.get('mAP50-95', '')} | {r.get('Precision', '')} | {r.get('Recall', '')} | {r.get('Preprocess (ms)', '')}ms | {r.get('Inference (ms)', '')}ms | {r.get('Postprocess (ms)', '')}ms | {r.get('Latency (ms)', '')}ms | {r.get('FPS', '')} | {r.get('GPUs', '')} | {r.get('Evaluator', '')} |\n"
     
-    print(f"  ✅ Detection Narrative: {det_narrative_path}")
+    with open(md_det_global, "w") as f: f.write(det_md_content)
+    with open(md_det_narr, "w") as f: f.write(det_md_content)
     
-    # Segmentation Narrative
-    seg_narrative_path = os.path.join(narrative_dir, "Laporan_Evaluasi_Segmentation_(Mask)_-_Semua_Models.md")
-    with open(seg_narrative_path, "w", encoding="utf-8") as f:
-        f.write("# LAPORAN EVALUASI SEGMENTATION (MASK) - SEMUA MODELS\n\n")
-        f.write(f"**Tanggal:** {time.strftime('%d %B %Y, %H:%M:%S')}  \n")
-        f.write(f"**Workspace:** `{WORKSPACE_DIR}`  \n\n")
-        
-        f.write("## RINGKASAN MODEL\n\n")
-        if seg_available:
-            for fname, label, fpath in seg_available:
-                with open(fpath, "r", encoding="utf-8") as fin:
-                    reader = csv.DictReader(fin)
-                    for row in reader:
-                        f.write(f"### {row.get('Model', label)}\n\n")
-                        f.write(f"- **Model Size:** {row.get('Model Size (MB)', 'N/A')} MB  \n")
-                        f.write(f"- **mAP50-95 (Box):** {row.get('mAP50-95(Box)', 'N/A')}  \n")
-                        f.write(f"- **mAP50-95 (Mask):** {row.get('mAP50-95(Mask)', 'N/A')}  \n")
-                        f.write(f"- **Latency:** {row.get('Latency(ms)', 'N/A')} ms  \n")
-                        f.write(f"- **FPS:** {row.get('FPS', 'N/A')}  \n")
-                        f.write(f"- **GPUs:** {row.get('GPUs', 'N/A')}  \n")
-                        f.write(f"- **Evaluator:** {row.get('Evaluator', 'N/A')}  \n\n")
-        else:
-            f.write("*Tidak ada data segmentation yang tersedia.*\n\n")
-        
-        f.write("## KESIMPULAN\n\n")
-        f.write("Evaluasi segmentation menggunakan YOLOv8m-Seg, YOLOv9c-Seg, YOLO11m-Seg,  \n")
-        f.write("Hybrid Pipeline (YOLO11m + SAM2), dan Mask R-CNN DDP.  \n")
-        f.write("Semua model dievaluasi menggunakan COCOeval untuk mAP Mask.  \n")
+    # Segmentasi Markdown (Global)
+    md_seg_global = os.path.join(DATA_FILES_DIR, "report_evaluasi_segmentation.md")
     
-    print(f"  ✅ Segmentation Narrative: {seg_narrative_path}")
+    # Segmentasi Markdown (Narrative)
+    md_seg_narr = os.path.join(narrative_dir, "Laporan_Evaluasi_Segmentation_(Mask)_-_Semua_Models.md")
     
-    # --- 9. Cleanup & Final Report ---
-    print("\n[9] Cleanup & Final Report...")
-=======
-    print(f"  ✅ Evaluasi selesai: {len(all_predictions)} prediksi dari {len(gt_det)} gambar")
-    
-    # --- 4. Calculate mAP (Box) ---
-    print("\n[4] Menghitung mAP Box...")
-    # Simple implementation: calculate AP per class with IoU threshold 0.5
-    ap_per_class = []
-    for cls_id in range(num_classes):
-        cls_preds = [p for p in all_predictions if p["pred_cls"] == cls_id]
-        cls_gts = {}
-        for p in all_predictions:
-            if p["image"] not in cls_gts:
-                cls_gts[p["image"]] = {"boxes": [], "clss": []}
-            # Filter GT for this class
-            for gt_box, gt_cls in zip(p["gt_boxes"], p["gt_clss"]):
-                if gt_cls == cls_id:
-                    cls_gts[p["image"]]["boxes"].append(gt_box)
-                    cls_gts[p["image"]]["clss"].append(gt_cls)
-        
-        if not cls_preds:
-            ap_per_class.append(0.0)
-            continue
-        
-        # Sort by confidence
-        cls_preds = sorted(cls_preds, key=lambda x: x["pred_conf"], reverse=True)
-        
-        # Calculate TP, FP for IoU threshold 0.5
-        tp, fp = 0, 0
-        gt_matched = set()
-        
-        for pred in cls_preds:
-            max_iou = 0
-            best_gt_idx = -1
-            for gt_idx, (gt_box, gt_cls) in enumerate(zip(pred["gt_boxes"], pred["gt_clss"])):
-                if gt_cls != cls_id:
-                    continue
-                iou = compute_iou(pred["pred_box"], gt_box)
-                if iou > max_iou:
-                    max_iou = iou
-                    best_gt_idx = gt_idx
+    seg_md_content = """# Laporan Evaluasi Segmentation (Mask) - Semua Model
+## Mono: COCOeval (pycocotools)
+
+Evaluator: COCOeval (standar industri)
+
+---
+
+## 📊 Tabel Perbandingan mAP Segmentation (Mask)
+
+| Model | mAP50-95 (Box) | mAP50-95 (Mask) | Latency (ms) | FPS | GPUs | Evaluator |
+|-------|----------------|-----------------|--------------|-----|------|-----------|
+"""
+    if seg_rows_all:
+        for r in seg_rows_all:
+            seg_md_content += f"| **{r.get('Model', '')}** | {r.get('mAP50-95(Box)', '')} | {r.get('mAP50-95(Mask)', '')} | {r.get('Latency (ms)', '')}ms | {r.get('FPS', '')} | {r.get('GPUs', '')} | {r.get('Evaluator', '')} |\n"
             
-            if max_iou >= 0.5 and best_gt_idx not in gt_matched:
-                tp += 1
-                gt_matched.add(best_gt_idx)
-            else:
-                fp += 1
-        
-        # Precision, Recall, AP (simplified)
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-        recall = tp / len(cls_gts) if len(cls_gts) > 0 else 0
-        ap = precision  # Simplified, should be integral of PR curve
-        ap_per_class.append(ap)
-        
-        print(f"  Kelas {cls_id}: Precision={precision:.4f}, Recall={recall:.4f}, AP={ap:.4f}")
+    with open(md_seg_global, "w") as f: f.write(seg_md_content)
+    with open(md_seg_narr, "w") as f: f.write(seg_md_content)
     
-    mAP50_box = np.mean(ap_per_class)
-    print(f"  ✅ mAP50 (Box): {mAP50_box:.4f}")
-    
-    # --- 5. Calculate mAP (Mask) ---
-    print("\n[5] Menghitung mAP Mask...")
-    mAP50_mask = "N/A"  # Placeholder, needs further implementation
-    print(f"  ⚠️  mAP Mask perlu implementasi tambahan (mask IoU)")
-    
-    # --- 6. Save Results ---
-    print("\n[6] Menyimpan hasil...")
-    report_dir = REPORTS_DIR
-    os.makedirs(report_dir, exist_ok=True)
-    
-    # Summary CSV
-    summary_csv = os.path.join(report_dir, "report_hybrid_map.csv")
-    with open(summary_csv, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Metric", "Value"])
-        writer.writerow(["mAP50 (Box)", f"{mAP50_box:.4f}"])
-        writer.writerow(["mAP50-95 (Box)", "N/A (perlu implementasi multi-threshold)"])
-        writer.writerow(["mAP50 (Mask)", mAP50_mask])
-        writer.writerow(["mAP50-95 (Mask)", "N/A (perlu implementasi multi-threshold)"])
-        writer.writerow(["Model", "Hybrid (YOLO11m + SAM2)"])
-        writer.writerow(["Validation Set", str(len(gt_det)) + " images"])
-    
-    print(f"  ✅ Summary: {summary_csv}")
-    
-    # Detailed predictions CSV
-    detail_csv = os.path.join(report_dir, "hybrid_detailed_predictions.csv")
-    with open(detail_csv, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Image", "Pred_Class", "Confidence", "GT_Class", "IoU", "Has_Mask"])
-        for p in all_predictions[:100]:  # Limit 100 rows for readability
-            max_iou = 0
-            gt_cls_matched = -1
-            for gt_box, gt_cls in zip(p["gt_boxes"], p["gt_clss"]):
-                iou = compute_iou(p["pred_box"], gt_box)
-                if iou > max_iou:
-                    max_iou = iou
-                    gt_cls_matched = gt_cls
-            writer.writerow([
-                os.path.basename(p["image"]),
-                p["pred_cls"],
-                f"{p['pred_conf']:.4f}",
-                gt_cls_matched,
-                f"{max_iou:.4f}",
-                "Yes" if p["pred_mask"] is not None else "No"
-            ])
-    
-    print(f"  ✅ Details: {detail_csv}")
->>>>>>> main
+    print("\n" + "="*65)
+    print("  EVALUASI mAP HYBRID SELESAI")
+    print("="*65)
     
     # Cleanup
     del yolo_det, sam_model
     _flush("final")
     
-<<<<<<< HEAD
-    # Count total files
-    total_files = 0
-    if combined_det_csv and os.path.exists(combined_det_csv):
-        total_files += 1
-    if combined_seg_csv and os.path.exists(combined_seg_csv):
-        total_files += 1
-    if os.path.exists(det_narrative_path):
-        total_files += 1
-    if os.path.exists(seg_narrative_path):
-        total_files += 1
-    # Add individual reports
-    for fname, _, _ in det_available + seg_available:
-        if os.path.exists(os.path.join(report_dir, fname)):
-            total_files += 1
-    if os.path.exists(detail_csv):
-        total_files += 1
-    
-    print("\n" + "="*65)
-    print("  EVALUASI mAP HYBRID SELESAI")
-    print(f"  mAP50 (Box): {mAP50_box:.4f}")
-    print(f"  mAP50-95 (Box): {mAP50_95_box:.4f}" if isinstance(mAP50_95_box, float) else f"  mAP50-95 (Box): {mAP50_95_box}")
-    print(f"  mAP50 (Mask): {mAP50_mask}")
-    print(f"  mAP50-95 (Mask): {mAP50_95_mask}")
-    print(f"\n  📁 Laporan yang dihasilkan:")
-    print(f"    1. {det_csv}")
-    print(f"    2. {seg_csv}")
-    print(f"    3. {detail_csv}")
-    if combined_det_csv:
-        print(f"    4. {combined_det_csv}")
-    if combined_seg_csv:
-        print(f"    5. {combined_seg_csv}")
-    print(f"    6. {det_narrative_path}")
-    print(f"    7. {seg_narrative_path}")
-    print(f"\n  ✅ Total file laporan: {total_files} (Target: 13 files)")
-    print("="*65)
-    
-    # Send Telegram notification
-    telegram_msg = f"""✅ <b>Hybrid Pipeline Evaluation Finished</b>
-📁 Workspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>
-
-📊 <b>Detection Reports:</b>
-  • Combined: {"✅" if combined_det_csv else "❌"} report_evaluasi_detection.csv
-  • Narrative: ✅ Laporan_Evaluasi_Detection_(Box)_-_Semua_Models.md
-
-📊 <b>Segmentation Reports:</b>
-  • Combined: {"✅" if combined_seg_csv else "❌"} report_evaluasi_segmentation.csv
-  • Narrative: ✅ Laporan_Evaluasi_Segmentation_(Mask)_-_Semua_Models.md
-
-📈 <b>Summary:</b>
-  • mAP50 (Box): {mAP50_box:.4f}
-  • mAP50-95 (Box): {mAP50_95_box:.4f if isinstance(mAP50_95_box, float) else mAP50_95_box}
-  • mAP50 (Mask): {mAP50_mask}
-  • mAP50-95 (Mask): {mAP50_95_mask}
-
-⚠️ <b>Missing Files:</b>
-  • Detection: {[f[0] for f in det_missing] if det_missing else "None"}
-  • Segmentation: {[f[0] for f in seg_missing] if seg_missing else "None"}
-"""
-    try:
-        send_telegram_msg(telegram_msg)
-    except:
-        print("  ⚠️  Telegram notification failed")
-    
-    # Check if we have 13 files
-    if total_files >= 13:
-        print("\n✅ Target 13 files tercapai!")
-    else:
-        print(f"\n⚠️  Baru {total_files} files, kurang {13 - total_files} lagi")
-
-
-=======
-    print("\n" + "="*65)
-    print("  EVALUASI mAP HYBRID SELESAI")
-    print(f"  mAP50 (Box): {mAP50_box:.4f}")
-    print(f"  Output: {summary_csv}")
-    print("="*65)
-
-
->>>>>>> main
 if __name__ == "__main__":
     evaluate_hybrid_map()
