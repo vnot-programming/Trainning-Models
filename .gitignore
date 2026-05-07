@@ -46,8 +46,9 @@ MyFineTunning-dev/hybrid/*.pt
 .DS_Store
 .vscode/
 .idea/
-/home/my/Trainning-Models/.agents
-/home/my/Trainning-Models/.instructions
-/home/my/Trainning-Models/.prompts
-/home/my/Trainning-Models/.instructions.md
-/home/my/Trainning-Models/AGENTS.md
+.agents/
+.instructions/
+.prompts/
+.instructions.md
+AGENTS.md
+.agentignore
