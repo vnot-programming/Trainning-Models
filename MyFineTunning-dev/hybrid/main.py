@@ -836,3 +836,11 @@ Evaluator: COCOeval (standar industri)
     
 if __name__ == "__main__":
     evaluate_hybrid_map()
+
+    # --- 9. Generate Visual Comparisons ---
+    print("\n[9] Generate Visual Comparisons...")
+    try:
+        from generate_visuals import run_all_visuals
+        run_all_visuals()
+    except Exception as _ve:
+        print(f"[Visual] ⚠️  Gagal generate visual: {_ve}")

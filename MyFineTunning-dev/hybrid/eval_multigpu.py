@@ -598,3 +598,11 @@ if __name__ == "__main__":
             f"Total waktu: <code>{total_elapsed}s</code>\n"
             f"Report: <code>{REPORTS_DIR}</code>"
         )
+
+        # Generate Visual Comparisons
+        print("\n  [Visual] Generating comparison images...")
+        try:
+            from generate_visuals import run_all_visuals
+            run_all_visuals()
+        except Exception as _ve:
+            print(f"  [Visual] ⚠️  Gagal generate visual: {_ve}")
