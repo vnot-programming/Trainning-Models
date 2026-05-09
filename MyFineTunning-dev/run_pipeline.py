@@ -12,10 +12,10 @@ Setiap model:
   3. Membersihkan GPU memory sebelum memulai model berikutnya
 
 Cara pakai:
-  source /root/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && python3 run_pipeline.py 2>&1 | tee PipelineReport.log
+  source .venv/bin/activate && python3 run_pipeline.py 2>&1 | tee PipelineReport.log
 
 Atau via tmux (recommended):
-  tmux new-session -d -s run_pipeline "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev && python3 run_pipeline.py 2>&1 | tee run_pipeline.log"
+  tmux new-session -d -s run_pipeline "source .venv/bin/activate && python3 run_pipeline.py 2>&1 | tee run_pipeline.log"
 
   
 
@@ -34,7 +34,7 @@ Script `run_pipeline.py` sudah dibuat! Berikut cara pakainya:
 
 ### Cara Jalankan (via tmux, recommended):
 ```bash
-tmux new-session -d -s pipeline "cd /home/my/Trainning-Models/MyFineTunning-dev && python3 run_pipeline.py 2>&1 | tee PipelineReport.log"
+tmux new-session -d -s run_pipeline "python3 run_pipeline.py 2>&1 | tee run_pipeline.log"
 ```
 
 ### Fitur:
@@ -75,8 +75,8 @@ from datetime import datetime, timedelta
 # ==============================================================================
 # KONFIGURASI PIPELINE
 # ==============================================================================
-VENV_ACTIVATE = "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate"
-BASE_DIR = "/home/my/Trainning-Models/MyFineTunning-dev"
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+VENV_ACTIVATE = f"source {os.path.join(BASE_DIR, '.venv', 'bin', 'activate')}"
 
 TRAINING_JOBS = [
     {
