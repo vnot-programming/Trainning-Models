@@ -15,7 +15,7 @@ Cara pakai:
   source /root/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && python3 run_pipeline.py 2>&1 | tee PipelineReport.log
 
 Atau via tmux (recommended):
-  tmux new-session -d -s run_pipeline "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev && python3 run_pipeline.py 2>&1 | tee RunPipelineReport.log"
+  tmux new-session -d -s run_pipeline "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev && python3 run_pipeline.py 2>&1 | tee run_pipeline.log"
 
   
 
