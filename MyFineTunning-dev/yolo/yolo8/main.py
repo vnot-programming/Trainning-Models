@@ -476,16 +476,13 @@ print(f"✅ Seg Report : {seg_csv}")
 #     _img_dir = os.path.join(os.path.dirname(DET_YAML), "valid", "images")
 
 # ------ Visualisasi sampel per model ------
-_img_dir = os.path.join(os.path.dirname(DET_YAML), "test", "images")
-if not os.path.isdir(_img_dir):
-    _img_dir = os.path.join(os.path.dirname(DET_YAML), "valid", "images")
-_seg_img_dir = _img_dir.replace(os.path.dirname(DET_YAML), os.path.dirname(SEG_YAML))
-if not os.path.isdir(_seg_img_dir):
-    _seg_img_dir = _img_dir  # fallback ke det dir
-
-save_yolo_visual_samples(best_det, "yolov8m",     _img_dir)
-save_yolo_visual_samples(best_seg, "yolov8m_seg",
-    _img_dir.replace(os.path.dirname(DET_YAML), os.path.dirname(SEG_YAML)))
+try:
+    sys.path.insert(0, FINETUNING_ROOT)
+    from visual_utils import generate_single_yolo
+    generate_single_yolo("yolov8m", "YOLOv8m", is_multigpu=False, task="det")
+    generate_single_yolo("yolov8m_seg", "YOLOv8m-Seg", is_multigpu=False, task="seg")
+except Exception as e:
+    print(f"⚠️ Gagal generate visual_utils: {e}")
 
 # ------ Kompres folder hasil training ------
 # compress_run("yolov8m")

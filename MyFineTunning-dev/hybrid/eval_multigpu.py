@@ -602,7 +602,9 @@ if __name__ == "__main__":
         # Generate Visual Comparisons
         print("\n  [Visual] Generating comparison images...")
         try:
-            from generate_visuals import run_all_visuals
-            run_all_visuals()
+            sys.path.insert(0, _FINETUNING_ROOT)
+            from visual_utils import generate_single_hybrid, generate_hybrid_grids
+            generate_single_hybrid(is_multigpu=True)
+            generate_hybrid_grids(is_multigpu=True)
         except Exception as _ve:
             print(f"  [Visual] ⚠️  Gagal generate visual: {_ve}")

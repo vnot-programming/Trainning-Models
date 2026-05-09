@@ -477,15 +477,13 @@ with open(seg_csv, "w", newline="", encoding="utf-8") as f:
 print(f"✅ Seg Report : {seg_csv}")
 
 # ------ Visualisasi sampel per model ------
-_img_dir = os.path.join(os.path.dirname(DET_YAML), "test", "images")
-if not os.path.isdir(_img_dir):
-    _img_dir = os.path.join(os.path.dirname(DET_YAML), "valid", "images")
-_seg_img_dir = _img_dir.replace(os.path.dirname(DET_YAML), os.path.dirname(SEG_YAML))
-if not os.path.isdir(_seg_img_dir):
-    _seg_img_dir = _img_dir  # fallback ke det dir
-
-save_yolo_visual_samples(best_det, "yolo11m",     _img_dir)
-save_yolo_visual_samples(best_seg, "yolo11m_seg", _seg_img_dir)
+try:
+    sys.path.insert(0, FINETUNING_ROOT)
+    from visual_utils import generate_single_yolo
+    generate_single_yolo("yolo11m", "YOLO11m", is_multigpu=False, task="det")
+    generate_single_yolo("yolo11m_seg", "YOLO11m-Seg", is_multigpu=False, task="seg")
+except Exception as e:
+    print(f"⚠️ Gagal generate visual_utils: {e}")
 
 # compress_run("yolo11m")
 # compress_run("yolo11m_seg")

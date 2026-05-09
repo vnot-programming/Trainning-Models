@@ -458,6 +458,14 @@ if __name__ == "__main__":
             print("\n❌ Evaluasi gagal — tidak ada report yang disimpan.")
             send_telegram_msg("❌ <b>Mask R-CNN MultiGPU Eval GAGAL</b>\nCek log untuk detail error.")
 
+        # Generate Visuals
+        try:
+            sys.path.insert(0, _FINETUNING_ROOT)
+            from visual_utils import generate_single_maskrcnn
+            generate_single_maskrcnn(is_multigpu=True)
+        except Exception as e:
+            print(f"⚠️ Gagal generate visual_utils: {e}")
+
         total_elapsed = round(time.perf_counter() - t_total_start, 1)
         print(f"\n✅ Total waktu evaluasi: {total_elapsed}s")
         send_telegram_msg(

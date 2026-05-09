@@ -480,6 +480,17 @@ if __name__ == "__main__":
                     f"GPUs: <code>{seg_row['GPUs']}</code>"
                 )
 
+        # Generate Visuals
+        try:
+            sys.path.insert(0, _FINETUNING_ROOT)
+            from visual_utils import generate_single_yolo
+            if not args.skip_det:
+                generate_single_yolo("yolov9m", "YOLOv9m", is_multigpu=True, task="det")
+            if not args.skip_seg:
+                generate_single_yolo("yolov9c_seg", "YOLOv9c-Seg", is_multigpu=True, task="seg")
+        except Exception as e:
+            print(f"⚠️ Gagal generate visual_utils: {e}")
+
         total_elapsed = round(time.perf_counter() - t_total_start, 1)
         print(f"\n✅ YOLOv9 MultiGPU Evaluation selesai dalam {total_elapsed}s")
         send_telegram_msg(
