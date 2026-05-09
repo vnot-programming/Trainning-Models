@@ -787,7 +787,7 @@ if __name__ == "__main__":
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
         w.writerow({
-            "Model":           "Mask R-CNN ResNet-50 FPN-v2 (DDP Fine-tuned)",
+            "Model":           "Mask R-CNN ResNet-50 FPN-v2",
             "Model Size (MB)": size_mb,
             "mAP50-95(Box)":   map_box,
             "mAP50-95(Mask)":  map_mask,

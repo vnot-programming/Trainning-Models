@@ -59,7 +59,7 @@ from coco_eval_utils import (
     build_coco_ground_truth, evaluate_coco_predictions, check_pycocotools
 )
 
-MODEL_LABEL = "Hybrid (YOLO11m+SAM2, MultiGPU)"
+MODEL_LABEL = "Hybrid (YOLO11m+SAM2)"
 SAM_MODEL_PATH = os.path.join(_HYBRID_DIR, "sam2.1_b.pt")
 
 # ==============================================================================

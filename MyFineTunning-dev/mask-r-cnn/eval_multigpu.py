@@ -53,7 +53,7 @@ from config_shared import (
 from telegram_utils import send_telegram_msg
 from maskrcnn_builder import build_model
 
-MODEL_LABEL = "Mask R-CNN ResNet-50 FPN-v2 (DDP Fine-tuned, MultiGPU Eval)"
+MODEL_LABEL = "Mask R-CNN ResNet-50 FPN-v2"
 OUTPUT_KEY  = "maskrcnn"
 
 # ==============================================================================

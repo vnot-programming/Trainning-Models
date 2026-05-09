@@ -433,7 +433,7 @@ os.makedirs(report_dir, exist_ok=True)
 print("\n" + "="*65 + "\n  Evaluasi Detection YOLOv8m\n" + "="*65)
 print("  🔄 Mencoba evaluasi dengan COCOeval...")
 
-det_row = _coco_eval_det("YOLOv8m (Fine-tuned COCOeval)", best_det, DET_YAML)
+det_row = _coco_eval_det("YOLOv8m", best_det, DET_YAML)
 
 if det_row is None:
     print("\n  ⚠️ COCOeval gagal, menggunakan _eval_det() sebagai fallback...")
@@ -441,7 +441,7 @@ if det_row is None:
     evaluator_used_det = "Ultralytics"
 else:
     evaluator_used_det = "COCOeval"
-    det_row["Model"] = "YOLOv8m (Fine-tuned COCOeval)"
+    det_row["Model"] = "YOLOv8m"
     det_row["Evaluator"] = "COCOeval"
 
 det_fields = ["Model", "Model Size (MB)", "mAP50-95", "mAP50", "Precision", "Recall", "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"]
@@ -454,7 +454,7 @@ print(f"\n✅ Det Report : {det_csv}")
 print("\n" + "="*65 + "\n  Evaluasi Segmentasi YOLOv8m-Seg\n" + "="*65)
 print("  🔄 Mencoba evaluasi dengan COCOeval...")
 
-seg_row = _coco_eval_seg("YOLOv8m-Seg (Fine-tuned COCOeval)", best_seg, SEG_YAML)
+seg_row = _coco_eval_seg("YOLOv8m-Seg", best_seg, SEG_YAML)
 
 if seg_row is None:
     print("\n  ⚠️ COCOeval gagal, menggunakan _eval_seg() sebagai fallback...")
@@ -462,7 +462,7 @@ if seg_row is None:
     evaluator_used = "Ultralytics"
 else:
     evaluator_used = "COCOeval"
-    seg_row["Model"] = "YOLOv8m-Seg (Fine-tuned COCOeval)"
+    seg_row["Model"] = "YOLOv8m-Seg"
 
 seg_fields = ["Model", "Model Size (MB)", "mAP50-95(Box)", "mAP50-95(Mask)", "Latency (ms)", "FPS", "GPUs", "Evaluator"]
 seg_csv = os.path.join(report_dir, "report_yolov8m_seg_coco.csv")
