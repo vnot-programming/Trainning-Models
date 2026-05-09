@@ -47,8 +47,8 @@ from coco_eval_utils import (
     build_coco_ground_truth, evaluate_coco_predictions, check_pycocotools
 )
 
-MODEL_LABEL_DET = "YOLOv8m (Fine-tuned, MultiGPU)"
-MODEL_LABEL_SEG = "YOLOv8m-Seg (Fine-tuned, MultiGPU)"
+MODEL_LABEL_DET = "YOLOv8m"
+MODEL_LABEL_SEG = "YOLOv8m-Seg"
 
 # ==============================================================================
 # HELPERS
