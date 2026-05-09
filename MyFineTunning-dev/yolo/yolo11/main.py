@@ -406,7 +406,7 @@ def _coco_eval_det(label, pt, yaml):
             "Postprocess (ms)":post,
             "Latency (ms)": round(pre+inf+post, 2),
             "FPS": round(1000/(pre+inf+post), 2) if pre+inf+post>0 else "N/A",
-            "GPUs": get_gpu_report_str(0),
+            "GPUs": get_gpu_report_str(DEVICE),
             "Evaluator":       "COCOeval",
         }
     except Exception as e:
