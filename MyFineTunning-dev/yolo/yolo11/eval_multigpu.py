@@ -89,7 +89,9 @@ def _resolve_img_dir(yaml_path: str) -> str:
 
 
 def _collect_results(tmp_dir: str, prefix: str, world_size: int):
+    """Kumpulkan prediksi + timing speed dari semua rank pickle."""
     all_preds, total_imgs = [], 0
+    all_pre = []; all_inf = []; all_post = []
     for r in range(world_size):
         pkl = os.path.join(tmp_dir, f"{prefix}_rank{r}.pkl")
         if os.path.exists(pkl):
@@ -97,7 +99,11 @@ def _collect_results(tmp_dir: str, prefix: str, world_size: int):
                 data = pickle.load(f)
             all_preds.extend(data["preds"])
             total_imgs += data["n_imgs"]
-    return all_preds, total_imgs
+            all_pre.extend(data.get("speed_pre",  []))
+            all_inf.extend(data.get("speed_inf",  []))
+            all_post.extend(data.get("speed_post", []))
+    def _avg(lst): return round(sum(lst)/len(lst), 2) if lst else "N/A"
+    return all_preds, total_imgs, _avg(all_pre), _avg(all_inf), _avg(all_post)
 
 
 def _calc_prec_recall(all_preds: list, coco_gt_dict: dict, image_ids: dict):
@@ -165,24 +171,32 @@ def _infer_worker_det(rank: int, gpu_ids: list, pt_path: str,
     model  = YOLO(pt_path)
     subset = _partition_images(img_dir, rank, len(gpu_ids))
     preds  = []
+    speed_pre = []; speed_inf = []; speed_post = []
 
     t_start = time.perf_counter()
     for img_path in subset:
         if img_path not in image_ids: continue
         result = model.predict(img_path, conf=0.5, imgsz=IMAGE_SIZE,
                                device=gpu, verbose=False)
-        if result and result[0].boxes is not None:
-            boxes = result[0].boxes.xyxy.cpu().numpy()
-            confs = result[0].boxes.conf.cpu().numpy()
-            clss  = result[0].boxes.cls.cpu().numpy().astype(int)
-            for box, conf, cls in zip(boxes, confs, clss):
-                preds.append({"image": img_path, "pred_box": box.tolist(),
-                              "pred_cls": int(cls), "pred_conf": float(conf)})
+        if result:
+            spd = result[0].speed
+            speed_pre.append(spd.get("preprocess", 0.0))
+            speed_inf.append(spd.get("inference",  0.0))
+            speed_post.append(spd.get("postprocess", 0.0))
+            if result[0].boxes is not None:
+                boxes = result[0].boxes.xyxy.cpu().numpy()
+                confs = result[0].boxes.conf.cpu().numpy()
+                clss  = result[0].boxes.cls.cpu().numpy().astype(int)
+                for box, conf, cls in zip(boxes, confs, clss):
+                    preds.append({"image": img_path, "pred_box": box.tolist(),
+                                  "pred_cls": int(cls), "pred_conf": float(conf)})
     elapsed = time.perf_counter() - t_start
     print(f"  [GPU:{gpu}] {len(preds)} prediksi dari {len(subset)} gambar dalam {elapsed:.1f}s", flush=True)
 
     with open(os.path.join(tmp_dir, f"det_rank{rank}.pkl"), "wb") as f:
-        pickle.dump({"preds": preds, "elapsed": elapsed, "n_imgs": len(subset)}, f)
+        pickle.dump({"preds": preds, "elapsed": elapsed, "n_imgs": len(subset),
+                     "speed_pre": speed_pre, "speed_inf": speed_inf,
+                     "speed_post": speed_post}, f)
 
     del model; _flush_gpu(gpu, f"det rank{rank}")
     print(f"  [GPU:{gpu}] Rank {rank} selesai.", flush=True)
@@ -199,26 +213,34 @@ def _infer_worker_seg(rank: int, gpu_ids: list, pt_path: str,
     model  = YOLO(pt_path)
     subset = _partition_images(img_dir, rank, len(gpu_ids))
     preds  = []
+    speed_pre = []; speed_inf = []; speed_post = []
 
     t_start = time.perf_counter()
     for img_path in subset:
         if img_path not in image_ids: continue
         result = model.predict(img_path, conf=0.5, imgsz=IMAGE_SIZE,
                                device=gpu, verbose=False)
-        if result and result[0].masks is not None:
-            masks = result[0].masks.data.cpu().numpy()
-            boxes = result[0].boxes.xyxy.cpu().numpy()
-            confs = result[0].boxes.conf.cpu().numpy()
-            clss  = result[0].boxes.cls.cpu().numpy().astype(int)
-            for mask, box, conf, cls in zip(masks, boxes, confs, clss):
-                preds.append({"image": img_path, "pred_mask": mask,
-                              "pred_box": box.tolist(), "pred_cls": int(cls),
-                              "pred_conf": float(conf)})
+        if result:
+            spd = result[0].speed
+            speed_pre.append(spd.get("preprocess", 0.0))
+            speed_inf.append(spd.get("inference",  0.0))
+            speed_post.append(spd.get("postprocess", 0.0))
+            if result[0].masks is not None:
+                masks = result[0].masks.data.cpu().numpy()
+                boxes = result[0].boxes.xyxy.cpu().numpy()
+                confs = result[0].boxes.conf.cpu().numpy()
+                clss  = result[0].boxes.cls.cpu().numpy().astype(int)
+                for mask, box, conf, cls in zip(masks, boxes, confs, clss):
+                    preds.append({"image": img_path, "pred_mask": mask,
+                                  "pred_box": box.tolist(), "pred_cls": int(cls),
+                                  "pred_conf": float(conf)})
     elapsed = time.perf_counter() - t_start
     print(f"  [GPU:{gpu}] {len(preds)} prediksi-mask dari {len(subset)} gambar dalam {elapsed:.1f}s", flush=True)
 
     with open(os.path.join(tmp_dir, f"seg_rank{rank}.pkl"), "wb") as f:
-        pickle.dump({"preds": preds, "elapsed": elapsed, "n_imgs": len(subset)}, f)
+        pickle.dump({"preds": preds, "elapsed": elapsed, "n_imgs": len(subset),
+                     "speed_pre": speed_pre, "speed_inf": speed_inf,
+                     "speed_post": speed_post}, f)
 
     del model; _flush_gpu(gpu, f"seg rank{rank}")
     print(f"  [GPU:{gpu}] Rank {rank} selesai.", flush=True)
@@ -259,8 +281,9 @@ def eval_detection_distributed(gpu_ids: list, tmp_dir: str) -> dict | None:
              nprocs=world_size, join=True)
     total_wall = time.perf_counter() - t_wall_start
 
-    all_preds, total_imgs = _collect_results(tmp_dir, "det", world_size)
+    all_preds, total_imgs, avg_pre, avg_inf, avg_post = _collect_results(tmp_dir, "det", world_size)
     print(f"  [Collect] {len(all_preds)} prediksi dari {total_imgs} gambar | Wall: {total_wall:.2f}s")
+    print(f"  [Speed] Pre={avg_pre}ms | Inf={avg_inf}ms | Post={avg_post}ms (avg/gambar)")
 
     throughput_fps = round(total_imgs / total_wall, 2) if total_wall > 0 else "N/A"
     lat_ms         = round(total_wall * 1000 / total_imgs, 2) if total_imgs > 0 else "N/A"
@@ -279,9 +302,9 @@ def eval_detection_distributed(gpu_ids: list, tmp_dir: str) -> dict | None:
         "mAP50":             mAP50,
         "Precision":         prec,
         "Recall":            rec,
-        "Preprocess (ms)":   "N/A (Distributed)",
-        "Inference (ms)":    "N/A (Distributed)",
-        "Postprocess (ms)":  "N/A (Distributed)",
+        "Preprocess (ms)":   avg_pre,
+        "Inference (ms)":    avg_inf,
+        "Postprocess (ms)":  avg_post,
         "Latency (ms)":      lat_ms,
         "FPS":               throughput_fps,
         "GPUs":              _gpu_report_str(gpu_ids),
@@ -322,8 +345,9 @@ def eval_segmentation_distributed(gpu_ids: list, tmp_dir: str) -> dict | None:
              nprocs=world_size, join=True)
     total_wall = time.perf_counter() - t_wall_start
 
-    all_preds, total_imgs = _collect_results(tmp_dir, "seg", world_size)
+    all_preds, total_imgs, avg_pre, avg_inf, avg_post = _collect_results(tmp_dir, "seg", world_size)
     print(f"  [Collect] {len(all_preds)} prediksi dari {total_imgs} gambar | Wall: {total_wall:.2f}s")
+    print(f"  [Speed] Pre={avg_pre}ms | Inf={avg_inf}ms | Post={avg_post}ms (avg/gambar)")
 
     throughput_fps = round(total_imgs / total_wall, 2) if total_wall > 0 else "N/A"
     lat_ms         = round(total_wall * 1000 / total_imgs, 2) if total_imgs > 0 else "N/A"
@@ -338,6 +362,9 @@ def eval_segmentation_distributed(gpu_ids: list, tmp_dir: str) -> dict | None:
         "Model Size (MB)":  round(os.path.getsize(pt_path)/1e6, 2),
         "mAP50-95(Box)":    mAP50_95_box,
         "mAP50-95(Mask)":   mAP50_95_mask,
+        "Preprocess (ms)":  avg_pre,
+        "Inference (ms)":   avg_inf,
+        "Postprocess (ms)": avg_post,
         "Latency (ms)":     lat_ms,
         "FPS":              throughput_fps,
         "GPUs":             _gpu_report_str(gpu_ids),

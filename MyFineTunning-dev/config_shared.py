@@ -133,6 +133,52 @@ NUM_WORKERS         = 10    # 16
 # MASKRCNN_BATCH_SIZE = 16    # 4
 # NUM_WORKERS         = 32    # 16
 
+# Cara menghitung manualnya didasarkan pada **kapasitas VRAM GPU** dan **jumlah CPU Core** yang tersedia. Berikut adalah panduan hitungan manual untuk meningkatkan performa di RunPod Anda:
+
+# ### 1. Menghitung `YOLO_BATCH_SIZE` (Total Batch)
+# YOLO menggunakan DDP (Distributed Data Parallel), jadi angkanya adalah total untuk 4 GPU.
+
+# *   **Rumus:** `(Target VRAM per GPU / VRAM saat ini) * Batch per GPU saat ini * Jumlah GPU`
+# *   **Logika Manual:**
+#     *   Saat ini: Batch total **80** (artinya **20 per GPU**) menggunakan **10-15GB**.
+#     *   Kapasitas A5000: **24GB**. Kita ingin target aman di **20GB** (agar tidak OOM saat validasi).
+#     *   Jika 20 per GPU = 12GB, maka untuk mencapai 20GB: `(20GB / 12GB) * 20 = ~33 per GPU`.
+#     *   **Rekomendasi:** Gunakan **batch 40 per GPU**.
+#     *   **Hitungan:** `40 * 4 GPU = 160`.
+#     *   *Kenapa VRAM sekarang cuma 10-15GB?* Karena batch 20 terlalu kecil untuk GPU 24GB. GPU Anda sedang "santai".
+
+# ### 2. Menghitung `MASKRCNN_BATCH_SIZE`
+# MaskRCNN jauh lebih berat daripada YOLO karena memproses region proposal (RPN).
+
+# *   **Logika Manual:**
+#     *   MaskRCNN biasanya memakan VRAM besar. Di GPU 24GB, biasanya bisa menampung **8 s/d 12 image per GPU**.
+#     *   Jika Anda menggunakan 4 GPU: `8 image * 4 GPU = 32`.
+#     *   **Rekomendasi:** Naikkan secara bertahap ke **32** atau **48**.
+#     *   Jika Anda set ke **16** (seperti sekarang), itu artinya cuma **4 image per GPU**. Ini sangat rendah untuk spek A5000.
+
+# ### 3. Menghitung `NUM_WORKERS` (CPU Power)
+# Ini adalah "asisten" yang menyiapkan gambar sebelum dikirim ke GPU.
+
+# *   **Rumus Aman:** `2 * Jumlah GPU` s/d `4 * Jumlah GPU`.
+# *   **Rumus Maksimal:** `Total CPU Cores / Jumlah GPU`.
+# *   **Logika Manual:**
+#     *   Anda punya **96 Core** dan **4 GPU**. Artinya jatah maksimal per GPU adalah `96 / 4 = 24 core`.
+#     *   Namun, jangan gunakan semua core agar sistem tidak *hang*.
+#     *   **Rekomendasi:** Gunakan **8 s/d 12 worker per GPU**.
+#     *   **Hitungan:** `8 * 4 GPU = 32` atau `12 * 4 GPU = 48`.
+#     *   Gunakan **32** atau **48** jika Anda merasa GPU Utilization (di `nvidia-smi`) sering turun di bawah 90%.
+
+# ---
+
+# ### Kesimpulan Rekomendasi "Gas Pol" (Safe Mode):
+# Jika Anda ingin memaksimalkan 4x RTX A5000 tanpa sering OOM:
+
+# 1.  **`YOLO_BATCH_SIZE = 160`** (40 per GPU) -> VRAM akan terisi sekitar **18-20GB**.
+# 2.  **`MASKRCNN_BATCH_SIZE = 32`** (8 per GPU) -> MaskRCNN sangat haus memori, 8 per GPU sudah cukup berat.
+# 3.  **`NUM_WORKERS = 32`** -> Sudah sangat cukup untuk menyuplai data ke 4 GPU secara simultan.
+
+# **Tips:** Selalu perhatikan kolom `GPU-Util` di `nvidia-smi`. Jika nilainya **95-100%**, berarti settingan Anda sudah optimal. Jika nilainya rendah (misal 60%), naikkan `NUM_WORKERS`.
+
 # ==============================================================================
 # HELPERS
 # ==============================================================================
