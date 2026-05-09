@@ -138,15 +138,18 @@ def _infer_worker_hybrid(rank: int, gpu_ids: list,
         print(f"  [GPU:{gpu}] ❌ Gagal load model: {e}", flush=True)
         with open(os.path.join(tmp_dir, f"rank{rank}.pkl"), "wb") as f:
             pickle.dump({"dt_bbox": [], "dt_segm": [],
-                         "times": [], "n_imgs": 0,
-                         "yolo_times": [], "sam_times": []}, f)
+                         "n_imgs": 0,
+                         "yolo_pre": [], "yolo_inf": [], "yolo_post": [],
+                         "sam_times": []}, f)
         return
 
     subset  = _partition_images(img_dir, rank, len(gpu_ids))
     dt_bbox = []
     dt_segm = []
-    yolo_times = []
-    sam_times  = []
+    yolo_pre  = []
+    yolo_inf  = []
+    yolo_post = []
+    sam_times = []
 
     for img_path in subset:
         if img_path not in image_ids:
@@ -154,10 +157,13 @@ def _infer_worker_hybrid(rank: int, gpu_ids: list,
         img_id = image_ids[img_path]
 
         # YOLO detection
-        t_yolo = time.perf_counter()
         det_result = yolo_model.predict(img_path, conf=0.5, imgsz=IMAGE_SIZE,
                                         device=device_str, verbose=False)
-        yolo_times.append((time.perf_counter() - t_yolo) * 1000)
+        if det_result:
+            spd = det_result[0].speed
+            yolo_pre.append(spd.get("preprocess", 0.0))
+            yolo_inf.append(spd.get("inference",  0.0))
+            yolo_post.append(spd.get("postprocess", 0.0))
 
         if not (det_result and det_result[0].boxes is not None
                 and len(det_result[0].boxes) > 0):
@@ -225,7 +231,9 @@ def _infer_worker_hybrid(rank: int, gpu_ids: list,
         pickle.dump({
             "dt_bbox":    dt_bbox,
             "dt_segm":    dt_segm,
-            "yolo_times": yolo_times,
+            "yolo_pre":   yolo_pre,
+            "yolo_inf":   yolo_inf,
+            "yolo_post":  yolo_post,
             "sam_times":  sam_times,
             "n_imgs":     len(subset),
         }, f)
@@ -300,7 +308,9 @@ def eval_hybrid_distributed(gpu_ids: list, tmp_dir: str) -> tuple:
     # Kumpulkan hasil
     all_dt_bbox  = []
     all_dt_segm  = []
-    all_yolo_t   = []
+    all_yolo_pre = []
+    all_yolo_inf = []
+    all_yolo_post = []
     all_sam_t    = []
     total_imgs   = 0
 
@@ -311,8 +321,10 @@ def eval_hybrid_distributed(gpu_ids: list, tmp_dir: str) -> tuple:
                 data = pickle.load(f)
             all_dt_bbox.extend(data["dt_bbox"])
             all_dt_segm.extend(data["dt_segm"])
-            all_yolo_t.extend(data["yolo_times"])
-            all_sam_t.extend(data["sam_times"])
+            all_yolo_pre.extend(data.get("yolo_pre",  []))
+            all_yolo_inf.extend(data.get("yolo_inf",  []))
+            all_yolo_post.extend(data.get("yolo_post", []))
+            all_sam_t.extend(data.get("sam_times", []))
             total_imgs += data["n_imgs"]
 
     print(f"\n  [Collect] {len(all_dt_bbox)} bbox prediksi | {len(all_dt_segm)} mask prediksi")
@@ -325,9 +337,14 @@ def eval_hybrid_distributed(gpu_ids: list, tmp_dir: str) -> tuple:
     throughput_fps = round(total_imgs / total_wall, 2) if total_wall > 0 else "N/A"
     lat_ms         = round(total_wall * 1000 / total_imgs, 2) if total_imgs > 0 else "N/A"
 
-    avg_yolo_ms = round(sum(all_yolo_t) / len(all_yolo_t), 2) if all_yolo_t else "N/A"
-    avg_sam_ms  = round(sum(all_sam_t) / len(all_sam_t), 2) if all_sam_t else "N/A"
-    print(f"  [Latency] Avg YOLO: {avg_yolo_ms}ms | Avg SAM2: {avg_sam_ms}ms | Total: {lat_ms}ms")
+    def _avg(lst): return round(sum(lst)/len(lst), 2) if lst else "N/A"
+    avg_pre  = _avg(all_yolo_pre)
+    avg_inf  = _avg(all_yolo_inf)
+    avg_post = _avg(all_yolo_post)
+    avg_sam  = _avg(all_sam_t)
+    print(f"  [Speed YOLO] Pre={avg_pre}ms | Inf={avg_inf}ms | Post={avg_post}ms (avg/gambar)")
+    print(f"  [Speed SAM2] Avg={avg_sam}ms (avg/gambar)")
+    print(f"  [Throughput] {throughput_fps} FPS | Latency={lat_ms}ms")
 
     # COCOeval — gunakan pycocotools langsung (format dt sudah COCO-native dari worker)
     try:
@@ -372,16 +389,80 @@ def eval_hybrid_distributed(gpu_ids: list, tmp_dir: str) -> tuple:
 
     gpu_str = _gpu_report_str(gpu_ids)
 
+    # ── Hitung Precision & Recall dari prediksi bbox ──────────────────────
+    prec, rec = "N/A", "N/A"
+    try:
+        # Kumpulkan GT per image_id
+        gt_per_img = {}  # {image_id: [(cat_id, bbox), ...]}
+        for ann in coco_gt_dict["annotations"]:
+            iid = ann["image_id"]
+            b   = ann["bbox"]  # [x, y, w, h]
+            gt_per_img.setdefault(iid, []).append((ann["category_id"], b))
+
+        total_tp, total_fp, total_gt = 0, 0, 0
+        # Group predictions by image_id
+        preds_per_img = {}  # {image_id: [(cat_id, bbox, score), ...]}
+        for dt in all_dt_bbox:
+            iid = dt["image_id"]
+            b   = dt["bbox"]  # [x, y, w, h]
+            preds_per_img.setdefault(iid, []).append(
+                (dt["category_id"], b, dt["score"])
+            )
+
+        for iid, gt_list in gt_per_img.items():
+            total_gt += len(gt_list)
+            preds = preds_per_img.get(iid, [])
+            preds.sort(key=lambda x: x[2], reverse=True)  # sort by score
+            matched = set()
+            for cat_id, pb, score in preds:
+                # pb = [x, y, w, h] → convert to [x1, y1, x2, y2]
+                px1, py1 = pb[0], pb[1]
+                px2, py2 = pb[0]+pb[2], pb[1]+pb[3]
+                best_iou, best_idx = 0.0, None
+                for gi, (gc, gb) in enumerate(gt_list):
+                    if gc != cat_id or gi in matched:
+                        continue
+                    gx1, gy1 = gb[0], gb[1]
+                    gx2, gy2 = gb[0]+gb[2], gb[1]+gb[3]
+                    ix1 = max(px1, gx1); iy1 = max(py1, gy1)
+                    ix2 = min(px2, gx2); iy2 = min(py2, gy2)
+                    iw = max(0, ix2-ix1); ih = max(0, iy2-iy1)
+                    ia = iw * ih
+                    ua = (px2-px1)*(py2-py1) + (gx2-gx1)*(gy2-gy1) - ia
+                    iou = ia / ua if ua > 0 else 0.0
+                    if iou > best_iou:
+                        best_iou = iou; best_idx = gi
+                if best_iou >= 0.5 and best_idx is not None:
+                    total_tp += 1; matched.add(best_idx)
+                else:
+                    total_fp += 1
+
+        prec = round(total_tp / (total_tp + total_fp), 4) if (total_tp + total_fp) > 0 else 0.0
+        rec  = round(total_tp / total_gt, 4) if total_gt > 0 else 0.0
+        print(f"  ✅ Precision={prec}  Recall={rec}")
+    except Exception as e:
+        print(f"  ⚠️ Precision/Recall error: {e}")
+
+    # Untuk Hybrid: kolom timing mencerminkan breakdown nyata
+    # Preprocess (ms)  = YOLO preprocess (resize, normalize)
+    # Inference (ms)   = YOLO inference + SAM2 inference (kedua model bekerja per gambar)
+    # Postprocess (ms) = YOLO postprocess (NMS, dst)
+    hybrid_inf_ms = "N/A"
+    if isinstance(avg_inf, (int, float)) and isinstance(avg_sam, (int, float)):
+        hybrid_inf_ms = round(avg_inf + avg_sam, 2)
+    elif isinstance(avg_inf, (int, float)):
+        hybrid_inf_ms = avg_inf
+
     det_row = {
         "Model":             MODEL_LABEL,
         "Model Size (MB)":   total_mb_str,
         "mAP50-95":          mAP50_95_box,
         "mAP50":             mAP50_box,
-        "Precision":         "N/A (MultiGPU)",
-        "Recall":            "N/A (MultiGPU)",
-        "Preprocess (ms)":   avg_yolo_ms,
-        "Inference (ms)":    avg_sam_ms,
-        "Postprocess (ms)":  "N/A (Distributed)",
+        "Precision":         prec,
+        "Recall":            rec,
+        "Preprocess (ms)":   avg_pre,
+        "Inference (ms)":    hybrid_inf_ms,
+        "Postprocess (ms)":  avg_post,
         "Latency (ms)":      lat_ms,
         "FPS":               throughput_fps,
         "GPUs":              gpu_str,
@@ -393,6 +474,9 @@ def eval_hybrid_distributed(gpu_ids: list, tmp_dir: str) -> tuple:
         "Model Size (MB)":  total_mb_str,
         "mAP50-95(Box)":    mAP50_95_box,
         "mAP50-95(Mask)":   mAP50_95_mask,
+        "Preprocess (ms)":  avg_pre,
+        "Inference (ms)":   hybrid_inf_ms,
+        "Postprocess (ms)": avg_post,
         "Latency (ms)":     lat_ms,
         "FPS":              throughput_fps,
         "GPUs":             gpu_str,
@@ -474,8 +558,11 @@ if __name__ == "__main__":
                 f"✅ <b>Hybrid Det MultiGPU Selesai</b>\n"
                 f"mAP50-95: <code>{det_row['mAP50-95']}</code>\n"
                 f"mAP50: <code>{det_row['mAP50']}</code>\n"
-                f"YOLO Latency: <code>{det_row['Preprocess (ms)']}ms</code>\n"
-                f"SAM2 Latency: <code>{det_row['Inference (ms)']}ms</code>\n"
+                f"Precision: <code>{det_row['Precision']}</code>\n"
+                f"Recall: <code>{det_row['Recall']}</code>\n"
+                f"Pre: <code>{det_row['Preprocess (ms)']}ms</code> | "
+                f"Inf: <code>{det_row['Inference (ms)']}ms</code> | "
+                f"Post: <code>{det_row['Postprocess (ms)']}ms</code>\n"
                 f"FPS (Throughput): <code>{det_row['FPS']}</code>\n"
                 f"GPUs: <code>{det_row['GPUs']}</code>"
             )
@@ -484,7 +571,8 @@ if __name__ == "__main__":
         if seg_row:
             seg_fields = [
                 "Model", "Model Size (MB)", "mAP50-95(Box)",
-                "mAP50-95(Mask)", "Latency (ms)", "FPS", "GPUs", "Evaluator"
+                "mAP50-95(Mask)", "Preprocess (ms)", "Inference (ms)",
+                "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"
             ]
             seg_csv = os.path.join(REPORTS_DIR, "report_hybrid_seg_multigpu.csv")
             with open(seg_csv, "w", newline="", encoding="utf-8") as f:
