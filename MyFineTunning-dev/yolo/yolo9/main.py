@@ -108,7 +108,7 @@ def _eval_det(label, pt, yaml):
     """Detection — Ultralytics native evaluation."""
     try:
         m   = YOLO(pt)
-        met = m.val(data=yaml, imgsz=IMAGE_SIZE, device=0, verbose=False, plots=False)
+        met = m.val(data=yaml, imgsz=IMAGE_SIZE, device=DEVICE, verbose=False, plots=False)
         sp  = getattr(met, "speed", {})
         pre  = round(sp.get("preprocess",  0), 2)
         inf  = round(sp.get("inference",   0), 2)
@@ -141,7 +141,7 @@ def _eval_seg(label, pt, yaml):
     """Segmentation — format reporter.py seg_performance."""
     try:
         m   = YOLO(pt)
-        met = m.val(data=yaml, imgsz=IMAGE_SIZE, device=0, verbose=False, plots=False)
+        met = m.val(data=yaml, imgsz=IMAGE_SIZE, device=DEVICE, verbose=False, plots=False)
         sp  = getattr(met, "speed", {})
         pre  = round(sp.get("preprocess",  0), 2)
         inf  = round(sp.get("inference",   0), 2)
@@ -186,7 +186,7 @@ def _coco_eval_det(label, pt, yaml):
         
         # Run inference & collect predictions in COCO format
         m   = YOLO(pt)
-        met = m.val(data=yaml, imgsz=IMAGE_SIZE, device=0, verbose=False, plots=False)
+        met = m.val(data=yaml, imgsz=IMAGE_SIZE, device=DEVICE, verbose=False, plots=False)
         sp  = getattr(met, "speed", {})
         pre  = round(sp.get("preprocess",  0), 2)
         inf  = round(sp.get("inference",   0), 2)
@@ -348,7 +348,7 @@ def _coco_eval_seg(label, pt, yaml):
         
         # Run inference
         m   = YOLO(pt)
-        met = m.val(data=yaml, imgsz=IMAGE_SIZE, device=0, verbose=False, plots=False)
+        met = m.val(data=yaml, imgsz=IMAGE_SIZE, device=DEVICE, verbose=False, plots=False)
         sp  = getattr(met, "speed", {})
         pre  = round(sp.get("preprocess",  0), 2)
         inf  = round(sp.get("inference",   0), 2)
