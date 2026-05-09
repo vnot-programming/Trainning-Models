@@ -329,15 +329,7 @@ def eval_hybrid_distributed(gpu_ids: list, tmp_dir: str) -> tuple:
     avg_sam_ms  = round(sum(all_sam_t) / len(all_sam_t), 2) if all_sam_t else "N/A"
     print(f"  [Latency] Avg YOLO: {avg_yolo_ms}ms | Avg SAM2: {avg_sam_ms}ms | Total: {lat_ms}ms")
 
-    # COCOeval — Detection (BBox)
-    print("\n  [COCOeval] ── Detection (BBox) ──")
-    mAP50_box, mAP50_95_box = evaluate_coco_predictions(
-        coco_gt_dict, image_ids,
-        # Convert back to compatible format
-        [{"image": None, "pred_box": None, "pred_cls": None, "pred_conf": None}],  # dummy
-        iou_type="bbox"
-    )
-    # Gunakan langsung dari COCOeval dengan format dt yang benar
+    # COCOeval — gunakan pycocotools langsung (format dt sudah COCO-native dari worker)
     try:
         from pycocotools.coco import COCO
         from pycocotools.cocoeval import COCOeval
@@ -346,25 +338,28 @@ def eval_hybrid_distributed(gpu_ids: list, tmp_dir: str) -> tuple:
         coco_gt.dataset = coco_gt_dict
         coco_gt.createIndex()
 
-        # Detection evaluation
+        # ── Detection (BBox) ─────────────────────────────────────────────────
+        print("\n  [COCOeval] ── Detection (BBox) ──")
         if all_dt_bbox:
-            coco_dt_box = coco_gt.loadRes(all_dt_bbox)
-            eval_box    = COCOeval(coco_gt, coco_dt_box, iouType="bbox")
+            coco_dt_box  = coco_gt.loadRes(all_dt_bbox)
+            eval_box     = COCOeval(coco_gt, coco_dt_box, iouType="bbox")
             eval_box.evaluate(); eval_box.accumulate(); eval_box.summarize()
-            mAP50_box    = round(float(eval_box.stats[1]), 4)  # stats[1] = mAP@.50
-            mAP50_95_box = round(float(eval_box.stats[0]), 4)  # stats[0] = mAP@.50:.95
+            mAP50_box    = round(float(eval_box.stats[1]), 4)   # mAP@.50
+            mAP50_95_box = round(float(eval_box.stats[0]), 4)   # mAP@.50:.95
         else:
+            print("  ⚠️  Tidak ada prediksi bbox — mAP tidak dapat dihitung.")
             mAP50_box = mAP50_95_box = "N/A"
 
-        # Segmentation evaluation
+        # ── Segmentation (Mask) ──────────────────────────────────────────────
         if all_dt_segm:
             print("\n  [COCOeval] ── Segmentation (Mask) ──")
-            coco_dt_seg  = coco_gt.loadRes(all_dt_segm)
-            eval_seg     = COCOeval(coco_gt, coco_dt_seg, iouType="segm")
+            coco_dt_seg   = coco_gt.loadRes(all_dt_segm)
+            eval_seg      = COCOeval(coco_gt, coco_dt_seg, iouType="segm")
             eval_seg.evaluate(); eval_seg.accumulate(); eval_seg.summarize()
             mAP50_mask    = round(float(eval_seg.stats[1]), 4)
             mAP50_95_mask = round(float(eval_seg.stats[0]), 4)
         else:
+            print("  ⚠️  Tidak ada prediksi mask — mAP segmentasi tidak dapat dihitung.")
             mAP50_mask = mAP50_95_mask = "N/A"
 
     except Exception as e:
