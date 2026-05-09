@@ -465,7 +465,7 @@ if __name__ == "__main__":
             if seg_row:
                 seg_fields = [
                     "Model", "Model Size (MB)", "mAP50-95(Box)",
-                    "mAP50-95(Mask)", "Latency (ms)", "FPS", "GPUs", "Evaluator"
+                    "mAP50-95(Mask)", "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"
                 ]
                 seg_csv = os.path.join(REPORTS_DIR, "report_yolov9c_seg_multigpu.csv")
                 with open(seg_csv, "w", newline="", encoding="utf-8") as f:
