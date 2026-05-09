@@ -445,4 +445,14 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n⚠️ [Pipeline] Dibatalkan oleh pengguna (KeyboardInterrupt)!")
+        print("  🧹 Membersihkan sesi tmux yang tertinggal...")
+        for job in JOBS:
+            subprocess.run(["tmux", "kill-session", "-t", job["name"]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print("  🧹 Membersihkan GPU memory...")
+        flush_gpu_memory()
+        print("✅ Pipeline dihentikan secara aman.")
+        sys.exit(130)
