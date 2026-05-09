@@ -49,9 +49,9 @@ from torch.optim.lr_scheduler import StepLR
 
 # Path setup — agar bisa import dari MyTrainEngine dan MyFineTunning root
 _SCRIPT_DIR    = os.path.abspath(os.path.dirname(__file__))
-_FINETUNING_ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, ".."))
+ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, ".."))
 _TRAIN_ENGINE  = os.environ.get("TRAIN_ENGINE_PATH", "/root/MyTrainEngine")
-sys.path.insert(0, _FINETUNING_ROOT)
+sys.path.insert(0, ROOT)
 sys.path.insert(0, _TRAIN_ENGINE)
 
 # ==============================================================================
@@ -726,7 +726,7 @@ if __name__ == "__main__":
         from gpu_fan_manager import start_fan_manager
         start_fan_manager()
     except ImportError:
-        print("[Warning] gpu_fan_manager.py not found in FINETUNING_ROOT.")
+        print("[Warning] gpu_fan_manager.py not found in ROOT.")
 
     best_pt = os.path.join(OUTPUT_DIR, "best.pt")
 
@@ -800,7 +800,7 @@ if __name__ == "__main__":
 
     # ── Visualisasi ──────────────────────────────────────────────────────────
     try:
-        sys.path.insert(0, _FINETUNING_ROOT)
+        sys.path.insert(0, ROOT)
         from visual_utils import generate_single_maskrcnn
         generate_single_maskrcnn(is_multigpu=False)
     except Exception as e:

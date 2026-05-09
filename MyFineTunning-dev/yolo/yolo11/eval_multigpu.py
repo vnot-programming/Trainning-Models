@@ -474,7 +474,7 @@ if __name__ == "__main__":
 
         # Generate Visuals
         try:
-            sys.path.insert(0, _FINETUNING_ROOT)
+            sys.path.insert(0, ROOT)
             from visual_utils import generate_single_yolo
             if not args.skip_det:
                 generate_single_yolo("yolo11m", "YOLO11m", is_multigpu=True, task="det")

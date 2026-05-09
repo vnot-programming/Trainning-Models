@@ -23,11 +23,11 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 # WORKSPACE — Berbasis timestamp
 # ==============================================================================
 # Direktori root MyFineTunning (lokal / RunPOD)
-_FINETUNING_ROOT = os.environ.get(
-    "FINETUNING_ROOT",
+ROOT = os.environ.get(
+    "ROOT",
     os.path.abspath(os.path.join(os.path.dirname(__file__)))
 )
-_WORKSPACE_ID_FILE = os.path.join(_FINETUNING_ROOT, ".workspace_id")
+_WORKSPACE_ID_FILE = os.path.join(ROOT, ".workspace_id")
 
 # Baca timestamp dari file jika sudah ada (sub-script ikut workspace root main)
 # Jika belum ada (pertama kali root main.py dijalankan), buat baru.
@@ -40,16 +40,16 @@ else:
 # Path workspace lokal — di dalam data-files/ agar output terpusat
 _BASE_DIR     = os.environ.get(
     "WORKSPACE_BASE",
-    os.path.join(_FINETUNING_ROOT, "data-files")
+    os.path.join(ROOT, "data-files")
 )
 WORKSPACE_DIR = os.path.join(_BASE_DIR, f"MyFineTunning-{_TIMESTAMP}")
 
 # ==============================================================================
 # PATHS — Project Structure
 # ==============================================================================
-DATASETS_DIR      = os.path.join(_FINETUNING_ROOT, "datasets")
-MODELS_DIR        = os.path.join(_FINETUNING_ROOT, "models")
-DATA_FILES_DIR    = os.path.join(_FINETUNING_ROOT, "data-files")
+DATASETS_DIR      = os.path.join(ROOT, "datasets")
+MODELS_DIR        = os.path.join(ROOT, "models")
+DATA_FILES_DIR    = os.path.join(ROOT, "data-files")
 REPORTS_DIR       = os.path.join(WORKSPACE_DIR, "reports")
 VISUALS_DIR       = os.path.join(WORKSPACE_DIR, "visuals")
 IMAGE_SAMPLES_DIR = os.path.join(WORKSPACE_DIR, "image_samples")
@@ -72,34 +72,34 @@ SEG_YAML = os.path.join(SEG_DATASET_LOCATION, "data.yaml")
 # ==============================================================================
 # PATHS — Pipeline (untuk run_pipeline.py)
 # ==============================================================================
-VENV_ACTIVATE_PATH = os.path.join(_FINETUNING_ROOT, ".venv", "bin", "activate")
+VENV_ACTIVATE_PATH = os.path.join(ROOT, ".venv", "bin", "activate")
 
 PIPELINE_JOBS = [
     {
         "name": "yolo8",
         "session": "yolo8training",
-        "workdir": os.path.join(_FINETUNING_ROOT, "yolo", "yolo8"),
+        "workdir": os.path.join(ROOT, "yolo", "yolo8"),
         "script": "main.py",
         "logfile": "yolo8training.log",
     },
     {
         "name": "yolo9",
         "session": "yolo9training",
-        "workdir": os.path.join(_FINETUNING_ROOT, "yolo", "yolo9"),
+        "workdir": os.path.join(ROOT, "yolo", "yolo9"),
         "script": "main.py",
         "logfile": "yolo9training.log",
     },
     {
         "name": "yolo11",
         "session": "yolo11training",
-        "workdir": os.path.join(_FINETUNING_ROOT, "yolo", "yolo11"),
+        "workdir": os.path.join(ROOT, "yolo", "yolo11"),
         "script": "main.py",
         "logfile": "yolo11training.log",
     },
     {
         "name": "maskrcnn",
         "session": "masktraining",
-        "workdir": os.path.join(_FINETUNING_ROOT, "mask-r-cnn"),
+        "workdir": os.path.join(ROOT, "mask-r-cnn"),
         "script": "train_multigpu.py",
         "logfile": "train_multigpu.log",
     },

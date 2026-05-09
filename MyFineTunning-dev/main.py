@@ -33,8 +33,8 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 # Harus dilakukan SEBELUM import config_shared agar semua sub-script
 # membaca timestamp yang sama dari file ini.
 # ==============================================================================
-_ROOT = os.path.dirname(os.path.abspath(__file__))
-_WS_ID_FILE = os.path.join(_ROOT, ".workspace_id")
+ROOT = os.path.dirname(os.path.abspath(__file__))
+_WS_ID_FILE = os.path.join(ROOT, ".workspace_id")
 
 if os.path.exists(_WS_ID_FILE):
     with open(_WS_ID_FILE) as _f:

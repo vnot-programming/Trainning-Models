@@ -25,11 +25,11 @@ from pathlib import Path
 from datetime import datetime
 
 # Root project
-_PROJECT_ROOT = Path(__file__).resolve().parent
+_PROJECTROOT = Path(__file__).resolve().parent
 
 # ── Load .env ──────────────────────────────────────────────────────────────────
 def _load_dotenv() -> None:
-    env_path = _PROJECT_ROOT / ".env"
+    env_path = _PROJECTROOT / ".env"
     if not env_path.exists():
         return
     try:
@@ -49,7 +49,7 @@ RCLONE_BIN    = os.environ.get("RCLONE_BIN",    str(Path.home() / ".local/bin/rc
 RCLONE_REMOTE = os.environ.get("RCLONE_REMOTE", "gdrive")
 RCLONE_DEST   = os.environ.get("RCLONE_DEST",   "gdrive-backup")
 HOSTNAME      = socket.gethostname()
-RCLONE_LOCAL  = _PROJECT_ROOT / "rclone_local"
+RCLONE_LOCAL  = _PROJECTROOT / "rclone_local"
 
 # Interval laporan Telegram untuk operasi panjang (5 menit)
 _PROGRESS_INTERVAL = 300
@@ -100,7 +100,7 @@ def _apply_smart_delay(seconds: int, reason: str = "Rate Limit Protection") -> N
 # HELPER — Workspace ID
 # ==============================================================================
 def _get_workspace_timestamp() -> str:
-    ws_id_file = _PROJECT_ROOT / ".workspace_id"
+    ws_id_file = _PROJECTROOT / ".workspace_id"
     if ws_id_file.exists():
         return ws_id_file.read_text().strip()
     return datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -113,7 +113,7 @@ def _get_remote_folder() -> str:
 
 def _workspace_dirs() -> list[Path]:
     """Temukan semua folder MyFineTunning-* di data-files/."""
-    data_files = _PROJECT_ROOT / "data-files"
+    data_files = _PROJECTROOT / "data-files"
     if not data_files.exists():
         return []
     return sorted(data_files.glob("MyFineTunning-*"))
@@ -331,7 +331,7 @@ def download_weights(target_dir: str | None = None, auto_extract: bool = True) -
     ok = _run_rclone([cmd_bin, "copy", f"{remote}/fine_models_archive", str(dl_dir), "--progress"], label="Download arsip")
     if ok and auto_extract:
         archives = list(dl_dir.glob("*.tar.zst")) + list(dl_dir.glob("*.tar.gz"))
-        extract_dest = _PROJECT_ROOT / "data-files"
+        extract_dest = _PROJECTROOT / "data-files"
         for archive in archives:
             cmd = f"tar --use-compress-program='zstd -d -T0' -xf '{archive}' -C '{extract_dest}'" if ".zst" in archive.name else f"tar -xzf '{archive}' -C '{extract_dest}'"
             if subprocess.run(cmd, shell=True).returncode == 0: archive.unlink()

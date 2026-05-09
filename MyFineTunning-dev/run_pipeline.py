@@ -12,7 +12,7 @@ Setiap model:
   3. Membersihkan GPU memory sebelum memulai model berikutnya
 
 Cara pakai:
-  source .venv/bin/activate && python3 run_pipeline.py 2>&1 | tee PipelineReport.log
+  source Trainning-Models/MyFineTunning-dev/.venv/bin/activate && python3 run_pipeline.py 2>&1 | tee PipelineReport.log
 
 Atau via tmux (recommended):
   tmux new-session -d -s run_pipeline "source .venv/bin/activate && python3 run_pipeline.py 2>&1 | tee run_pipeline.log"

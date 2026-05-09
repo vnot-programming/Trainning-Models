@@ -44,8 +44,8 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 
 _HYBRID_DIR      = os.path.abspath(os.path.dirname(__file__))
-_FINETUNING_ROOT = os.path.abspath(os.path.join(_HYBRID_DIR, ".."))
-sys.path.insert(0, _FINETUNING_ROOT)
+ROOT = os.path.abspath(os.path.join(_HYBRID_DIR, ".."))
+sys.path.insert(0, ROOT)
 
 import torch
 import torch.multiprocessing as mp
@@ -602,7 +602,7 @@ if __name__ == "__main__":
         # Generate Visual Comparisons
         print("\n  [Visual] Generating comparison images...")
         try:
-            sys.path.insert(0, _FINETUNING_ROOT)
+            sys.path.insert(0, ROOT)
             from visual_utils import generate_single_hybrid, generate_hybrid_grids
             generate_single_hybrid(is_multigpu=True)
             generate_hybrid_grids(is_multigpu=True)

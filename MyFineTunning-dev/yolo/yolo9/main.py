@@ -473,7 +473,7 @@ print(f"✅ Seg Report : {seg_csv}")
 
 # ------ Visualisasi sampel per model ------
 try:
-    sys.path.insert(0, FINETUNING_ROOT)
+    sys.path.insert(0, ROOT)
     from visual_utils import generate_single_yolo
     generate_single_yolo("yolov9m", "YOLOv9m", is_multigpu=False, task="det")
     generate_single_yolo("yolov9c_seg", "YOLOv9c-Seg", is_multigpu=False, task="seg")

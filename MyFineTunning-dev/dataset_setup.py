@@ -37,7 +37,7 @@ import os
 from pathlib import Path
 
 # Root project = direktori file ini
-_PROJECT_ROOT = Path(__file__).resolve().parent
+_PROJECTROOT = Path(__file__).resolve().parent
 _KEY_NAME     = "ROBOFLOW_KU_KEY1"
 
 # Roboflow project info
@@ -70,14 +70,14 @@ def _get_datasets_dir() -> Path:
         from config_shared import DATASETS_DIR
         return Path(DATASETS_DIR)
     except ImportError:
-        return _PROJECT_ROOT / "datasets"
+        return _PROJECTROOT / "datasets"
 
 
 # ==============================================================================
 # CREDENTIAL — .env / OS env var
 # ==============================================================================
 def _load_dotenv() -> None:
-    env_path = _PROJECT_ROOT / ".env"
+    env_path = _PROJECTROOT / ".env"
     if not env_path.exists():
         return
     try:

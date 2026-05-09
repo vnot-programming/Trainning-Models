@@ -840,7 +840,7 @@ if __name__ == "__main__":
     # --- 9. Generate Visual Comparisons ---
     print("\n[9] Generate Visual Comparisons...")
     try:
-        sys.path.insert(0, FINETUNING_ROOT)
+        sys.path.insert(0, ROOT)
         from visual_utils import generate_single_hybrid, generate_hybrid_grids
         generate_single_hybrid(is_multigpu=False)
         generate_hybrid_grids(is_multigpu=False)
