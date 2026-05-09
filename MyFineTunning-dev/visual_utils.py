@@ -20,8 +20,11 @@ if _MASKRCNN_DIR not in sys.path:
 
 from config_shared import (
     IMAGE_SAMPLES_DIR, VISUALS_DIR, REPORTS_DIR, MODEL_COLORS,
-    get_output_dir, IMAGE_SIZE, CLASS_NAMES
+    get_output_dir, IMAGE_SIZE
 )
+
+CLASS_NAMES = ["dishwasher", "milk", "mineral", "non_mineral",
+               "not_empty", "soda", "yogurt"]
 
 SAM2_PT = os.path.join(_THIS_DIR, "hybrid", "sam2.1_b.pt")
 DEVICE  = "cuda:0" if torch.cuda.is_available() else "cpu"
