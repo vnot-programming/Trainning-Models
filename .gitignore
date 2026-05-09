@@ -26,21 +26,25 @@ MyFineTunning-dev/mask-r-cnn/monitor_training.py
 MyFineTunning-dev/mask-r-cnn/monitor.log
 MyFineTunning-dev/mask-r-cnn/train_multigpu.log
 
+MyFineTunning-dev/yolo/yolo8/__pycache__
 MyFineTunning-dev/yolo/yolo8/reporter-yolo8.py
 MyFineTunning-dev/yolo/yolo8/yolo8training.log
 MyFineTunning-dev/yolo/yolo8/yolo26n.pt
 
+MyFineTunning-dev/yolo/yolo9/__pycache__
 MyFineTunning-dev/yolo/yolo9/det_eval_only.py 
 MyFineTunning-dev/yolo/yolo9/seg_only.py
 MyFineTunning-dev/yolo/yolo9/reporter-yolo9.py
 MyFineTunning-dev/yolo/yolo9/yolo9training.log
 MyFineTunning-dev/yolo/yolo9/yolo26n.pt
 
+MyFineTunning-dev/yolo/yolo11/__pycache__
 MyFineTunning-dev/yolo/yolo11/yolo11training.log
 MyFineTunning-dev/yolo/yolo11/yolo26n.pt
 MyFineTunning-dev/rclone_local/*
 MyFineTunning-dev/hybrid/*.pt
 .workspace_id
+
 
 # General
 .DS_Store
