@@ -1,33 +1,105 @@
 # 🤖 Computer Vision Training Models
 
-[![Version](https://img.shields.io/badge/version-v0.1.1-blue?style=for-the-badge)](https://github.com/vnot-programming/Trainning-Models/releases/tag/v0.1.1)
+[![Version](https://img.shields.io/badge/version-v0.2.0-blue?style=for-the-badge)](https://github.com/vnot-programming/Trainning-Models/releases)
 [![Status](https://img.shields.io/badge/Status-Release-green?style=for-the-badge)](https://github.com/vnot-programming/Trainning-Models/releases)
+[![Python](https://img.shields.io/badge/Python-3.11-yellow?style=for-the-badge&logo=python)](https://www.python.org/)
+[![Framework](https://img.shields.io/badge/Framework-PyTorch-orange?style=for-the-badge&logo=pytorch)](https://pytorch.org/)
 
-Repository for Fine-Tuning models and Computer Vision experiments.
+Repository for Fine-Tuning models and Computer Vision experiments — targeting **Scopus Q1/Q2** publication.
+
+---
 
 ## 🚀 Current Release
-- **Release Title:** `MyFineTunning_20260505_000000`
-- **Version Tag:** `v0.1.1`
+- **Version Tag:** `v0.2.0`
+- **Date:** May 9, 2026
 - **Type:** Release (Stable)
+- **Release Notes:** [`release_notes.md`](./release_notes.md)
 
 ## 📦 Downloads & Assets
 > [!TIP]
 > You can download the latest model weights and assets from the release page below.
 
-🔗 **[Download Latest Release Assets](https://github.com/vnot-programming/Trainning-Models/releases/tag/v0.1.1)**
+🔗 **[Download Latest Release Assets](https://github.com/vnot-programming/Trainning-Models/releases)**
+
+---
+
+## 🧠 Models
+
+| Model | Task | Architecture | Evaluator |
+|---|---|---|---|
+| **YOLOv8m** | Detection + Segmentation | YOLO v8 | COCOeval / Ultralytics |
+| **YOLOv9m / YOLOv9c-Seg** | Detection + Segmentation | YOLO v9 | COCOeval / Ultralytics |
+| **YOLO11m / YOLO11m-Seg** | Detection + Segmentation | YOLO v11 | COCOeval / Ultralytics |
+| **Mask R-CNN ResNet-50 FPN-v2** | Detection + Segmentation | Mask R-CNN | COCOeval (DDP) |
+| **Hybrid (YOLO11m + SAM2)** | Detection + Segmentation | YOLO11m + SAM2.1-B | COCOeval (MultiGPU) |
+
+---
+
+## 🏃 Pipeline Evaluasi (Multi-GPU)
+
+Jalankan evaluasi semua model secara **sekuensial** menggunakan satu script orchestrator:
+
+```bash
+# Background via tmux (recommended):
+tmux new-session -d -s run_pipeline_multi \
+  "cd /root/Trainning-Models/MyFineTunning-dev && \
+   python3 run_pipeline_multi.py 2>&1 | tee run_pipeline_multi.log"
+
+# Skip model tertentu:
+python3 run_pipeline_multi.py --skip yolo8,yolo9
+
+# Pilih GPU spesifik:
+python3 run_pipeline_multi.py --gpus 0,1
+```
+
+### Pipeline Training (Single):
+```bash
+tmux new-session -d -s run_pipeline \
+  "source /root/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && \
+   cd /root/Trainning-Models/MyFineTunning-dev && \
+   python3 run_pipeline.py 2>&1 | tee run_pipeline.log"
+```
 
 ---
 
 ## 🛠️ Folder Structure
-- `MyFineTunning-dev/`: Primary model development and training scripts.
-- `backups/`: Datas Backups.
-- `MyFineTunning-dev/data-files` : Historical Datas and Fine Tunning Models
-- `MyFineTunning-dev/models` : Located all Downloaded Base Models
-- `MyFineTunning-dev/datasets` : Located all Downloaded Datasets from Roboflow, Huggingface, or etc
-- `MyFineTunning-dev/data-files/reports` : Contains data such as report_det_comparison,report_det_performance, report_hybrid_latency, report_maskrcnn_ddp_seg, report_model_complexity, report_seg_comparison, report_seg_performance, report_yolo11m, report_yolov8m_complexity, report_yolov8m_det, report_yolov8m_seg, report_yolov9_complexity, report_yolov9c_seg, report_yolov9m_det
-- `MyFineTunning-dev/data-files/visuals` : Contains images data from the models such as yolo8, yolo9, yolo11, mask-r-cnn, hybrid (yolo11+SAM2). The images are using the same example images.
+
+```
+Trainning-Models/
+├── MyFineTunning-dev/
+│   ├── .venv/                     # Virtual environment
+│   ├── datasets/                  # Roboflow / HuggingFace datasets
+│   ├── models/                    # Base model weights (.pt)
+│   ├── data-files/
+│   │   ├── reports/               # CSV evaluation reports
+│   │   └── visuals/               # Visualisasi prediksi per model
+│   ├── yolo/
+│   │   ├── yolo8/                 # YOLOv8m training & eval
+│   │   ├── yolo9/                 # YOLOv9m training & eval
+│   │   └── yolo11/                # YOLO11m training & eval
+│   ├── mask-r-cnn/                # Mask R-CNN DDP training & eval
+│   ├── hybrid/                    # YOLO11m + SAM2 hybrid pipeline
+│   ├── config_shared.py           # Shared config (paths, hyperparams)
+│   ├── coco_eval_utils.py         # COCOeval utilities
+│   ├── run_pipeline.py            # Single-model training orchestrator
+│   └── run_pipeline_multi.py      # Multi-model evaluation orchestrator
+└── backups/                       # Dataset/model backups
+```
+
+**Report Files (per model):**
+| File | Deskripsi |
+|---|---|
+| `report_*_det_*.csv` | Detection: mAP50-95, mAP50, Precision, Recall, Latency, FPS, GPUs |
+| `report_*_seg_*.csv` | Segmentation: mAP50-95(Box), mAP50-95(Mask), Latency, FPS |
+
+---
 
 ## 🔄 Development Workflow
+
+```
+feature branch → dev → main
+```
+
 Semua perubahan kode wajib di-push ke branch `dev` sebelum dilakukan sinkronisasi ke `main`.
 
 ---
@@ -40,32 +112,19 @@ Workspace ini dilengkapi dengan **AI Agents** dan **Instructions** untuk membant
 1. **CV Research Collaborator — Scopus Q1/Q2** (`.agents/cv-research-collaborator.agent.md`)
    - Fokus: Computer Vision research untuk jurnal Scopus Q1/Q2
    - Gaya: Brutal honesty, tantang asumsi, bahasa Indonesia akademik
-   - Gunakan untuk: Review arsitektur model, metodologi riset, draft jurnal
 
 2. **Bio-Digital Design Reviewer** (`.agents/pro-design-review.agent.md`)
    - Fokus: Review UI/UX untuk kepatuhan Bio-Digital Minimalism 2026
-   - Cek: Typography (Inter/Outfit/Lora), 60fps animations, WCAG 2.2+, glassmorphism
-   - Gunakan untuk: Review antarmuka web hasil deteksi objek
-
-### Global Instructions
-- **Bio-Digital Minimalism 2026** (`.instructions/bio-digital-minimalism-2026.instructions.md`)
-  - Wajib untuk semua pembuatan UI/UX
-  - 60fps animations, circadian-sync colors, WCAG 2.2+, essentialism
+   - Cek: Typography, 60fps animations, WCAG 2.2+, glassmorphism
 
 ### Rules (`.agents/rules/`)
-- `coding-standards.md` - Clean Code, DRY, KISS, Early Returns
-- `network-topology.md` - Topologi jaringan
-- `ui-ux-biodigital.md` - Bio-Digital UI/UX principles
-
-### Skills (`.prompts/skills/`)
-1. **pro-advanced-ui-ux** - Google UI/UX Expert, Bio-Digital Minimalism
-2. **pro-circadian-js** - Circadian-sync color utility
-3. **pro-performance-auditor** - Lighthouse audit, 60fps compliance
+- `coding-standards.md` — Clean Code, DRY, KISS, Early Returns
+- `network-topology.md` — Topologi jaringan infrastruktur
+- `ui-ux-biodigital.md` — Bio-Digital UI/UX principles
 
 ### File Protection
 Baca file `.agentignore` untuk daftar file yang **DILARANG** diakses oleh agents.
 
-Lihat `AGENTS.md` untuk panduan lengkap penggunaan agents di workspace ini.
-
 ---
-*Generated by Antigravity UI/UX Engineering Expert*
+
+*Generated by Antigravity | Updated: May 2026*
