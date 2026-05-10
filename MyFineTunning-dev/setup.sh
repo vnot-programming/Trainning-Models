@@ -83,14 +83,14 @@ else
         
         if [ "$USE_CU126" -eq 1 ]; then
             echo "[Setup] CUDA >= 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu126)..."
-            pip install torch torchvision ultralytics --index-url https://download.pytorch.org/whl/cu126 --force-reinstall --quiet
+            pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126 --force-reinstall --quiet
         else
             echo "[Setup] CUDA < 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu121)..."
-            pip install torch torchvision ultralytics --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
+            pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
         fi
     else
         echo "[Setup] nvidia-smi tidak ditemukan — fallback install versi kompatibel (cu121)..."
-        pip install torch torchvision ultralytics --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
     fi
 fi
 
