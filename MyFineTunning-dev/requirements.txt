@@ -8,9 +8,11 @@
 # YOLO + SAM2 (otomatis install torch-compatible)
 ultralytics
 
-# Boundary IoU API (Cheng et al., CVPR 2021) — auto-install via eval_boundary_iou.py
-# Manual: pip install git+https://github.com/bowenc0221/boundary-iou-api.git
-# boundary-iou-api
+# Boundary IoU API (Cheng et al., CVPR 2021)
+# PENTING: pip install git+... menghasilkan package KOSONG pada repo ini.
+# Install manual: git clone https://github.com/bowenc0221/boundary-iou-api.git /tmp/biou && pip install -e /tmp/biou
+# auto-install dikelola oleh eval_boundary_iou.py via git clone method.
+
 
 # Image processing
 opencv-python-headless>=4.9.0
