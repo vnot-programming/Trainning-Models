@@ -91,6 +91,9 @@ def _ensure_boundary_iou_installed() -> bool:
         print(f"[BoundaryIoU] ❌ Instalasi gagal: {e}")
         return False
 
+    # Patch numpy deprecated aliases SEBELUM import dicoba lagi
+    _patch_boundary_iou_numpy(tmp_dir)
+
     # Invalidate import cache Python
     import importlib, site
     importlib.invalidate_caches()
@@ -110,10 +113,40 @@ def _ensure_boundary_iou_installed() -> bool:
 
 
 
+def _patch_boundary_iou_numpy(clone_dir: str) -> None:
+    """Patch deprecated np.float/np.bool/np.int aliases di boundary_iou source.
 
-# ==============================================================================
-# HELPERS
-# ==============================================================================
+    boundary-iou-api menggunakan `np.float` yang sudah dihapus sejak NumPy 1.24.
+    Karena install via `-e` (editable), patch langsung ke source tree.
+    """
+    import re
+    targets = [
+        os.path.join(clone_dir, "boundary_iou", "coco_instance_api", "cocoeval.py"),
+        os.path.join(clone_dir, "boundary_iou", "lvis_instance_api", "eval.py"),
+        os.path.join(clone_dir, "boundary_iou", "cityscapes_instance_api",
+                     "evalInstanceLevelSemanticLabeling.py"),
+    ]
+    replacements = [
+        (r"\bnp\.float\b",   "np.float64"),
+        (r"\bnp\.int\b",     "np.int64"),
+        (r"\bnp\.bool\b",    "np.bool_"),
+        (r"\bnp\.complex\b", "np.complex128"),
+        (r"\bnp\.object\b",  "np.object_"),
+        (r"\bnp\.str\b",     "np.str_"),
+    ]
+    for fpath in targets:
+        if not os.path.exists(fpath):
+            continue
+        with open(fpath, "r", encoding="utf-8") as f:
+            src = f.read()
+        patched = src
+        for old, new in replacements:
+            patched = re.sub(old, new, patched)
+        if patched != src:
+            with open(fpath, "w", encoding="utf-8") as f:
+                f.write(patched)
+            print(f"  [Patch] ✅ NumPy alias dipatch: {os.path.basename(fpath)}")
+
 
 def _flush_gpu(label: str = ""):
     gc.collect()
