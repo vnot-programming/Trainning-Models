@@ -114,13 +114,16 @@ def _ensure_boundary_iou_installed() -> bool:
 
 
 def _patch_boundary_iou_numpy(clone_dir: str) -> None:
-    """Patch deprecated np.float/np.bool/np.int aliases di boundary_iou source.
+    """Patch deprecated np.float/np.bool/np.int aliases + numpy bbox comparison.
 
     boundary-iou-api menggunakan `np.float` yang sudah dihapus sejak NumPy 1.24.
+    Selain itu, loadRes() di coco.py gagal ketika dt_segm mengandung field 'bbox'
+    sebagai numpy array (4,) karena perbandingan `!= []` tidak aman untuk numpy.
     Karena install via `-e` (editable), patch langsung ke source tree.
     """
     import re
-    targets = [
+    # ── Patch 1: deprecated numpy aliases ─────────────────────────────────────
+    targets_numpy = [
         os.path.join(clone_dir, "boundary_iou", "coco_instance_api", "cocoeval.py"),
         os.path.join(clone_dir, "boundary_iou", "lvis_instance_api", "eval.py"),
         os.path.join(clone_dir, "boundary_iou", "cityscapes_instance_api",
@@ -134,7 +137,7 @@ def _patch_boundary_iou_numpy(clone_dir: str) -> None:
         (r"\bnp\.object\b",  "np.object_"),
         (r"\bnp\.str\b",     "np.str_"),
     ]
-    for fpath in targets:
+    for fpath in targets_numpy:
         if not os.path.exists(fpath):
             continue
         with open(fpath, "r", encoding="utf-8") as f:
@@ -146,6 +149,29 @@ def _patch_boundary_iou_numpy(clone_dir: str) -> None:
             with open(fpath, "w", encoding="utf-8") as f:
                 f.write(patched)
             print(f"  [Patch] ✅ NumPy alias dipatch: {os.path.basename(fpath)}")
+
+    # ── Patch 2: loadRes bbox comparison agar aman dengan numpy array ──────────
+    # pycocotools.loadRes() memodifikasi dt_segm in-place & menambah field 'bbox'
+    # sebagai numpy array. Ketika list yang sama diteruskan ke boundary_iou.loadRes(),
+    # baris `not anns[0]['bbox'] == []` gagal karena numpy array tidak bisa
+    # dibandingkan langsung dengan list kosong menggunakan operator ==.
+    coco_path = os.path.join(
+        clone_dir, "boundary_iou", "coco_instance_api", "coco.py"
+    )
+    if os.path.exists(coco_path):
+        with open(coco_path, "r", encoding="utf-8") as f:
+            src = f.read()
+        old_line = "elif 'bbox' in anns[0] and not anns[0]['bbox'] == []:"
+        new_line  = ("elif 'bbox' in anns[0] and "
+                     "not (list(anns[0]['bbox']) "
+                     "if hasattr(anns[0]['bbox'], '__iter__') "
+                     "else [anns[0]['bbox']]) == []:")
+        if old_line in src:
+            patched = src.replace(old_line, new_line)
+            with open(coco_path, "w", encoding="utf-8") as f:
+                f.write(patched)
+            print(f"  [Patch] ✅ loadRes bbox numpy-safe dipatch: coco.py")
+
 
 
 def _flush_gpu(label: str = ""):
@@ -630,8 +656,13 @@ def run_evaluation(device_str: str = "cuda:0"):
             dt_segm = []
 
         # ── Evaluasi Dual: Standard Mask mAP + Boundary AP ────────────────────
-        std_metrics  = _run_standard_mask_eval(coco_gt, dt_segm, label)
-        bound_metrics = _run_boundary_eval(coco_gt, dt_segm, label)
+        # PENTING: deepcopy wajib — pycocotools.loadRes() memodifikasi dt_segm
+        # in-place (menambahkan field 'bbox' sebagai numpy array). Jika list yang
+        # sama diteruskan ke boundary_iou.loadRes(), perbandingan numpy array (4,)
+        # vs [] akan gagal dengan ValueError.
+        import copy
+        std_metrics   = _run_standard_mask_eval(coco_gt, copy.deepcopy(dt_segm), label)
+        bound_metrics = _run_boundary_eval(coco_gt, copy.deepcopy(dt_segm), label)
         elapsed = round(time.perf_counter() - t0, 1)
 
         row = {
