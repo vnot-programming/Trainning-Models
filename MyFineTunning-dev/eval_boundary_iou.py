@@ -479,8 +479,10 @@ def _infer_hybrid(yolo_pt: str, sam_pt: str, image_ids: dict,
 
 
 # ==============================================================================
-# SAVE REPORTS
-# ==================================def _save_csv(rows: list, out_dir: str):
+
+
+def _save_csv(rows: list, out_dir: str):
+
     os.makedirs(out_dir, exist_ok=True)
     csv_path = os.path.join(out_dir, "report_boundary_iou_comparison.csv")
     fields = [
