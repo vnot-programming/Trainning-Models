@@ -304,7 +304,7 @@ def _infer_maskrcnn(pt_path: str, image_ids: dict, device: torch.device) -> list
 
     print(f"\n  [Infer] Loading Mask R-CNN dari {pt_path} ...")
     model = _build_maskrcnn_model(device)
-    model.load_state_dict(torch.load(pt_path, map_location=device))
+    model.load_state_dict(torch.load(pt_path, map_location=device, weights_only=True))
     model.eval()
 
     dt_segm = []
