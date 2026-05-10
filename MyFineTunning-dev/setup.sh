@@ -74,27 +74,42 @@ echo "[Setup] Python: $(which python3) — $(python3 --version)"
 pip install --upgrade pip --quiet
 
 # Cek apakah torch sudah terinstall dan kompatibel
-if python3 -c "import torch; exit(0 if torch.cuda.is_available() else 1)" 2>/dev/null; then
-    echo "[Setup] torch dengan dukungan CUDA sudah tersedia."
+if command -v nvidia-smi &> /dev/null; then
+    CUDA_VER=$(nvidia-smi | grep -i "CUDA Version" | sed -E 's/.*CUDA Version: ([0-9]+\.[0-9]+).*/\1/')
+    USE_CU130=$(python3 -c "print(1 if float('${CUDA_VER:-0.0}') >= 13.0 else 0)" 2>/dev/null || echo 0)
+    USE_CU128=$(python3 -c "print(1 if float('${CUDA_VER:-0.0}') >= 12.8 else 0)" 2>/dev/null || echo 0)
+    USE_CU126=$(python3 -c "print(1 if float('${CUDA_VER:-0.0}') >= 12.6 else 0)" 2>/dev/null || echo 0)
 else
-    if command -v nvidia-smi &> /dev/null; then
-        CUDA_VER=$(nvidia-smi | grep -i "CUDA Version" | sed -E 's/.*CUDA Version: ([0-9]+\.[0-9]+).*/\1/')
-        USE_CU130=$(python3 -c "print(1 if float('${CUDA_VER:-0.0}') >= 13.0 else 0)" 2>/dev/null || echo 0)
-        USE_CU128=$(python3 -c "print(1 if float('${CUDA_VER:-0.0}') >= 12.8 else 0)" 2>/dev/null || echo 0)
-        USE_CU126=$(python3 -c "print(1 if float('${CUDA_VER:-0.0}') >= 12.6 else 0)" 2>/dev/null || echo 0)
-        
-        if [ "$USE_CU130" -eq 1 ] || [ "$USE_CU128" -eq 1 ]; then
-            echo "[Setup] CUDA >= 12.8 terdeteksi (Host: $CUDA_VER). Arsitektur Blackwell/Hopper+ membutuhkan cu128..."
-            pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128 --force-reinstall --quiet
-        elif [ "$USE_CU126" -eq 1 ]; then
-            echo "[Setup] CUDA >= 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu126)..."
-            pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126 --force-reinstall --quiet
-        else
-            echo "[Setup] CUDA < 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu121)..."
-            pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
-        fi
+    CUDA_VER="0.0"
+    USE_CU130=0; USE_CU128=0; USE_CU126=0
+fi
+
+TORCH_OK=$(python3 -c "
+import torch
+import sys
+if not torch.cuda.is_available():
+    print(0)
+    sys.exit(0)
+pt_cuda = float(torch.version.cuda) if torch.version.cuda else 0.0
+if $USE_CU130 == 1 or $USE_CU128 == 1:
+    print(1 if pt_cuda >= 12.8 else 0)
+elif $USE_CU126 == 1:
+    print(1 if pt_cuda >= 12.6 else 0)
+else:
+    print(1 if pt_cuda >= 12.1 else 0)
+" 2>/dev/null || echo 0)
+
+if [ "$TORCH_OK" -eq 1 ]; then
+    echo "[Setup] torch dengan dukungan CUDA yang sesuai (Host: $CUDA_VER) sudah tersedia."
+else
+    if [ "$USE_CU130" -eq 1 ] || [ "$USE_CU128" -eq 1 ]; then
+        echo "[Setup] CUDA >= 12.8 terdeteksi (Host: $CUDA_VER). Arsitektur Blackwell membutuhkan cu128..."
+        pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128 --force-reinstall --quiet
+    elif [ "$USE_CU126" -eq 1 ]; then
+        echo "[Setup] CUDA >= 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu126)..."
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126 --force-reinstall --quiet
     else
-        echo "[Setup] nvidia-smi tidak ditemukan — fallback install versi kompatibel (cu121)..."
+        echo "[Setup] CUDA < 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu121)..."
         pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
     fi
 fi
