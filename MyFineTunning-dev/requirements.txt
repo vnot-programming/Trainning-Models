@@ -8,6 +8,10 @@
 # YOLO + SAM2 (otomatis install torch-compatible)
 ultralytics
 
+# Boundary IoU API (Cheng et al., CVPR 2021) — auto-install via eval_boundary_iou.py
+# Manual: pip install git+https://github.com/bowenc0221/boundary-iou-api.git
+# boundary-iou-api
+
 # Image processing
 opencv-python-headless>=4.9.0
 Pillow>=10.2.0
