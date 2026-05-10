@@ -79,9 +79,14 @@ if python3 -c "import torch; exit(0 if torch.cuda.is_available() else 1)" 2>/dev
 else
     if command -v nvidia-smi &> /dev/null; then
         CUDA_VER=$(nvidia-smi | grep -i "CUDA Version" | sed -E 's/.*CUDA Version: ([0-9]+\.[0-9]+).*/\1/')
+        USE_CU130=$(python3 -c "print(1 if float('${CUDA_VER:-0.0}') >= 13.0 else 0)" 2>/dev/null || echo 0)
+        USE_CU128=$(python3 -c "print(1 if float('${CUDA_VER:-0.0}') >= 12.8 else 0)" 2>/dev/null || echo 0)
         USE_CU126=$(python3 -c "print(1 if float('${CUDA_VER:-0.0}') >= 12.6 else 0)" 2>/dev/null || echo 0)
         
-        if [ "$USE_CU126" -eq 1 ]; then
+        if [ "$USE_CU130" -eq 1 ] || [ "$USE_CU128" -eq 1 ]; then
+            echo "[Setup] CUDA >= 12.8 terdeteksi (Host: $CUDA_VER). Arsitektur Blackwell/Hopper+ membutuhkan cu128..."
+            pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128 --force-reinstall --quiet
+        elif [ "$USE_CU126" -eq 1 ]; then
             echo "[Setup] CUDA >= 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu126)..."
             pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126 --force-reinstall --quiet
         else
