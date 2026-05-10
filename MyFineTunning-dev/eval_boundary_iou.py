@@ -19,6 +19,13 @@ Cara menjalankan:
     python eval_boundary_iou.py --gpus 0
     python eval_boundary_iou.py --gpus 0,1
 
+Atau via tmux (recommended):
+tmux new-session -d -s eval_boundary_iou "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && \\
+      cd /home/my/Trainning-Models/MyFineTunning-dev && \\
+      python -u eval_boundary_iou.py 2>&1 | tee eval_boundary_iou.log"
+
+tmux new-session -d -s eval_boundary_iou "cd /home/my/Trainning-Models/MyFineTunning-dev && python3 eval_boundary_iou.py 2>&1 | tee eval_boundary_iou.log"
+
 Output:
     REPORTS_DIR/report_boundary_iou_comparison.csv
     REPORTS_DIR/narrative_reports/Laporan_Boundary_IoU_Comparison.md
@@ -48,26 +55,60 @@ from coco_eval_utils import build_coco_ground_truth
 # ==============================================================================
 
 def _ensure_boundary_iou_installed() -> bool:
-    """Auto-install boundary-iou-api jika belum tersedia."""
-    try:
-        from boundary_iou.coco_instance_api.coco import COCO  # noqa
-        from boundary_iou.coco_instance_api.cocoeval import COCOeval  # noqa
+    """Auto-install boundary-iou-api jika belum tersedia.
+
+    Catatan: `pip install git+...` untuk repo ini menghasilkan package KOSONG
+    (hanya __init__.py tanpa submodule). Solusi: clone manual lalu `pip install -e`.
+    """
+    def _try_import():
+        try:
+            from boundary_iou.coco_instance_api.coco import COCO  # noqa
+            from boundary_iou.coco_instance_api.cocoeval import COCOeval  # noqa
+            return True
+        except (ImportError, AttributeError):
+            return False
+
+    if _try_import():
         print("[BoundaryIoU] ✅ boundary-iou-api sudah terinstall.")
         return True
-    except ImportError:
-        print("[BoundaryIoU] ⏳ boundary-iou-api belum ada — menginstall otomatis...")
-        try:
-            subprocess.check_call([
-                sys.executable, "-m", "pip", "install",
-                "git+https://github.com/bowenc0221/boundary-iou-api.git",
-                "--quiet"
-            ])
-            from boundary_iou.coco_instance_api.coco import COCO  # noqa
-            print("[BoundaryIoU] ✅ boundary-iou-api berhasil diinstall.")
-            return True
-        except Exception as e:
-            print(f"[BoundaryIoU] ❌ Gagal install boundary-iou-api: {e}")
-            return False
+
+    print("[BoundaryIoU] ⏳ boundary-iou-api belum ada — menginstall via git clone...")
+    import tempfile, shutil
+    tmp_dir = tempfile.mkdtemp(prefix="boundary_iou_")
+    try:
+        # Clone repo (lebih andal dari pip install git+)
+        subprocess.check_call(
+            ["git", "clone", "https://github.com/bowenc0221/boundary-iou-api.git",
+             tmp_dir, "--depth=1", "--quiet"],
+            timeout=120
+        )
+        # Install editable agar subpackage tersedia
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "-e", tmp_dir, "--quiet"],
+            timeout=120
+        )
+    except Exception as e:
+        print(f"[BoundaryIoU] ❌ Instalasi gagal: {e}")
+        return False
+
+    # Invalidate import cache Python
+    import importlib, site
+    importlib.invalidate_caches()
+    for sp in site.getsitepackages():
+        if sp not in sys.path:
+            sys.path.insert(0, sp)
+
+    if _try_import():
+        print("[BoundaryIoU] ✅ boundary-iou-api berhasil diinstall dan di-load.")
+        return True
+
+    print("[BoundaryIoU] ❌ Import masih gagal setelah instalasi.")
+    print(f"   Jalankan manual di dalam .venv:")
+    print(f"   git clone https://github.com/bowenc0221/boundary-iou-api.git /tmp/biou")
+    print(f"   pip install -e /tmp/biou")
+    return False
+
+
 
 
 # ==============================================================================
