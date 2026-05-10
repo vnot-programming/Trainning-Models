@@ -269,13 +269,20 @@ def eval_hybrid_distributed(gpu_ids: list, tmp_dir: str) -> tuple:
         return None, None
 
     if not os.path.exists(sam_pt):
-        print(f"  ❌ SAM2 model tidak ditemukan: {sam_pt}")
-        print("  💡 Pastikan sam2.1_b.pt ada di direktori hybrid/")
-        send_telegram_msg(
-            f"❌ <b>Hybrid MultiGPU Eval</b>\n"
-            f"SAM2 model tidak ditemukan:\n<code>{sam_pt}</code>"
-        )
-        return None, None
+        print(f"  ⚠️ SAM2 model tidak ditemukan: {sam_pt}")
+        print("  ⏳ Mencoba mengunduh sam2.1_b.pt secara otomatis...")
+        try:
+            from ultralytics.utils.downloads import download
+            download("https://github.com/ultralytics/assets/releases/download/v8.4.0/sam2.1_b.pt", dir=os.path.dirname(sam_pt))
+            if not os.path.exists(sam_pt):
+                raise FileNotFoundError("Unduhan selesai namun file pt tidak ada.")
+        except Exception as e:
+            print(f"  ❌ Gagal mengunduh SAM2: {e}")
+            send_telegram_msg(
+                f"❌ <b>Hybrid MultiGPU Eval</b>\n"
+                f"Gagal mengunduh SAM2 model:\n<code>{sam_pt}</code>"
+            )
+            return None, None
 
     if not check_pycocotools():
         print("  ❌ pycocotools tidak terinstall."); return None, None
