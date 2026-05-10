@@ -39,6 +39,7 @@ from pathlib import Path
 # Root project = direktori file ini
 _PROJECTROOT = Path(__file__).resolve().parent
 _KEY_NAME     = "ROBOFLOW_KU_KEY1"
+_KEY_NAME_UNU = "ROBOFLOW_UNU_KEY1"
 
 # Roboflow project info
 # _DET_WORKSPACE  = "wbc-laboratory"
@@ -200,6 +201,55 @@ def setup_segmentation_dataset(key: str | None) -> tuple[str, str]:
     yaml_path = os.path.join(location, "data.yaml")
     print(f"   → {location}")
     return location, yaml_path
+
+
+# ==============================================================================
+# DATASET COCO SEGMENTASI (UNU)
+# ==============================================================================
+def setup_coco_segmentation_dataset_unu() -> str:
+    """
+    Download dataset COCO segmentation dari workspace vnot.
+    Sesuai dengan snippet:
+    !pip install roboflow
+    key_unu = os.environ.get(_KEY_NAME_UNU)
+    from roboflow import Roboflow
+    rf = Roboflow(api_key=key_unu)
+    project = rf.workspace("vnot").project("me-bottle-isempty-unu3-sem-seg")
+    dataset = project.version(1).download("coco-segmentation")
+    """
+    import subprocess
+    import sys
+    
+    # Auto-install roboflow setara dengan !pip install roboflow
+    try:
+        import roboflow
+    except ImportError:
+        print("📦 Menginstall roboflow...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "roboflow"])
+
+    _load_dotenv()
+    key_unu = os.environ.get(_KEY_NAME_UNU)
+    if not key_unu:
+        raise RuntimeError(f"❌ API Key {_KEY_NAME_UNU} tidak ditemukan di .env")
+
+    print(f"\n🌐 Dataset COCO Segmentasi (UNU): Download dari Roboflow...")
+    try:
+        from roboflow import Roboflow
+        rf = Roboflow(api_key=key_unu)
+        project = rf.workspace("vnot").project("me-bottle-isempty-unu3-sem-seg")
+        
+        datasets_dir = _get_datasets_dir()
+        target_loc = str(datasets_dir / "me-bottle-isempty-unu3-sem-seg-1-coco")
+        
+        dataset = project.version(1).download(
+            "coco-segmentation",
+            location=target_loc,
+            overwrite=False
+        )
+        print(f"   → {dataset.location}")
+        return dataset.location
+    except Exception as e:
+        raise RuntimeError(f"❌ Gagal download dataset COCO segmentasi UNU: {e}") from e
 
 
 # ==============================================================================
