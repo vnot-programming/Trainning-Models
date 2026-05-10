@@ -77,8 +77,21 @@ pip install --upgrade pip --quiet
 if python3 -c "import torch; exit(0 if torch.cuda.is_available() else 1)" 2>/dev/null; then
     echo "[Setup] torch dengan dukungan CUDA sudah tersedia."
 else
-    echo "[Setup] torch belum ada atau CUDA tidak terdeteksi — install versi kompatibel (cu121)..."
-    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
+    if command -v nvidia-smi &> /dev/null; then
+        CUDA_VER=$(nvidia-smi | grep -i "CUDA Version" | sed -E 's/.*CUDA Version: ([0-9]+\.[0-9]+).*/\1/')
+        USE_CU126=$(python3 -c "print(1 if float('${CUDA_VER:-0.0}') >= 12.6 else 0)" 2>/dev/null || echo 0)
+        
+        if [ "$USE_CU126" -eq 1 ]; then
+            echo "[Setup] CUDA >= 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu126)..."
+            pip install torch torchvision ultralytics --index-url https://download.pytorch.org/whl/cu126 --force-reinstall --quiet
+        else
+            echo "[Setup] CUDA < 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu121)..."
+            pip install torch torchvision ultralytics --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
+        fi
+    else
+        echo "[Setup] nvidia-smi tidak ditemukan — fallback install versi kompatibel (cu121)..."
+        pip install torch torchvision ultralytics --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
+    fi
 fi
 
 # ------------------------------------------------------------------------------
