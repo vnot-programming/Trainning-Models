@@ -30,7 +30,7 @@ sys.path.insert(0, ROOT)
 from ultralytics import YOLO, SAM
 from config_shared import (
     get_output_dir, NUM_CLASSES, IMAGE_SIZE, PAPER1_VIS_DIR,
-    DET_DATASET_LOCATION, SEG_DATASET_LOCATION
+    STANDAR_DET_DATASET_LOCATION, STANDAR_SEG_DATASET_LOCATION
 )
 from eval_unu_helpers import flush_gpu
 from eval_paper import load_maskrcnn
@@ -49,8 +49,8 @@ def _resolve_valid_dir(dataset_loc):
         return dataset_loc
     raise FileNotFoundError(f"Tidak ditemukan valid/ di {dataset_loc}")
 
-STD_DET_DIR = _resolve_valid_dir(DET_DATASET_LOCATION)
-STD_SEG_DIR = _resolve_valid_dir(SEG_DATASET_LOCATION)
+STD_DET_DIR = _resolve_valid_dir(STANDAR_DET_DATASET_LOCATION)
+STD_SEG_DIR = _resolve_valid_dir(STANDAR_SEG_DATASET_LOCATION)
 
 # Output Directory — paper1/visuals/standard/
 STD_VIS_DIR    = os.path.join(PAPER1_VIS_DIR, "standard")

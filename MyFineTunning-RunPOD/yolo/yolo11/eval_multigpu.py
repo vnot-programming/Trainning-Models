@@ -28,7 +28,7 @@ Output:
     <REPORTS_DIR>/report_yolo11l_seg_multigpu.csv
 """
 
-import os, sys, gc, csv, time, argparse, pickle, tempfile
+import os, sys, gc, csv, time, argparse, pickle, tempfile, subprocess
 os.environ["TORCHDYNAMO_DISABLE"]     = "1"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -472,16 +472,12 @@ if __name__ == "__main__":
                     f"GPUs: <code>{seg_row['GPUs']}</code>"
                 )
 
-        # Generate Visuals
+        # ------ Generate Comparison Grid ------
+        print("\n" + "="*65 + "\n  Generating Comparison Grid\n" + "="*65)
         try:
-            sys.path.insert(0, ROOT)
-            from visual_utils import generate_single_yolo
-            if not args.skip_det:
-                generate_single_yolo("yolo11l", "YOLO11l", is_multigpu=True, task="det")
-            if not args.skip_seg:
-                generate_single_yolo("yolo11l_seg", "YOLO11l-Seg", is_multigpu=True, task="seg")
+            subprocess.run([sys.executable, "-u", os.path.join(ROOT, "utils", "generate_comparison_grid.py")], check=False)
         except Exception as e:
-            print(f"⚠️ Gagal generate visual_utils: {e}")
+            print(f"⚠️ Gagal memanggil generate_comparison_grid: {e}")
 
         total_elapsed = round(time.perf_counter() - t_total_start, 1)
         print(f"\n✅ YOLO11l MultiGPU Evaluation selesai dalam {total_elapsed}s")

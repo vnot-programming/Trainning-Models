@@ -458,13 +458,13 @@ if __name__ == "__main__":
             print("\n❌ Evaluasi gagal — tidak ada report yang disimpan.")
             send_telegram_msg("❌ <b>Mask R-CNN MultiGPU Eval GAGAL</b>\nCek log untuk detail error.")
 
-        # Generate Visuals
+        # ------ Generate Comparison Grid ------
+        print("\n" + "="*65 + "\n  Generating Comparison Grid\n" + "="*65)
         try:
-            sys.path.insert(0, ROOT)
-            from visual_utils import generate_single_maskrcnn
-            generate_single_maskrcnn(is_multigpu=True)
+            import subprocess
+            subprocess.run([sys.executable, "-u", os.path.join(ROOT, "utils", "generate_comparison_grid.py")], check=False)
         except Exception as e:
-            print(f"⚠️ Gagal generate visual_utils: {e}")
+            print(f"⚠️ Gagal memanggil generate_comparison_grid: {e}")
 
         total_elapsed = round(time.perf_counter() - t_total_start, 1)
         print(f"\n✅ Total waktu evaluasi: {total_elapsed}s")

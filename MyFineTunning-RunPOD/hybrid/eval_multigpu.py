@@ -421,4 +421,11 @@ if __name__ == "__main__":
             w.writeheader(); w.writerows(all_seg_rows)
         print(f"✅ Seg Report: {seg_csv}")
 
-    print("\n  [Visual] Note: Visualisasi perbandingan model silakan jalankan utils/generate_paper_visuals.py")
+    # ------ Generate Comparison Grid (Training Dataset) ------
+    print("\n" + "="*65 + "\n  Generating Comparison Grid\n" + "="*65)
+    try:
+        import subprocess
+        subprocess.run([sys.executable, "-u", os.path.join(ROOT, "utils", "generate_comparison_grid.py")], check=False)
+    except Exception as e:
+        print(f"⚠️ Gagal memanggil generate_comparison_grid: {e}")
+

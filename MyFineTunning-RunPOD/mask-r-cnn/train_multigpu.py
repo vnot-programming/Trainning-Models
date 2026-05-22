@@ -798,13 +798,13 @@ if __name__ == "__main__":
         })
     print(f"\n✅ Report: {csv_path}")
 
-    # ── Visualisasi ──────────────────────────────────────────────────────────
+    # ── Evaluasi Multi-GPU ───────────────────────────────────────────────────────
+    print("\n" + "="*65 + "\n  Menjalankan Evaluasi Multi-GPU Mask R-CNN\n" + "="*65)
     try:
-        sys.path.insert(0, ROOT)
-        from visual_utils import generate_single_maskrcnn
-        generate_single_maskrcnn(is_multigpu=False)
-    except Exception as e:
-        print(f"⚠️ Gagal generate visual_utils: {e}")
+        import subprocess
+        subprocess.run([sys.executable, "-u", "eval_multigpu.py", "--gpus", "all"], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️ Evaluasi Multi-GPU gagal: {e}")
 
     # ── Kompres folder hasil training ───────────────────────────────────────
     compress_run(OUTPUT_KEY)

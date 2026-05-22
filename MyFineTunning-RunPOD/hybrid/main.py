@@ -839,12 +839,12 @@ Evaluator: COCOeval (standar industri)
 if __name__ == "__main__":
     evaluate_hybrid_map()
 
-    # --- 9. Generate Visual Comparisons ---
-    print("\n[9] Generate Visual Comparisons...")
+    # --- 9. Distributed Multi-GPU Evaluation ---
+    print("\n[9] Distributed Multi-GPU Evaluation...")
     try:
-        sys.path.insert(0, ROOT)
-        from visual_utils import generate_single_hybrid, generate_hybrid_grids
-        generate_single_hybrid(is_multigpu=False)
-        generate_hybrid_grids(is_multigpu=False)
-    except Exception as _ve:
-        print(f"[Visual] ⚠️  Gagal generate visual: {_ve}")
+        import subprocess
+        subprocess.run([sys.executable, "-u", "eval_multigpu.py", "--gpus", "all"], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️ Evaluasi Multi-GPU gagal: {e}")
+
+    send_telegram_msg(f"✅ <b>Hybrid Pipeline Finished</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>")
