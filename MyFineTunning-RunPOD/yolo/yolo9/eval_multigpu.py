@@ -1,13 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-yolo/yolo11/eval_multigpu.py
-=============================
-Distributed Multi-GPU Evaluation untuk YOLO11l (Detection + Segmentation).
-
-Catatan penting untuk YOLO11l:
-  - Model ini adalah "prompt model" untuk pipeline Hybrid (YOLO11l + SAM2)
-  - best.pt dari deteksi digunakan bersama oleh hybrid/eval_multigpu.py
-  - Evaluasi distributed ini menghasilkan baseline perbandingan YOLO11l mandiri vs Hybrid
+yolo/yolo9/eval_multigpu.py
+============================
+Distributed Multi-GPU Evaluation untuk YOLOv9m (Detection) + YOLOv9c-Seg (Segmentation).
 
 Strategi:
   - mp.spawn: setiap GPU memproses subset gambar secara paralel
@@ -19,13 +14,13 @@ Cara menjalankan:
     python -u eval_multigpu.py --gpus 0,1 2>&1 | tee eval_multigpu.log
 
     # tmux background:
-    tmux new-session -d -s yolo11eval "source ../../.venv/bin/activate && \\
-      cd /home/my/Trainning-Models/MyFineTunning-dev/yolo/yolo11 && \\
+    tmux new-session -d -s yolo9eval "source ../../.venv/bin/activate && \\
+      cd /home/my/Trainning-Models/MyFineTunning-dev/yolo/yolo9 && \\
       python -u eval_multigpu.py 2>&1 | tee eval_multigpu.log"
 
 Output:
-    <REPORTS_DIR>/report_yolo11l_det_multigpu.csv
-    <REPORTS_DIR>/report_yolo11l_seg_multigpu.csv
+    <REPORTS_DIR>/report_yolov9m_det_multigpu.csv
+    <REPORTS_DIR>/report_yolov9c_seg_multigpu.csv
 """
 
 import os, sys, gc, csv, time, argparse, pickle, tempfile
@@ -49,8 +44,8 @@ from coco_eval_utils import (
     build_coco_ground_truth, evaluate_coco_predictions, check_pycocotools
 )
 
-MODEL_LABEL_DET = "YOLO11l"
-MODEL_LABEL_SEG = "YOLO11l-Seg"
+MODEL_LABEL_DET = "YOLOv9m"
+MODEL_LABEL_SEG = "YOLOv9c-Seg"
 
 # ==============================================================================
 # HELPERS
@@ -88,6 +83,110 @@ def _resolve_img_dir(yaml_path: str) -> str:
     raise FileNotFoundError(f"Tidak ditemukan valid/ atau test/images di {base}")
 
 
+# ==============================================================================
+# WORKERS
+# ==============================================================================
+
+def _infer_worker_det(rank: int, gpu_ids: list, pt_path: str,
+                      img_dir: str, image_ids: dict, tmp_dir: str):
+    from ultralytics import YOLO
+
+    gpu = gpu_ids[rank]
+    torch.cuda.set_device(gpu)
+    print(f"  [GPU:{gpu}] Rank {rank} mulai inferens deteksi...", flush=True)
+
+    model  = YOLO(pt_path)
+    subset = _partition_images(img_dir, rank, len(gpu_ids))
+    preds  = []
+    speed_pre = []; speed_inf = []; speed_post = []
+
+    t_start = time.perf_counter()
+    for img_path in subset:
+        if img_path not in image_ids:
+            continue
+        result = model.predict(img_path, conf=0.5, imgsz=IMAGE_SIZE,
+                               device=gpu, verbose=False)
+        if result:
+            spd = result[0].speed
+            speed_pre.append(spd.get("preprocess", 0.0))
+            speed_inf.append(spd.get("inference",  0.0))
+            speed_post.append(spd.get("postprocess", 0.0))
+            if result[0].boxes is not None:
+                boxes = result[0].boxes.xyxy.cpu().numpy()
+                confs = result[0].boxes.conf.cpu().numpy()
+                clss  = result[0].boxes.cls.cpu().numpy().astype(int)
+                for box, conf, cls in zip(boxes, confs, clss):
+                    preds.append({
+                        "image":     img_path,
+                        "pred_box":  box.tolist(),
+                        "pred_cls":  int(cls),
+                        "pred_conf": float(conf),
+                    })
+    elapsed = time.perf_counter() - t_start
+    print(f"  [GPU:{gpu}] {len(preds)} prediksi dari {len(subset)} gambar dalam {elapsed:.1f}s", flush=True)
+
+    with open(os.path.join(tmp_dir, f"det_rank{rank}.pkl"), "wb") as f:
+        pickle.dump({"preds": preds, "elapsed": elapsed, "n_imgs": len(subset),
+                     "speed_pre": speed_pre, "speed_inf": speed_inf,
+                     "speed_post": speed_post}, f)
+
+    del model; _flush_gpu(gpu, f"det rank{rank}")
+    print(f"  [GPU:{gpu}] Rank {rank} selesai.", flush=True)
+
+
+def _infer_worker_seg(rank: int, gpu_ids: list, pt_path: str,
+                      img_dir: str, image_ids: dict, tmp_dir: str):
+    from ultralytics import YOLO
+
+    gpu = gpu_ids[rank]
+    torch.cuda.set_device(gpu)
+    print(f"  [GPU:{gpu}] Rank {rank} mulai inferens segmentasi...", flush=True)
+
+    model  = YOLO(pt_path)
+    subset = _partition_images(img_dir, rank, len(gpu_ids))
+    preds  = []
+    speed_pre = []; speed_inf = []; speed_post = []
+
+    t_start = time.perf_counter()
+    for img_path in subset:
+        if img_path not in image_ids:
+            continue
+        result = model.predict(img_path, conf=0.5, imgsz=IMAGE_SIZE,
+                               device=gpu, verbose=False)
+        if result:
+            spd = result[0].speed
+            speed_pre.append(spd.get("preprocess", 0.0))
+            speed_inf.append(spd.get("inference",  0.0))
+            speed_post.append(spd.get("postprocess", 0.0))
+            if result[0].masks is not None:
+                masks = result[0].masks.data.cpu().numpy()
+                boxes = result[0].boxes.xyxy.cpu().numpy()
+                confs = result[0].boxes.conf.cpu().numpy()
+                clss  = result[0].boxes.cls.cpu().numpy().astype(int)
+                for mask, box, conf, cls in zip(masks, boxes, confs, clss):
+                    preds.append({
+                        "image":     img_path,
+                        "pred_mask": mask,
+                        "pred_box":  box.tolist(),
+                        "pred_cls":  int(cls),
+                        "pred_conf": float(conf),
+                    })
+    elapsed = time.perf_counter() - t_start
+    print(f"  [GPU:{gpu}] {len(preds)} prediksi-mask dari {len(subset)} gambar dalam {elapsed:.1f}s", flush=True)
+
+    with open(os.path.join(tmp_dir, f"seg_rank{rank}.pkl"), "wb") as f:
+        pickle.dump({"preds": preds, "elapsed": elapsed, "n_imgs": len(subset),
+                     "speed_pre": speed_pre, "speed_inf": speed_inf,
+                     "speed_post": speed_post}, f)
+
+    del model; _flush_gpu(gpu, f"seg rank{rank}")
+    print(f"  [GPU:{gpu}] Rank {rank} selesai.", flush=True)
+
+
+# ==============================================================================
+# EVALUASI
+# ==============================================================================
+
 def _collect_results(tmp_dir: str, prefix: str, world_size: int):
     """Kumpulkan prediksi + timing speed dari semua rank pickle."""
     all_preds, total_imgs = [], 0
@@ -102,11 +201,12 @@ def _collect_results(tmp_dir: str, prefix: str, world_size: int):
             all_pre.extend(data.get("speed_pre",  []))
             all_inf.extend(data.get("speed_inf",  []))
             all_post.extend(data.get("speed_post", []))
+
     def _avg(lst): return round(sum(lst)/len(lst), 2) if lst else "N/A"
     return all_preds, total_imgs, _avg(all_pre), _avg(all_inf), _avg(all_post)
 
 
-def _calc_prec_recall(all_preds: list, coco_gt_dict: dict, image_ids: dict):
+def _calc_prec_recall(all_preds, coco_gt_dict, image_ids):
     gt_det = {}
     for img_path, img_id in image_ids.items():
         gt_det[img_path] = {"boxes": [], "clss": []}
@@ -125,8 +225,9 @@ def _calc_prec_recall(all_preds: list, coco_gt_dict: dict, image_ids: dict):
     num_classes = max(gt_per_class.keys()) + 1 if gt_per_class else 1
 
     for cls_id in range(num_classes):
-        cls_preds  = [p for p in all_preds if p["pred_cls"] == cls_id]
-        total_gt  += gt_per_class.get(cls_id, 0)
+        cls_preds   = [p for p in all_preds if p["pred_cls"] == cls_id]
+        cls_gt_cnt  = gt_per_class.get(cls_id, 0)
+        total_gt   += cls_gt_cnt
         if not cls_preds:
             continue
         gt_matched = set()
@@ -156,110 +257,15 @@ def _calc_prec_recall(all_preds: list, coco_gt_dict: dict, image_ids: dict):
     return prec, rec
 
 
-# ==============================================================================
-# WORKERS
-# ==============================================================================
-
-def _infer_worker_det(rank: int, gpu_ids: list, pt_path: str,
-                      img_dir: str, image_ids: dict, tmp_dir: str):
-    from ultralytics import YOLO
-
-    gpu = gpu_ids[rank]
-    torch.cuda.set_device(gpu)
-    print(f"  [GPU:{gpu}] Rank {rank} mulai inferens deteksi YOLO11l...", flush=True)
-
-    model  = YOLO(pt_path)
-    subset = _partition_images(img_dir, rank, len(gpu_ids))
-    preds  = []
-    speed_pre = []; speed_inf = []; speed_post = []
-
-    t_start = time.perf_counter()
-    for img_path in subset:
-        if img_path not in image_ids: continue
-        result = model.predict(img_path, conf=0.5, imgsz=IMAGE_SIZE,
-                               device=gpu, verbose=False)
-        if result:
-            spd = result[0].speed
-            speed_pre.append(spd.get("preprocess", 0.0))
-            speed_inf.append(spd.get("inference",  0.0))
-            speed_post.append(spd.get("postprocess", 0.0))
-            if result[0].boxes is not None:
-                boxes = result[0].boxes.xyxy.cpu().numpy()
-                confs = result[0].boxes.conf.cpu().numpy()
-                clss  = result[0].boxes.cls.cpu().numpy().astype(int)
-                for box, conf, cls in zip(boxes, confs, clss):
-                    preds.append({"image": img_path, "pred_box": box.tolist(),
-                                  "pred_cls": int(cls), "pred_conf": float(conf)})
-    elapsed = time.perf_counter() - t_start
-    print(f"  [GPU:{gpu}] {len(preds)} prediksi dari {len(subset)} gambar dalam {elapsed:.1f}s", flush=True)
-
-    with open(os.path.join(tmp_dir, f"det_rank{rank}.pkl"), "wb") as f:
-        pickle.dump({"preds": preds, "elapsed": elapsed, "n_imgs": len(subset),
-                     "speed_pre": speed_pre, "speed_inf": speed_inf,
-                     "speed_post": speed_post}, f)
-
-    del model; _flush_gpu(gpu, f"det rank{rank}")
-    print(f"  [GPU:{gpu}] Rank {rank} selesai.", flush=True)
-
-
-def _infer_worker_seg(rank: int, gpu_ids: list, pt_path: str,
-                      img_dir: str, image_ids: dict, tmp_dir: str):
-    from ultralytics import YOLO
-
-    gpu = gpu_ids[rank]
-    torch.cuda.set_device(gpu)
-    print(f"  [GPU:{gpu}] Rank {rank} mulai inferens segmentasi YOLO11l-Seg...", flush=True)
-
-    model  = YOLO(pt_path)
-    subset = _partition_images(img_dir, rank, len(gpu_ids))
-    preds  = []
-    speed_pre = []; speed_inf = []; speed_post = []
-
-    t_start = time.perf_counter()
-    for img_path in subset:
-        if img_path not in image_ids: continue
-        result = model.predict(img_path, conf=0.5, imgsz=IMAGE_SIZE,
-                               device=gpu, verbose=False)
-        if result:
-            spd = result[0].speed
-            speed_pre.append(spd.get("preprocess", 0.0))
-            speed_inf.append(spd.get("inference",  0.0))
-            speed_post.append(spd.get("postprocess", 0.0))
-            if result[0].masks is not None:
-                masks = result[0].masks.data.cpu().numpy()
-                boxes = result[0].boxes.xyxy.cpu().numpy()
-                confs = result[0].boxes.conf.cpu().numpy()
-                clss  = result[0].boxes.cls.cpu().numpy().astype(int)
-                for mask, box, conf, cls in zip(masks, boxes, confs, clss):
-                    preds.append({"image": img_path, "pred_mask": mask,
-                                  "pred_box": box.tolist(), "pred_cls": int(cls),
-                                  "pred_conf": float(conf)})
-    elapsed = time.perf_counter() - t_start
-    print(f"  [GPU:{gpu}] {len(preds)} prediksi-mask dari {len(subset)} gambar dalam {elapsed:.1f}s", flush=True)
-
-    with open(os.path.join(tmp_dir, f"seg_rank{rank}.pkl"), "wb") as f:
-        pickle.dump({"preds": preds, "elapsed": elapsed, "n_imgs": len(subset),
-                     "speed_pre": speed_pre, "speed_inf": speed_inf,
-                     "speed_post": speed_post}, f)
-
-    del model; _flush_gpu(gpu, f"seg rank{rank}")
-    print(f"  [GPU:{gpu}] Rank {rank} selesai.", flush=True)
-
-
-# ==============================================================================
-# EVALUASI
-# ==============================================================================
-
 def eval_detection_distributed(gpu_ids: list, tmp_dir: str) -> dict | None:
     print("\n" + "="*65)
-    print("  Distributed Eval: YOLO11l Detection (Prompt Model for Hybrid)")
+    print("  Distributed Eval: YOLOv9m Detection")
     print("="*65)
 
-    pt_path = os.path.join(get_output_dir("yolo11l"), "weights", "best.pt")
+    pt_path = os.path.join(get_output_dir("yolov9m"), "weights", "best.pt")
     if not os.path.exists(pt_path):
         print(f"  ❌ best.pt tidak ditemukan: {pt_path}")
-        print("  💡 Jalankan yolo/yolo11/main.py terlebih dahulu untuk training.")
-        send_telegram_msg(f"❌ <b>YOLO11l MultiGPU Eval</b>\nDet best.pt tidak ditemukan:\n<code>{pt_path}</code>")
+        send_telegram_msg(f"❌ <b>YOLOv9m MultiGPU Eval</b>\nDet best.pt tidak ditemukan:\n<code>{pt_path}</code>")
         return None
 
     if not check_pycocotools():
@@ -318,13 +324,13 @@ def eval_detection_distributed(gpu_ids: list, tmp_dir: str) -> dict | None:
 
 def eval_segmentation_distributed(gpu_ids: list, tmp_dir: str) -> dict | None:
     print("\n" + "="*65)
-    print("  Distributed Eval: YOLO11l-Seg Segmentation")
+    print("  Distributed Eval: YOLOv9c-Seg Segmentation")
     print("="*65)
 
-    pt_path = os.path.join(get_output_dir("yolo11l_seg"), "weights", "best.pt")
+    pt_path = os.path.join(get_output_dir("yolov9c_seg"), "weights", "best.pt")
     if not os.path.exists(pt_path):
         print(f"  ❌ best.pt tidak ditemukan: {pt_path}")
-        send_telegram_msg(f"❌ <b>YOLO11l-Seg MultiGPU Eval</b>\nSeg best.pt tidak ditemukan:\n<code>{pt_path}</code>")
+        send_telegram_msg(f"❌ <b>YOLOv9c-Seg MultiGPU Eval</b>\nSeg best.pt tidak ditemukan:\n<code>{pt_path}</code>")
         return None
 
     if not check_pycocotools():
@@ -334,6 +340,7 @@ def eval_segmentation_distributed(gpu_ids: list, tmp_dir: str) -> dict | None:
     coco_gt_dict, image_ids = build_coco_ground_truth(SEG_YAML, split="valid")
     if coco_gt_dict is None:
         print("  ❌ Gagal membangun COCO GT"); return None
+    print(f"  [GT] {len(image_ids)} gambar ditemukan.")
 
     img_dir    = _resolve_img_dir(SEG_YAML)
     world_size = len(gpu_ids)
@@ -381,7 +388,7 @@ def eval_segmentation_distributed(gpu_ids: list, tmp_dir: str) -> dict | None:
 # ==============================================================================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="YOLO11l Distributed Multi-GPU Evaluation")
+    parser = argparse.ArgumentParser(description="YOLOv9 Distributed Multi-GPU Evaluation")
     parser.add_argument("--gpus", type=str, default="all",
         help="GPU yang digunakan. Contoh: '0,1' atau 'all'. Default: semua GPU.")
     parser.add_argument("--skip-det", action="store_true", help="Lewati evaluasi detection.")
@@ -400,7 +407,7 @@ if __name__ == "__main__":
             print(f"❌ GPU {g} tidak tersedia (sistem punya {n_avail} GPU)."); sys.exit(1)
 
     print("=" * 65)
-    print("  YOLO11l — Distributed Multi-GPU Evaluation")
+    print("  YOLOv9 — Distributed Multi-GPU Evaluation")
     print("=" * 65)
     print(f"  GPU yang digunakan : {GPU_IDS}")
     print(f"  World size         : {len(GPU_IDS)}")
@@ -414,20 +421,20 @@ if __name__ == "__main__":
     print(f"[MemClean] VRAM bebas GPU:{GPU_IDS[0]}: {free_gb:.2f} GB\n")
 
     send_telegram_msg(
-        f"🚀 <b>YOLO11l MultiGPU Eval Dimulai</b>\n"
+        f"🚀 <b>YOLOv9 MultiGPU Eval Dimulai</b>\n"
         f"GPUs: <code>{GPU_IDS}</code>\n"
-        f"World Size: {len(GPU_IDS)}\n"
-        f"ℹ️ YOLO11l det best.pt akan digunakan juga oleh Hybrid pipeline."
+        f"World Size: {len(GPU_IDS)}"
     )
 
     os.makedirs(REPORTS_DIR, exist_ok=True)
 
-    with tempfile.TemporaryDirectory(prefix="yolo11eval_") as tmp_dir:
+    with tempfile.TemporaryDirectory(prefix="yolo9eval_") as tmp_dir:
         t_total_start = time.perf_counter()
 
+        # ── Detection ─────────────────────────────────────────────────────────
         det_row = None
         if not args.skip_det:
-            send_telegram_msg("🔍 <b>YOLO11l Det Eval</b>\nMemulai distributed inference deteksi...", force=False)
+            send_telegram_msg("🔍 <b>YOLOv9m Det Eval</b>\nMemulai distributed inference deteksi...", force=False)
             det_row = eval_detection_distributed(GPU_IDS, tmp_dir)
             if det_row:
                 det_fields = [
@@ -435,13 +442,13 @@ if __name__ == "__main__":
                     "Precision", "Recall", "Preprocess (ms)", "Inference (ms)",
                     "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"
                 ]
-                det_csv = os.path.join(REPORTS_DIR, "report_yolo11l_det_multigpu.csv")
+                det_csv = os.path.join(REPORTS_DIR, "report_yolov9m_det_multigpu.csv")
                 with open(det_csv, "w", newline="", encoding="utf-8") as f:
                     w = csv.DictWriter(f, fieldnames=det_fields)
                     w.writeheader(); w.writerow(det_row)
                 print(f"\n✅ Det Report: {det_csv}")
                 send_telegram_msg(
-                    f"✅ <b>YOLO11l Det MultiGPU Selesai</b>\n"
+                    f"✅ <b>YOLOv9m Det MultiGPU Selesai</b>\n"
                     f"mAP50-95: <code>{det_row['mAP50-95']}</code>\n"
                     f"mAP50: <code>{det_row['mAP50']}</code>\n"
                     f"Precision: <code>{det_row['Precision']}</code>\n"
@@ -450,22 +457,23 @@ if __name__ == "__main__":
                     f"GPUs: <code>{det_row['GPUs']}</code>"
                 )
 
+        # ── Segmentation ──────────────────────────────────────────────────────
         seg_row = None
         if not args.skip_seg:
-            send_telegram_msg("🔍 <b>YOLO11l-Seg Eval</b>\nMemulai distributed inference segmentasi...", force=False)
+            send_telegram_msg("🔍 <b>YOLOv9c-Seg Eval</b>\nMemulai distributed inference segmentasi...", force=False)
             seg_row = eval_segmentation_distributed(GPU_IDS, tmp_dir)
             if seg_row:
                 seg_fields = [
                     "Model", "Model Size (MB)", "mAP50-95(Box)",
                     "mAP50-95(Mask)", "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"
                 ]
-                seg_csv = os.path.join(REPORTS_DIR, "report_yolo11l_seg_multigpu.csv")
+                seg_csv = os.path.join(REPORTS_DIR, "report_yolov9c_seg_multigpu.csv")
                 with open(seg_csv, "w", newline="", encoding="utf-8") as f:
                     w = csv.DictWriter(f, fieldnames=seg_fields)
                     w.writeheader(); w.writerow(seg_row)
                 print(f"✅ Seg Report: {seg_csv}")
                 send_telegram_msg(
-                    f"✅ <b>YOLO11l-Seg MultiGPU Selesai</b>\n"
+                    f"✅ <b>YOLOv9c-Seg MultiGPU Selesai</b>\n"
                     f"mAP50-95(Box): <code>{seg_row['mAP50-95(Box)']}</code>\n"
                     f"mAP50-95(Mask): <code>{seg_row['mAP50-95(Mask)']}</code>\n"
                     f"FPS (Throughput): <code>{seg_row['FPS']}</code>\n"
@@ -477,16 +485,16 @@ if __name__ == "__main__":
             sys.path.insert(0, ROOT)
             from visual_utils import generate_single_yolo
             if not args.skip_det:
-                generate_single_yolo("yolo11l", "YOLO11l", is_multigpu=True, task="det")
+                generate_single_yolo("yolov9m", "YOLOv9m", is_multigpu=True, task="det")
             if not args.skip_seg:
-                generate_single_yolo("yolo11l_seg", "YOLO11l-Seg", is_multigpu=True, task="seg")
+                generate_single_yolo("yolov9c_seg", "YOLOv9c-Seg", is_multigpu=True, task="seg")
         except Exception as e:
             print(f"⚠️ Gagal generate visual_utils: {e}")
 
         total_elapsed = round(time.perf_counter() - t_total_start, 1)
-        print(f"\n✅ YOLO11l MultiGPU Evaluation selesai dalam {total_elapsed}s")
+        print(f"\n✅ YOLOv9 MultiGPU Evaluation selesai dalam {total_elapsed}s")
         send_telegram_msg(
-            f"🏁 <b>YOLO11l MultiGPU Eval Selesai</b>\n"
+            f"🏁 <b>YOLOv9 MultiGPU Eval Selesai</b>\n"
             f"Total waktu: <code>{total_elapsed}s</code>\n"
             f"Report: <code>{REPORTS_DIR}</code>"
         )

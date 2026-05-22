@@ -25,6 +25,7 @@ MyFineTunning-dev/mask-r-cnn/maskrcnn_train.log
 MyFineTunning-dev/mask-r-cnn/monitor_training.py
 MyFineTunning-dev/mask-r-cnn/monitor.log
 MyFineTunning-dev/mask-r-cnn/train_multigpu.log
+MyFineTunning-dev/mask-r-cnn/train_multigpu.log
 
 MyFineTunning-dev/yolo/yolo8/__pycache__
 MyFineTunning-dev/yolo/yolo8/reporter-yolo8.py

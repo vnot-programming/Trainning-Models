@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-yolo/yolo11/main.py
-===================
-Fine-tuning YOLO11 Large pada dataset botol plastik (RVM).
+yolo/yolo9/main.py
+==================
+Fine-tuning YOLOv9 pada dataset botol plastik (RVM).
 
 Model:
-  - yolo11l.pt      → Detection  (Primary — digunakan sebagai Prompt di Hybrid)
-  - yolo11l-seg.pt  → Instance Segmentation
+  - yolov9m.pt      → Detection
+  - yolov9c-seg.pt  → Instance Segmentation (Ultralytics assets v8.4.0)
 
 Cara menjalankan:
-    python -u main.py 2>&1 | tee yolo11_train.log
+    python -u main.py 2>&1 | tee yolov9_train.log
 """
 
 import os, sys, csv, gc
@@ -36,7 +36,6 @@ import argparse
 import torch
 from ultralytics import YOLO, settings
 
-# Arahkan semua download model Ultralytics ke MODELS_DIR
 settings.update({'weights_dir': MODELS_DIR})
 
 # Import COCO eval utils
@@ -47,7 +46,7 @@ from coco_eval_utils import (
     check_pycocotools
 )
 
-parser = argparse.ArgumentParser(description="YOLO11l Fine-tuning")
+parser = argparse.ArgumentParser(description="YOLOv9m Fine-tuning")
 parser.add_argument("--device", type=str, default=None,
     help="GPU: '0', '1,2', '0,1,2', 'cpu'. Default: semua GPU.")
 args = parser.parse_args()
@@ -58,7 +57,7 @@ else:
     n = torch.cuda.device_count()
     DEVICE = list(range(n)) if n > 1 else (0 if n == 1 else "cpu")
 
-print(f"[Device] YOLO11l → {DEVICE}")
+print(f"[Device] YOLOv9m → {DEVICE}")
 
 
 def get_gpu_report_str(device):
@@ -106,7 +105,7 @@ def _train(model_pt, yaml_path, run_name, label):
 
 
 def _eval_det(label, pt, yaml):
-    """Detection — format reporter.py det_performance."""
+    """Detection — Ultralytics native evaluation."""
     try:
         m   = YOLO(pt)
         met = m.val(data=yaml, imgsz=IMAGE_SIZE, device=DEVICE, verbose=False, plots=False)
@@ -163,94 +162,13 @@ def _eval_seg(label, pt, yaml):
             "Latency (ms)":     total_ms,
             "FPS":             fps,
             "GPUs":            get_gpu_report_str(DEVICE),
-            "Evaluator":       "Ultralytics",
+        "Evaluator":       "Ultralytics",
         }
     except Exception as e:
         print(f"  ⚠️ {label}: {e}")
         return {"Model": label, **{k: "ERR" for k in [
             "Model Size (MB)", "mAP50-95(Box)", "mAP50-95(Mask)",
             "Latency (ms)", "FPS", "GPUs", "Evaluator"]}}
-
-
-def _coco_eval_seg(label, pt, yaml):
-    """Segmentation — COCOeval (consistent with Hybrid & Mask R-CNN)."""
-    if not check_pycocotools():
-        print(f"  ⚠️ {label}: pycocotools tidak tersedia, fallback ke _eval_seg()")
-        return None  # Signal to use fallback
-    
-    try:
-        # Build ground truth
-        coco_gt_dict, image_ids = build_coco_ground_truth(yaml, split="valid")
-        if coco_gt_dict is None:
-            print(f"  ⚠️ {label}: Gagal build COCO GT, fallback ke _eval_seg()")
-            return None
-        
-        # Run inference
-        m   = YOLO(pt)
-        met = m.val(data=yaml, imgsz=IMAGE_SIZE, device=DEVICE, verbose=False, plots=False)
-        sp  = getattr(met, "speed", {})
-        pre  = round(sp.get("preprocess",  0), 2)
-        inf  = round(sp.get("inference",   0), 2)
-        post = round(sp.get("postprocess", 0), 2)
-        total_ms = round(pre + inf + post, 2)
-        fps = round(1000 / total_ms, 2) if total_ms > 0 else "N/A"
-        
-        # Collect segmentation predictions in COCO format
-        predictions = []
-        img_dir = os.path.join(os.path.dirname(yaml), "valid", "images")
-        if not os.path.isdir(img_dir):
-            img_dir = os.path.join(os.path.dirname(yaml), "test", "images")
-        
-        print(f"  🔍 Mengumpulkan prediksi segmentasi untuk COCOeval...")
-        for img_file in sorted(os.listdir(img_dir)):
-            if not img_file.lower().endswith((".jpg", ".png", ".jpeg")):
-                continue
-            img_path = os.path.join(img_dir, img_file)
-            if img_path not in image_ids:
-                continue
-            
-            result = m.predict(img_path, conf=0.5, imgsz=IMAGE_SIZE, verbose=False)
-            if result and result[0].masks is not None:
-                masks = result[0].masks.data.cpu().numpy()
-                boxes = result[0].boxes.xyxy.cpu().numpy()
-                confs = result[0].boxes.conf.cpu().numpy()
-                clss  = result[0].boxes.cls.cpu().numpy().astype(int)
-                
-                for i, (mask, box, conf, cls) in enumerate(zip(masks, boxes, confs, clss)):
-                    predictions.append({
-                        "image": img_path,
-                        "pred_mask": mask,
-                        "pred_box": box.tolist(),
-                        "pred_cls": int(cls),
-                        "pred_conf": float(conf),
-                    })
-        
-        print(f"  ✅ Total prediksi segmentasi: {len(predictions)}")
-        
-        # Evaluate with COCOeval
-        print(f"  📊 Menjalankan COCOeval untuk segmentasi...")
-        mAP50, mAP50_95 = evaluate_coco_predictions(coco_gt_dict, image_ids, predictions, iou_type="segm")
-        
-        # Also get box mAP for comparison
-        box_mAP50, box_mAP50_95 = evaluate_coco_predictions(coco_gt_dict, image_ids, predictions, iou_type="bbox")
-        
-        del m; _flush(f"eval {label} (COCOeval)")
-        
-        print(f"  ✅ COCOeval selesai: mAP50(Mask)={mAP50}, mAP50-95(Mask)={mAP50_95}")
-        
-        return {
-            "Model":           label,
-            "Model Size (MB)": round(os.path.getsize(pt)/1e6, 2),
-            "mAP50-95(Box)":   box_mAP50_95,
-            "mAP50-95(Mask)":  mAP50_95,
-            "Latency (ms)":     total_ms,
-            "FPS":             fps,
-            "GPUs":            get_gpu_report_str(DEVICE),
-            "Evaluator":       "COCOeval",
-        }
-    except Exception as e:
-        print(f"  ⚠️ {label} (COCOeval): {e}")
-        return None  # Signal to use fallback
 
 
 def _coco_eval_det(label, pt, yaml):
@@ -372,6 +290,7 @@ def _coco_eval_det(label, pt, yaml):
                     union_area = pred_area + gt_area - inter_area
                     
                     iou = inter_area / union_area if union_area > 0 else 0
+                    
                     if iou > max_iou:
                         max_iou = iou
                         best_gt_key = (gt_img_path, gt_idx)
@@ -414,98 +333,155 @@ def _coco_eval_det(label, pt, yaml):
         return None  # Signal to use fallback
 
 
-print("\n" + "="*65 + "\n  YOLO11l Fine-tuning\n" + "="*65)
+def _coco_eval_seg(label, pt, yaml):
+    """Segmentation — COCOeval (consistent with Hybrid & Mask R-CNN)."""
+    if not check_pycocotools():
+        print(f"  ⚠️ {label}: pycocotools tidak tersedia, fallback ke _eval_seg()")
+        return None  # Signal to use fallback
+    
+    try:
+        # Build ground truth
+        coco_gt_dict, image_ids = build_coco_ground_truth(yaml, split="valid")
+        if coco_gt_dict is None:
+            print(f"  ⚠️ {label}: Gagal build COCO GT, fallback ke _eval_seg()")
+            return None
+        
+        # Run inference
+        m   = YOLO(pt)
+        met = m.val(data=yaml, imgsz=IMAGE_SIZE, device=DEVICE, verbose=False, plots=False)
+        sp  = getattr(met, "speed", {})
+        pre  = round(sp.get("preprocess",  0), 2)
+        inf  = round(sp.get("inference",   0), 2)
+        post = round(sp.get("postprocess", 0), 2)
+        total_ms = round(pre + inf + post, 2)
+        fps = round(1000 / total_ms, 2) if total_ms > 0 else "N/A"
+        
+        # Collect segmentation predictions in COCO format
+        predictions = []
+        img_dir = os.path.join(os.path.dirname(yaml), "valid", "images")
+        if not os.path.isdir(img_dir):
+            img_dir = os.path.join(os.path.dirname(yaml), "test", "images")
+        
+        print(f"  🔍 Mengumpulkan prediksi segmentasi untuk COCOeval...")
+        for img_file in sorted(os.listdir(img_dir)):
+            if not img_file.lower().endswith((".jpg", ".png", ".jpeg")):
+                continue
+            img_path = os.path.join(img_dir, img_file)
+            if img_path not in image_ids:
+                continue
+            
+            result = m.predict(img_path, conf=0.5, imgsz=IMAGE_SIZE, verbose=False)
+            if result and result[0].masks is not None:
+                masks = result[0].masks.data.cpu().numpy()
+                boxes = result[0].boxes.xyxy.cpu().numpy()
+                confs = result[0].boxes.conf.cpu().numpy()
+                clss  = result[0].boxes.cls.cpu().numpy().astype(int)
+                
+                for i, (mask, box, conf, cls) in enumerate(zip(masks, boxes, confs, clss)):
+                    predictions.append({
+                        "image": img_path,
+                        "pred_mask": mask,
+                        "pred_box": box.tolist(),
+                        "pred_cls": int(cls),
+                        "pred_conf": float(conf),
+                    })
+        
+        print(f"  ✅ Total prediksi segmentasi: {len(predictions)}")
+        
+        # Evaluate with COCOeval
+        print(f"  📊 Menjalankan COCOeval untuk segmentasi...")
+        mAP50, mAP50_95 = evaluate_coco_predictions(coco_gt_dict, image_ids, predictions, iou_type="segm")
+        
+        # Also get box mAP for comparison
+        box_mAP50, box_mAP50_95 = evaluate_coco_predictions(coco_gt_dict, image_ids, predictions, iou_type="bbox")
+        
+        del m; _flush(f"eval {label} (COCOeval)")
+        
+        print(f"  ✅ COCOeval selesai: mAP50(Mask)={mAP50}, mAP50-95(Mask)={mAP50_95}")
+        
+        return {
+            "Model":           label,
+            "Model Size (MB)": round(os.path.getsize(pt)/1e6, 2),
+            "mAP50-95(Box)":   box_mAP50_95,
+            "mAP50-95(Mask)":  mAP50_95,
+            "Latency (ms)":     total_ms,
+            "FPS":             fps,
+            "GPUs":            get_gpu_report_str(DEVICE),
+            "Evaluator":       "COCOeval",
+        }
+    except Exception as e:
+        print(f"  ⚠️ {label} (COCOeval): {e}")
+        return None  # Signal to use fallback
 
+
+print("\n" + "="*65 + "\n  YOLOv9m Fine-tuning\n" + "="*65)
 # Download & Pindahkan model dasar terlebih dahulu
-det_model_path = download_and_move_model("yolo11l.pt")
-seg_model_path = download_and_move_model("yolo11l-seg.pt")
+det_model_path = download_and_move_model("yolov9m.pt")
+seg_model_path = download_and_move_model("yolov9c-seg.pt")
 
-# Detection — best.pt ini yang akan digunakan oleh hybrid/main.py sebagai prompt
-best_det = _train(det_model_path,     DET_YAML, "yolo11l",    "YOLO11l Detection (Primary)")
-best_seg = _train(seg_model_path, SEG_YAML, "yolo11l_seg","YOLO11l-Seg Segmentation")
-
-# Simpan path best_det ke file agar hybrid/main.py bisa membacanya
-det_path_file = os.path.join(get_output_dir("yolo11l"), "weights", "best_path.txt")
-with open(det_path_file, "w") as f:
-    f.write(best_det)
-print(f"[Info] Path YOLO11l best.pt disimpan ke: {det_path_file}")
+best_det = _train(det_model_path,     DET_YAML, "yolov9m",    "YOLOv9m Detection")
+best_seg = _train(seg_model_path, SEG_YAML, "yolov9c_seg","YOLOv9c-Seg Segmentation")
 
 report_dir = REPORTS_DIR
 os.makedirs(report_dir, exist_ok=True)
 
 # Detection CSV — Coba COCOeval dulu, fallback ke _eval_det()
-print("\n" + "="*65 + "\n  Evaluasi Detection YOLO11l\n" + "="*65)
+print("\n" + "="*65 + "\n  Evaluasi Detection YOLOv9m\n" + "="*65)
 print("  🔄 Mencoba evaluasi dengan COCOeval...")
 
-det_row = _coco_eval_det("YOLO11l", best_det, DET_YAML)
+det_row = _coco_eval_det("YOLOv9m", best_det, DET_YAML)
 
 if det_row is None:
     print("\n  ⚠️ COCOeval gagal, menggunakan _eval_det() sebagai fallback...")
-    det_row = _eval_det("YOLO11l (Fine-tuned)", best_det, DET_YAML)
+    det_row = _eval_det("YOLOv9m (Fine-tuned)", best_det, DET_YAML)
     evaluator_used_det = "Ultralytics"
 else:
     evaluator_used_det = "COCOeval"
-    det_row["Model"] = "YOLO11l"
+    det_row["Model"] = "YOLOv9m"
+    det_row["Evaluator"] = "COCOeval"
 
 det_fields = ["Model", "Model Size (MB)", "mAP50-95", "mAP50", "Precision", "Recall", "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"]
-det_csv = os.path.join(report_dir, "report_yolo11l_det_coco.csv")
+det_csv = os.path.join(report_dir, "report_yolov9m_det_coco.csv")
 with open(det_csv, "w", newline="", encoding="utf-8") as f:
-    w = csv.DictWriter(f, fieldnames=det_fields)
-    w.writeheader()
-    w.writerow(det_row)
+    w = csv.DictWriter(f, fieldnames=det_fields); w.writeheader(); w.writerow(det_row)
 print(f"\n✅ Det Report : {det_csv}")
 
 # Segmentation CSV — Coba COCOeval dulu, fallback ke _eval_seg()
-print("\n" + "="*65 + "\n  Evaluasi Segmentasi YOLO11l-Seg\n" + "="*65)
+print("\n" + "="*65 + "\n  Evaluasi Segmentasi YOLOv9c-Seg\n" + "="*65)
 print("  🔄 Mencoba evaluasi dengan COCOeval...")
 
-seg_row = _coco_eval_seg("YOLO11l-Seg", best_seg, SEG_YAML)
+seg_row = _coco_eval_seg("YOLOv9c-Seg", best_seg, SEG_YAML)
 
 if seg_row is None:
     print("\n  ⚠️ COCOeval gagal, menggunakan _eval_seg() sebagai fallback...")
-    seg_row = _eval_seg("YOLO11l-Seg (Fine-tuned)", best_seg, SEG_YAML)
+    seg_row = _eval_seg("YOLOv9c-Seg (Fine-tuned)", best_seg, SEG_YAML)
     evaluator_used = "Ultralytics"
 else:
     evaluator_used = "COCOeval"
-    # Update label untuk menunjukkan COCOeval
-    seg_row["Model"] = "YOLO11l-Seg"
+    seg_row["Model"] = "YOLOv9c-Seg"
 
 seg_fields = ["Model", "Model Size (MB)", "mAP50-95(Box)", "mAP50-95(Mask)", "Latency (ms)", "FPS", "GPUs", "Evaluator"]
-seg_csv = os.path.join(report_dir, "report_yolo11l_seg_coco.csv")
+seg_csv = os.path.join(report_dir, "report_yolov9c_seg_coco.csv")
 with open(seg_csv, "w", newline="", encoding="utf-8") as f:
     w = csv.DictWriter(f, fieldnames=seg_fields); w.writeheader(); w.writerow(seg_row)
 print(f"✅ Seg Report : {seg_csv}")
+
+# # ------ Visualisasi sampel per model ------
+# _img_dir = os.path.join(os.path.dirname(DET_YAML), "test", "images")
+# if not os.path.isdir(_img_dir):
+#     _img_dir = os.path.join(os.path.dirname(DET_YAML), "valid", "images")
 
 # ------ Visualisasi sampel per model ------
 try:
     sys.path.insert(0, ROOT)
     from visual_utils import generate_single_yolo
-    generate_single_yolo("yolo11l", "YOLO11l", is_multigpu=False, task="det")
-    generate_single_yolo("yolo11l_seg", "YOLO11l-Seg", is_multigpu=False, task="seg")
+    generate_single_yolo("yolov9m", "YOLOv9m", is_multigpu=False, task="det")
+    generate_single_yolo("yolov9c_seg", "YOLOv9c-Seg", is_multigpu=False, task="seg")
 except Exception as e:
     print(f"⚠️ Gagal generate visual_utils: {e}")
 
-# compress_run("yolo11l")
-# compress_run("yolo11l_seg")
+# compress_run("yolov9m")
+# compress_run("yolov9c_seg")
 
-print("\n✅ YOLO11l selesai.")
-
-# Telegram message dengan info evaluator
-telegram_msg = f"""✅ <b>YOLO11l Pipeline Finished</b>
-📁 Workspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>
-
-📊 <b>Detection Report:</b>
-  • Model: YOLO11l (Fine-tuned)
-  • Evaluator: Ultralytics (default)
-
-📊 <b>Segmentation Report:</b>
-  • Model: YOLO11l-Seg (Fine-tuned)
-  • Evaluator: <code>{evaluator_used}</code>
-  • mAP50-95(Mask): {seg_row.get('mAP50-95(Mask)', 'N/A')}
-  • mAP50-95(Box): {seg_row.get('mAP50-95(Box)', 'N/A')}
-  • Latency: {seg_row.get('Latency(ms)', 'N/A')} ms
-  • FPS: {seg_row.get('FPS', 'N/A')}
-"""
-
-send_telegram_msg(telegram_msg)
-print(f"\n[Next] Lanjutkan ke: cd ../../mask-r-cnn && python -u main.py")
+print("\n✅ YOLOv9 (m-det + c-seg) selesai.")
+send_telegram_msg(f"✅ <b>YOLOv9 Pipeline Finished</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>")

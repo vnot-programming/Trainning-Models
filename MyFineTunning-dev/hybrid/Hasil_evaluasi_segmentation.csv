@@ -1,0 +1,6 @@
+Model,Model Size (MB),mAP50-95(Box),mAP50-95(Mask),Latency (ms),FPS,GPUs,Evaluator
+YOLO11m-Seg,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+YOLOv9c-Seg,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+YOLOv8m-Seg,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+Hybrid (YOLO11m+SAM2),N/A,N/A,N/A,N/A,N/A,N/A,N/A
+Mask R-CNN ResNet-50 FPN-v2,N/A,N/A,N/A,N/A,N/A,N/A,N/A
