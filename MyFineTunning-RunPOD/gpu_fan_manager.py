@@ -3,9 +3,14 @@ import threading
 import time
 import os
 import logging
+import shutil
 
 # Configure logging to be visible in terminal
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - GPU-FAN - %(message)s')
+
+NVIDIA_SETTINGS_AVAILABLE = shutil.which("nvidia-settings") is not None
+if not NVIDIA_SETTINGS_AVAILABLE:
+    logging.warning("'nvidia-settings' not found. GPU Fan Manager will monitor temperatures but cannot adjust fan speeds. This is normal in headless RunPod containers.")
 
 def get_gpu_data():
     """Returns list of (index, temp) for all GPUs."""
@@ -30,6 +35,9 @@ def get_gpu_data():
 
 def set_fan_speed(gpu_idx, speed_percent):
     """Sets fan speed for a specific GPU using nvidia-settings."""
+    if not NVIDIA_SETTINGS_AVAILABLE:
+        return
+        
     try:
         # Note: nvidia-settings requires a display. 
         # In headless environments, this might need X-server running.
