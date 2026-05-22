@@ -91,6 +91,9 @@ def _train(model_pt, yaml_path, run_name, label):
     if os.path.exists(last_pt):
         print(f"\n[RESUME] {label}: melanjutkan dari last.pt\n  {last_pt}")
         model = YOLO(last_pt)
+        # Tambahkan Telegram Callbacks (meskipun resume)
+        for k, v in get_yolo_callbacks(label).items():
+            model.add_callback(k, v)
         model.train(resume=True)
     else:
         print(f"\n{'='*60}\n  {label}\n{'='*60}")
@@ -438,4 +441,12 @@ try:
 except subprocess.CalledProcessError as e:
     print(f"\n⚠️ Evaluasi Multi-GPU gagal: {e}")
 
+# ------ Kompres folder hasil training ------
+try:
+    compress_run("yolov8m")
+    compress_run("yolov8m_seg")
+except Exception as e:
+    print(f"⚠️ Gagal kompres: {e}")
+
 print("\n✅ YOLOv8m selesai.")
+send_telegram_msg(f"✅ <b>YOLOv8m Pipeline Finished</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>")
