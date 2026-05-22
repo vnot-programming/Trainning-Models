@@ -80,8 +80,9 @@ def _train(model_pt, yaml_path, run_name, label):
     out_dir = get_output_dir(run_name)
     best_pt = os.path.join(out_dir, "weights", "best.pt")
     last_pt = os.path.join(out_dir, "weights", "last.pt")
+    done_flag = os.path.join(out_dir, "training_done.flag")
 
-    if os.path.exists(best_pt):
+    if os.path.exists(done_flag) and os.path.exists(best_pt):
         print(f"\n[SKIP] {label}: training sudah selesai.\n  best.pt: {best_pt}")
         return best_pt
 
@@ -103,7 +104,11 @@ def _train(model_pt, yaml_path, run_name, label):
                     project=os.path.dirname(out_dir), name=os.path.basename(out_dir),
                     exist_ok=True, device=DEVICE)
 
-    result = str(model.trainer.best)
+    # Tandai training selesai
+    with open(done_flag, "w") as f:
+        f.write("done")
+
+    result = str(model.trainer.best) if hasattr(model, 'trainer') and model.trainer else best_pt
     del model; _flush(label)
     return result
 
