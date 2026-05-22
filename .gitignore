@@ -1,58 +1,38 @@
-# Root .gitignore for Computer-Vision
+# === Zip/Binary ===
+*.zip
 
-# Project specific ignores
-MyFineTunning-dev/__pycache__/
-MyFineTunning-dev/.venv/
-MyFineTunning-dev/.env
-MyFineTunning-dev/rclone.conf
-MyFineTunning-dev/datasets/*
-!MyFineTunning-dev/datasets/.gitkeep
-MyFineTunning-dev/models/*
-!MyFineTunning-dev/models/.gitkeep
-MyFineTunning-dev/hybrid/runs/
-MyFineTunning-dev/hybrid/__pycache__
+# === Binary / Large Files ===
+datasets/
+models/
+data-files/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.zip
+*.tar.gz
 
-# Data files (reports, visuals, logs)
-MyFineTunning-dev/data-files/MyFineTunning-*/
-MyFineTunning-dev/SetupReport.log
-MyFineTunning-dev/*.log
+# === Python ===
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# === Logs ===
 *.log
-backups/*
-MyFineTunning-dev/mask-r-cnn/__pycache__/
-MyFineTunning-dev/mask-r-cnn/main.py
-MyFineTunning-dev/mask-r-cnn/maskrcnn_eval.py
-MyFineTunning-dev/mask-r-cnn/maskrcnn_train.log
-MyFineTunning-dev/mask-r-cnn/monitor_training.py
-MyFineTunning-dev/mask-r-cnn/monitor.log
-MyFineTunning-dev/mask-r-cnn/train_multigpu.log
 
-MyFineTunning-dev/yolo/yolo8/__pycache__
-MyFineTunning-dev/yolo/yolo8/reporter-yolo8.py
-MyFineTunning-dev/yolo/yolo8/yolo8training.log
-MyFineTunning-dev/yolo/yolo8/yolo26n.pt
-
-MyFineTunning-dev/yolo/yolo9/__pycache__
-MyFineTunning-dev/yolo/yolo9/det_eval_only.py 
-MyFineTunning-dev/yolo/yolo9/seg_only.py
-MyFineTunning-dev/yolo/yolo9/reporter-yolo9.py
-MyFineTunning-dev/yolo/yolo9/yolo9training.log
-MyFineTunning-dev/yolo/yolo9/yolo26n.pt
-
-MyFineTunning-dev/yolo/yolo11/__pycache__
-MyFineTunning-dev/yolo/yolo11/yolo11training.log
-MyFineTunning-dev/yolo/yolo11/yolo26n.pt
-MyFineTunning-dev/rclone_local/*
-MyFineTunning-dev/hybrid/*.pt
-.workspace_id
-
-
-# General
+# === OS / IDE ===
 .DS_Store
+Thumbs.db
 .vscode/
 .idea/
-.agents/
-.instructions/
-.prompts/
-.instructions.md
-AGENTS.md
-.agentignore
+
+# === Rclone config (credentials) ===
+rclone.conf
+.env
+.workspace_id
+
+# === Hanya kirim MyFineTunning-RunPOD (dan file root) ===
+# File besar di dalam MyFineTunning-RunPOD diatur oleh .gitignore di dalam folder tersebut

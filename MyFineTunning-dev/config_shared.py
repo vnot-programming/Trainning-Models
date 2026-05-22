@@ -51,6 +51,8 @@ DATASETS_DIR      = os.path.join(ROOT, "datasets")
 MODELS_DIR        = os.path.join(ROOT, "models")
 DATA_FILES_DIR    = os.path.join(ROOT, "data-files")
 REPORTS_DIR       = os.path.join(WORKSPACE_DIR, "reports")
+PAPER1_CSV_DIR    = os.path.join(REPORTS_DIR, "paper1", "csv")
+PAPER1_VIS_DIR    = os.path.join(REPORTS_DIR, "paper1", "visuals")
 VISUALS_DIR       = os.path.join(WORKSPACE_DIR, "visuals")
 IMAGE_SAMPLES_DIR = os.path.join(WORKSPACE_DIR, "image_samples")
 
@@ -59,15 +61,24 @@ IMAGE_SAMPLES_DIR = os.path.join(WORKSPACE_DIR, "image_samples")
 # ==============================================================================
 DET_DATASET_LOCATION = os.environ.get(
     "DET_DATASET",
-    os.path.join(DATASETS_DIR, "me-bottle-isempty-ku3-8")
+    os.path.join(DATASETS_DIR, "standard_datasets_det")
 )
 SEG_DATASET_LOCATION = os.environ.get(
     "SEG_DATASET",
-    os.path.join(DATASETS_DIR, "segpoligon-me-bottle-isempty3-7")
+    os.path.join(DATASETS_DIR, "standard_datasets_seg")
 )
 
 DET_YAML = os.path.join(DET_DATASET_LOCATION, "data.yaml")
 SEG_YAML = os.path.join(SEG_DATASET_LOCATION, "data.yaml")
+
+GOLDEN_DET_DATASET_LOCATION = os.environ.get(
+    "GOLDEN_DET_DATASET",
+    os.path.join(DATASETS_DIR, "golden_dataset_det")
+)
+GOLDEN_SEG_DATASET_LOCATION = os.environ.get(
+    "GOLDEN_SEG_DATASET",
+    os.path.join(DATASETS_DIR, "golden_dataset_seg")
+)
 
 # ==============================================================================
 # PATHS — Pipeline (untuk run_pipeline.py)
@@ -249,8 +260,8 @@ MODEL_COLORS = {
     "yolov8m_seg": (255,   0,   0),
     "yolov9m":     (  0,   0, 255),   # Merah
     "yolov9c_seg": (  0,   0, 255),
-    "yolo11m":     (  0, 255,   0),   # Hijau
-    "yolo11m_seg": (  0, 255,   0),
+    "yolo11l":     (  0, 255,   0),   # Hijau
+    "yolo11l_seg": (  0, 255,   0),
     "maskrcnn":    (255,   0, 255),   # Magenta/Ungu
     "hybrid":      (  0, 165, 255),   # Orange
 }
@@ -507,3 +518,23 @@ def download_and_move_model(model_name: str) -> str:
         print(f"[Model] ❌ Gagal mendownload model: {e}")
     
     return target_path
+
+
+# Daftar semua model dasar yang dibutuhkan oleh pipeline
+ALL_BASE_MODELS = [
+    "yolov8m.pt",
+    "yolov8m-seg.pt",
+    "yolov9m.pt",
+    "yolov9c-seg.pt",
+    "yolo11l.pt",
+    "yolo11l-seg.pt",
+    "sam2.1_t.pt",
+]
+
+def ensure_all_base_models():
+    """Download semua model dasar ke MODELS_DIR jika belum ada."""
+    print("\n[Models] Memeriksa ketersediaan semua model dasar...")
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    for model_name in ALL_BASE_MODELS:
+        download_and_move_model(model_name)
+    print("[Models] ✅ Semua model dasar tersedia.\n")

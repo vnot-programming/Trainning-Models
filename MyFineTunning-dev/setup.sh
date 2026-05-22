@@ -56,24 +56,8 @@ if [[ "$1" == "--reuse" ]]; then
 fi
 
 # ------------------------------------------------------------------------------
-# Buat .venv baru jika belum ada
+# Cek Host CUDA Version terlebih dahulu
 # ------------------------------------------------------------------------------
-if [[ ! -d "$VENV_DIR" ]]; then
-    echo "[Setup] Membuat virtual environment di: $VENV_DIR"
-    python3 -m venv "$VENV_DIR"
-else
-    echo "[Setup] .venv sudah ada: $VENV_DIR"
-fi
-
-source "$VENV_DIR/bin/activate"
-echo "[Setup] Python: $(which python3) — $(python3 --version)"
-
-# ------------------------------------------------------------------------------
-# Upgrade pip
-# ------------------------------------------------------------------------------
-pip install --upgrade pip --quiet
-
-# Cek apakah torch sudah terinstall dan kompatibel
 if command -v nvidia-smi &> /dev/null; then
     CUDA_VER=$(nvidia-smi | grep -i "CUDA Version" | sed -E 's/.*CUDA Version: ([0-9]+\.[0-9]+).*/\1/')
     USE_CU130=$(python3 -c "print(1 if float('${CUDA_VER:-0.0}') >= 13.0 else 0)" 2>/dev/null || echo 0)
@@ -84,33 +68,66 @@ else
     USE_CU130=0; USE_CU128=0; USE_CU126=0
 fi
 
-TORCH_OK=$(python3 -c "
+# Fungsi Cek Kompatibilitas Torch CUDA
+check_torch_cuda() {
+    python3 -c "
 import torch
 import sys
 if not torch.cuda.is_available():
     print(0)
     sys.exit(0)
-pt_cuda = float(torch.version.cuda) if torch.version.cuda else 0.0
-if $USE_CU130 == 1 or $USE_CU128 == 1:
-    print(1 if pt_cuda >= 12.8 else 0)
-elif $USE_CU126 == 1:
-    print(1 if pt_cuda >= 12.6 else 0)
-else:
-    print(1 if pt_cuda >= 12.1 else 0)
-" 2>/dev/null || echo 0)
+# Jika torch.cuda.is_available() True, berarti versi cu berapapun yang terinstal sudah berfungsi dengan baik.
+print(1)
+" 2>/dev/null || echo 0
+}
+
+# 1. Cek cu versi terinstal di environment saat ini (sebelum aktifkan venv)
+echo "[Setup] Mengecek versi PyTorch CUDA di environment saat ini..."
+TORCH_OK=$(check_torch_cuda)
 
 if [ "$TORCH_OK" -eq 1 ]; then
-    echo "[Setup] torch dengan dukungan CUDA yang sesuai (Host: $CUDA_VER) sudah tersedia."
+    echo "[Setup] ✅ PyTorch dengan dukungan CUDA yang sesuai (Host: $CUDA_VER) sudah tersedia di environment aktif."
+    echo "[Setup] Menggunakan environment saat ini: $(which python3)"
 else
-    if [ "$USE_CU130" -eq 1 ] || [ "$USE_CU128" -eq 1 ]; then
-        echo "[Setup] CUDA >= 12.8 terdeteksi (Host: $CUDA_VER). Arsitektur Blackwell membutuhkan cu128..."
-        pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128 --force-reinstall --quiet
-    elif [ "$USE_CU126" -eq 1 ]; then
-        echo "[Setup] CUDA >= 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu126)..."
-        pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126 --force-reinstall --quiet
+    echo "[Setup] ⚠️ PyTorch CUDA belum sesuai di environment saat ini."
+    echo "[Setup] Mencari virtual environment lokal (.venv) di: $VENV_DIR"
+    
+    # ------------------------------------------------------------------------------
+    # Buat .venv baru jika belum ada
+    # ------------------------------------------------------------------------------
+    if [[ ! -d "$VENV_DIR" ]]; then
+        echo "[Setup] Membuat virtual environment di: $VENV_DIR"
+        python3 -m venv "$VENV_DIR"
     else
-        echo "[Setup] CUDA < 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu121)..."
-        pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
+        echo "[Setup] .venv lokal sudah ada: $VENV_DIR"
+    fi
+
+    echo "[Setup] Mengaktifkan virtual environment lokal..."
+    source "$VENV_DIR/bin/activate"
+    echo "[Setup] Python: $(which python3) — $(python3 --version)"
+
+    # Upgrade pip
+    pip install --upgrade pip --quiet
+
+    # 3. Cek lagi cu versi terinstal setelah venv aktif
+    echo "[Setup] Mengecek ulang versi PyTorch CUDA di dalam .venv..."
+    TORCH_OK=$(check_torch_cuda)
+    
+    if [ "$TORCH_OK" -eq 1 ]; then
+        echo "[Setup] ✅ PyTorch dengan dukungan CUDA yang sesuai (Host: $CUDA_VER) sudah tersedia di dalam .venv."
+    else
+        # 4. Install / Download jika masih belum sesuai
+        echo "[Setup] ⚠️ PyTorch CUDA belum sesuai di dalam .venv. Memulai instalasi..."
+        if [ "$USE_CU130" -eq 1 ] || [ "$USE_CU128" -eq 1 ]; then
+            echo "[Setup] CUDA >= 12.8 terdeteksi (Host: $CUDA_VER). Arsitektur Blackwell membutuhkan cu128..."
+            pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128 --force-reinstall --quiet
+        elif [ "$USE_CU126" -eq 1 ]; then
+            echo "[Setup] CUDA >= 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu126)..."
+            pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126 --force-reinstall --quiet
+        else
+            echo "[Setup] CUDA < 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu121)..."
+            pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
+        fi
     fi
 fi
 

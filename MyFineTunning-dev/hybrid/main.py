@@ -30,7 +30,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 sys.path.insert(0, ROOT)
 
 from config_shared import (
-    WORKSPACE_DIR, SEG_YAML, DET_YAML, IMAGE_SIZE,
+    WORKSPACE_DIR, SEG_YAML, DET_YAML, IMAGE_SIZE, MODELS_DIR,
     get_output_dir, REPORTS_DIR, DATA_FILES_DIR
 )
 from coco_eval_utils import (
@@ -444,21 +444,22 @@ def evaluate_hybrid_map():
     """Evaluasi mAP untuk Hybrid Pipeline."""
     
     print("\n" + "="*65)
-    print("  Evaluasi mAP Hybrid Pipeline (YOLO11m + SAM2)")
+    print("  Evaluasi mAP Hybrid Pipeline (YOLO11l + SAM2)")
     print("="*65)
     
     # --- 1. Load Models ---
     print("\n[1] Loading Models...")
-    yolo11m_path = os.path.join(get_output_dir("yolo11m"), "weights", "best.pt")
-    if not os.path.exists(yolo11m_path):
-        print(f"  ❌ YOLO11m best.pt tidak ditemukan: {yolo11m_path}")
+    yolo11l_path = os.path.join(get_output_dir("yolo11l"), "weights", "best.pt")
+    if not os.path.exists(yolo11l_path):
+        print(f"  ❌ YOLO11l best.pt tidak ditemukan: {yolo11l_path}")
         return
     
-    yolo_det = YOLO(yolo11m_path)
-    print(f"  ✅ YOLO11m loaded: {yolo11m_path}")
+    yolo_det = YOLO(yolo11l_path)
+    print(f"  ✅ YOLO11l loaded: {yolo11l_path}")
     
     try:
-        sam_model = SAM("sam2.1_b.pt")
+        sam_path = os.path.join(MODELS_DIR, "sam2.1_t.pt")
+        sam_model = SAM(sam_path)
         print("  ✅ SAM2 loaded")
     except Exception as e:
         print(f"  ❌ Gagal load SAM2: {e}")
@@ -466,8 +467,8 @@ def evaluate_hybrid_map():
         
     # Kalkulasi ukuran model dinamis
     try:
-        yolo_mb = os.path.getsize(yolo11m_path) / 1e6
-        sam_mb = os.path.getsize("sam2.1_b.pt") / 1e6
+        yolo_mb = os.path.getsize(yolo11l_path) / 1e6
+        sam_mb = os.path.getsize(os.path.join(MODELS_DIR, "sam2.1_t.pt")) / 1e6
         total_mb = yolo_mb + sam_mb
         model_size_str = f"{total_mb:.2f}"
     except Exception:
@@ -717,17 +718,17 @@ def evaluate_hybrid_map():
     print("\n[7] Menggabungkan Laporan (Aggregator)...")
     
     det_available = [
-        ("report_yolo11m_det_coco.csv", "YOLO11m (Fine-tuned)"),
+        ("report_yolo11l_det_coco.csv", "YOLO11l (Fine-tuned)"),
         ("report_yolov9m_det_coco.csv", "YOLOv9m (Fine-tuned)"),
         ("report_yolov8m_det_coco.csv", "YOLOv8m (Fine-tuned)"),
-        ("report_hybrid_det_coco.csv", "Hybrid (YOLO11m+SAM2)"),
+        ("report_hybrid_det_coco.csv", "Hybrid (YOLO11l+SAM2)"),
     ]
     
     seg_available = [
-        ("report_yolo11m_seg_coco.csv", "YOLO11m-Seg (Fine-tuned)"),
+        ("report_yolo11l_seg_coco.csv", "YOLO11l-Seg (Fine-tuned)"),
         ("report_yolov9c_seg_coco.csv", "YOLOv9c-Seg (Fine-tuned)"),
         ("report_yolov8m_seg_coco.csv", "YOLOv8m-Seg (Fine-tuned)"),
-        ("report_hybrid_seg_coco.csv", "Hybrid (YOLO11m+SAM2)"),
+        ("report_hybrid_seg_coco.csv", "Hybrid (YOLO11l+SAM2)"),
         ("report_maskrcnn_ddp_seg.csv", "Mask R-CNN (DDP Fine-tuned)"),
     ]
     

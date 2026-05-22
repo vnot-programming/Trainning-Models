@@ -15,10 +15,7 @@ Cara pakai:
   source Trainning-Models/MyFineTunning-dev/.venv/bin/activate && python3 run_pipeline.py 2>&1 | tee PipelineReport.log
 
 Atau via tmux (recommended):
-tmux new-session -d -s run_pipeline \
-"source Trainning-Models/MyFineTunning-dev/.venv/bin/activate && \
-cd Trainning-Models/MyFineTunning-dev && \
-python3 run_pipeline.py 2>&1 | tee run_pipeline.log"
+  tmux new-session -d -s run_pipeline "source Trainning-Models/MyFineTunning-dev/.venv/bin/activate && python3 Trainning-Models/MyFineTunning-dev/run_pipeline.py 2>&1 | tee run_pipeline.log"
 
   
 
@@ -448,14 +445,4 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\n\n⚠️ [Pipeline] Dibatalkan oleh pengguna (KeyboardInterrupt)!")
-        print("  🧹 Membersihkan sesi tmux yang tertinggal...")
-        for job in JOBS:
-            subprocess.run(["tmux", "kill-session", "-t", job["name"]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print("  🧹 Membersihkan GPU memory...")
-        flush_gpu_memory()
-        print("✅ Pipeline dihentikan secara aman.")
-        sys.exit(130)
+    main()

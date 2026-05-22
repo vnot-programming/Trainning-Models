@@ -2,36 +2,17 @@
 """
 hybrid/eval_multigpu.py
 ========================
-Distributed Multi-GPU Evaluation untuk Hybrid Pipeline (YOLO11m + SAM2).
+Distributed Multi-GPU Evaluation untuk Seluruh Pipeline (YOLO, Mask R-CNN, Hybrid).
 
-Arsitektur Hybrid:
-  - YOLO11m → Fast detection (bounding boxes + class predictions)
-  - SAM2     → High-quality instance segmentation dari bounding box prompts
-  
 Strategi Evaluasi Terdistribusi:
-  - Setiap GPU memuat YOLO11m + SAM2 secara terpisah (independent replicas)
+  - Setiap GPU memuat model (YOLO, Mask R-CNN, atau Hybrid) secara terpisah
   - Setiap GPU memproses subset gambar yang berbeda (data parallelism)
-  - Hasil prediksi (bbox + mask RLE) dikumpulkan dari file pickle per-rank
-  - COCOeval dijalankan di proses utama untuk konsistensi (single-threaded)
-  - Throughput = total_gambar / wall_clock_time (ukuran throughput nyata)
+  - Hasil prediksi dikumpulkan dan dievaluasi via COCOeval di proses utama
 
-Catatan:
-  - SAM2 (sam2.1_b.pt) harus tersedia di direktori hybrid/
-  - YOLO11m best.pt diambil dari get_output_dir("yolo11m")/weights/best.pt
+python hybrid/eval_multigpu.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/me-bottle-isempty-ku3-h61lr-2-yolov11/data.yaml
 
-Cara menjalankan:
-    python -u eval_multigpu.py 2>&1 | tee eval_multigpu.log
-    python -u eval_multigpu.py --gpus 0,1 2>&1 | tee eval_multigpu.log
+tmux new-session -d -s eval_multigpu "cd Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u hybrid/eval_multigpu.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/me-bottle-isempty-ku3-h61lr-2-yolov11/data.yaml 2>&1 | tee hybrid/eval_multigpu-h61lr-2-yolov11.log"
 
-    # tmux background:
-    tmux new-session -d -s hybrideval "source ../.venv/bin/activate && \\
-      cd /home/my/Trainning-Models/MyFineTunning-dev/hybrid && \\
-      python -u eval_multigpu.py 2>&1 | tee eval_multigpu.log"
-
-Output:
-    <REPORTS_DIR>/report_hybrid_det_multigpu.csv
-    <REPORTS_DIR>/report_hybrid_seg_multigpu.csv
-    <REPORTS_DIR>/hybrid_detailed_predictions_multigpu.csv
 """
 
 import os, sys, gc, csv, time, argparse, pickle, tempfile
@@ -51,16 +32,26 @@ import torch
 import torch.multiprocessing as mp
 
 from config_shared import (
-    WORKSPACE_DIR, SEG_YAML, DET_YAML, IMAGE_SIZE,
+    WORKSPACE_DIR, SEG_YAML, DET_YAML, IMAGE_SIZE, NUM_CLASSES,
     get_output_dir, REPORTS_DIR, DATA_FILES_DIR
 )
 from telegram_utils import send_telegram_msg
 from coco_eval_utils import (
-    build_coco_ground_truth, evaluate_coco_predictions, check_pycocotools
+    build_coco_ground_truth, evaluate_coco_predictions, check_pycocotools, load_native_coco_gt
 )
 
-MODEL_LABEL = "Hybrid (YOLO11m+SAM2)"
-SAM_MODEL_PATH = os.path.join(_HYBRID_DIR, "sam2.1_b.pt")
+SAM_MODEL_PATH = os.path.join(ROOT, "models", "sam2.1_t.pt")
+
+MODELS_CONFIG = [
+    {"label": "YOLOv8m", "key": "yolov8m", "type": "yolo_det"},
+    {"label": "YOLOv9m", "key": "yolov9m", "type": "yolo_det"},
+    {"label": "YOLO11l", "key": "yolo11l", "type": "yolo_det"},
+    {"label": "YOLOv8m-Seg", "key": "yolov8m_seg", "type": "yolo_seg"},
+    {"label": "YOLOv9c-Seg", "key": "yolov9c_seg", "type": "yolo_seg"},
+    {"label": "YOLO11l-Seg", "key": "yolo11l_seg", "type": "yolo_seg"},
+    {"label": "Mask R-CNN ResNet-50", "key": "maskrcnn", "type": "maskrcnn"},
+    {"label": "Hybrid (YOLO11l+SAM2)", "key": "hybrid", "type": "hybrid"}
+]
 
 # ==============================================================================
 # HELPERS
@@ -72,16 +63,13 @@ def _flush_gpu(gpu_id: int, label: str):
     if torch.cuda.is_available():
         torch.cuda.synchronize(gpu_id)
         free, total = torch.cuda.mem_get_info(gpu_id)
-        print(f"  [GPU:{gpu_id}][MemFlush] {label} — VRAM bebas: {free/1e9:.2f}/{total/1e9:.2f} GB",
-              flush=True)
-
+        print(f"  [GPU:{gpu_id}][MemFlush] {label} — VRAM bebas: {free/1e9:.2f}/{total/1e9:.2f} GB", flush=True)
 
 def _gpu_report_str(gpu_ids: list) -> str:
     from collections import Counter
     names  = [torch.cuda.get_device_name(i) for i in gpu_ids]
     counts = Counter(names)
     return ", ".join(f"{c}x {n}" for n, c in counts.items())
-
 
 def _partition_images(img_dir: str, rank: int, world_size: int) -> list:
     all_imgs = sorted([
@@ -90,528 +78,347 @@ def _partition_images(img_dir: str, rank: int, world_size: int) -> list:
     ])
     return all_imgs[rank::world_size]
 
-
 def _resolve_img_dir(yaml_path: str) -> str:
     base = os.path.dirname(yaml_path)
     for split in ("valid", "test"):
         d = os.path.join(base, split, "images")
-        if os.path.isdir(d):
-            return d
+        if os.path.isdir(d): return d
     raise FileNotFoundError(f"Tidak ditemukan valid/ atau test/images di {base}")
 
-
-def _get_model_size_str() -> str:
+def _get_model_size_mb(model_cfg: dict):
     try:
-        yolo_pt  = os.path.join(get_output_dir("yolo11m"), "weights", "best.pt")
-        yolo_mb  = os.path.getsize(yolo_pt) / 1e6 if os.path.exists(yolo_pt) else 0
-        sam_mb   = os.path.getsize(SAM_MODEL_PATH) / 1e6 if os.path.exists(SAM_MODEL_PATH) else 0
-        return f"{yolo_mb + sam_mb:.2f}"
-    except Exception:
+        mtype, mkey = model_cfg["type"], model_cfg["key"]
+        if mtype in ["yolo_det", "yolo_seg"]:
+            from ultralytics import YOLO
+            pt = os.path.join(get_output_dir(mkey), "weights", "best.pt")
+            m = YOLO(pt)
+            sz = sum(p.nelement() * p.element_size() for p in m.model.parameters()) + sum(b.nelement() * b.element_size() for b in m.model.buffers())
+            del m; gc.collect()
+            return round(sz / 1024**2, 2)
+        elif mtype == "maskrcnn":
+            import torchvision
+            from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+            from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+            m = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None)
+            in_box = m.roi_heads.box_predictor.cls_score.in_features
+            m.roi_heads.box_predictor = FastRCNNPredictor(in_box, NUM_CLASSES + 1)
+            in_mask = m.roi_heads.mask_predictor.conv5_mask.in_channels
+            m.roi_heads.mask_predictor = MaskRCNNPredictor(in_mask, 256, NUM_CLASSES + 1)
+            sz = sum(p.nelement() * p.element_size() for p in m.parameters()) + sum(b.nelement() * b.element_size() for b in m.buffers())
+            del m; gc.collect()
+            return round(sz / 1024**2, 2)
+        elif mtype == "hybrid":
+            from ultralytics import YOLO, SAM
+            y_m = YOLO(os.path.join(get_output_dir("yolo11l"), "weights", "best.pt"))
+            s_m = SAM(SAM_MODEL_PATH)
+            y_sz = sum(p.nelement() * p.element_size() for p in y_m.model.parameters()) + sum(b.nelement() * b.element_size() for b in y_m.model.buffers())
+            s_sz = sum(p.nelement() * p.element_size() for p in s_m.model.parameters()) + sum(b.nelement() * b.element_size() for b in s_m.model.buffers())
+            del y_m, s_m; gc.collect()
+            return round((y_sz + s_sz) / 1024**2, 2)
+    except Exception as e:
+        print(f"  ⚠️ Gagal hitung ukuran: {e}")
         return "N/A"
 
-
 # ==============================================================================
-# WORKER: HYBRID INFERENCE PER GPU
+# WORKER: INFERENCE PER GPU
 # ==============================================================================
 
-def _infer_worker_hybrid(rank: int, gpu_ids: list,
-                         yolo_pt: str, sam_pt: str,
-                         img_dir: str, image_ids: dict,
-                         tmp_dir: str):
-    """
-    Worker hybrid: setiap GPU jalankan YOLO11m → SAM2 per gambar.
-    Simpan prediksi (bbox + mask RLE) ke pickle.
-    """
-    from ultralytics import YOLO, SAM
-    from pycocotools import mask as maskUtils
-
-    gpu    = gpu_ids[rank]
+def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image_ids: dict, tmp_dir: str):
+    gpu = gpu_ids[rank]
     device_str = f"cuda:{gpu}"
     torch.cuda.set_device(gpu)
-
-    print(f"  [GPU:{gpu}] Rank {rank} loading YOLO11m + SAM2...", flush=True)
+    mtype, mkey, label = model_cfg["type"], model_cfg["key"], model_cfg["label"]
+    
+    print(f"  [GPU:{gpu}] Rank {rank} loading {label}...", flush=True)
+    model_obj, sam_model = None, None
     try:
-        yolo_model = YOLO(yolo_pt)
-        sam_model  = SAM(sam_pt)
-        print(f"  [GPU:{gpu}] Models loaded.", flush=True)
+        if mtype in ["yolo_det", "yolo_seg"]:
+            from ultralytics import YOLO
+            model_obj = YOLO(os.path.join(get_output_dir(mkey), "weights", "best.pt"))
+        elif mtype == "maskrcnn":
+            import torchvision
+            from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+            from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+            model_obj = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None)
+            in_box = model_obj.roi_heads.box_predictor.cls_score.in_features
+            model_obj.roi_heads.box_predictor = FastRCNNPredictor(in_box, NUM_CLASSES + 1)
+            in_mask = model_obj.roi_heads.mask_predictor.conv5_mask.in_channels
+            model_obj.roi_heads.mask_predictor = MaskRCNNPredictor(in_mask, 256, NUM_CLASSES + 1)
+            pt = os.path.join(get_output_dir("maskrcnn"), "weights", "best.pt")
+            model_obj.load_state_dict(torch.load(pt, map_location=device_str, weights_only=True))
+            model_obj.to(device_str).eval()
+        elif mtype == "hybrid":
+            from ultralytics import YOLO, SAM
+            model_obj = YOLO(os.path.join(get_output_dir("yolo11l"), "weights", "best.pt"))
+            sam_model = SAM(SAM_MODEL_PATH)
     except Exception as e:
-        print(f"  [GPU:{gpu}] ❌ Gagal load model: {e}", flush=True)
+        print(f"  [GPU:{gpu}] ❌ Gagal load {label}: {e}", flush=True)
         with open(os.path.join(tmp_dir, f"rank{rank}.pkl"), "wb") as f:
-            pickle.dump({"dt_bbox": [], "dt_segm": [],
-                         "n_imgs": 0,
-                         "yolo_pre": [], "yolo_inf": [], "yolo_post": [],
-                         "sam_times": []}, f)
+            pickle.dump({"dt_bbox": [], "dt_segm": [], "n_imgs": 0, "pre": [], "inf": [], "post": []}, f)
         return
 
-    subset  = _partition_images(img_dir, rank, len(gpu_ids))
-    dt_bbox = []
-    dt_segm = []
-    yolo_pre  = []
-    yolo_inf  = []
-    yolo_post = []
-    sam_times = []
-
+    subset = _partition_images(img_dir, rank, len(gpu_ids))
+    dt_bbox, dt_segm = [], []
+    t_pre, t_inf, t_post = [], [], []
+    
+    from pycocotools import mask as maskUtils
+    import torchvision.transforms.functional as TF
+    from PIL import Image as PILImage
+    
     for img_path in subset:
-        if img_path not in image_ids:
-            continue
+        if img_path not in image_ids: continue
         img_id = image_ids[img_path]
-
-        # YOLO detection
-        det_result = yolo_model.predict(img_path, conf=0.5, imgsz=IMAGE_SIZE,
-                                        device=device_str, verbose=False)
-        if det_result:
-            spd = det_result[0].speed
-            yolo_pre.append(spd.get("preprocess", 0.0))
-            yolo_inf.append(spd.get("inference",  0.0))
-            yolo_post.append(spd.get("postprocess", 0.0))
-
-        if not (det_result and det_result[0].boxes is not None
-                and len(det_result[0].boxes) > 0):
-            continue
-
-        pred_boxes = det_result[0].boxes.xyxy.cpu().numpy()
-        pred_confs = det_result[0].boxes.conf.cpu().numpy()
-        pred_clss  = det_result[0].boxes.cls.cpu().numpy().astype(int)
-
-        # SAM2 segmentation
-        try:
-            t_sam = time.perf_counter()
-            sam_result = sam_model.predict(
-                det_result[0].orig_img, bboxes=pred_boxes, verbose=False
-            )
-            sam_times.append((time.perf_counter() - t_sam) * 1000)
-        except Exception as e:
-            print(f"  [GPU:{gpu}] ⚠️ SAM2 error pada {os.path.basename(img_path)}: {e}",
-                  flush=True)
-            sam_result = None
-
-        # Load image dimensions
-        img_cv = cv2.imread(img_path)
-        if img_cv is None: continue
-        H, W = img_cv.shape[:2]
-
-        masks_np = []
-        if sam_result and sam_result[0].masks is not None:
-            for m in sam_result[0].masks.data.cpu().numpy():
-                if m.shape != (H, W):
-                    m = cv2.resize(m.astype(np.float32), (W, H),
-                                   interpolation=cv2.INTER_NEAREST)
-                masks_np.append(m > 0.5)
-        else:
-            masks_np = [None] * len(pred_boxes)
-
+        pred_boxes, pred_confs, pred_clss, masks_np = [], [], [], []
+        spd_pre, spd_inf, spd_post = 0.0, 0.0, 0.0
+        
+        if mtype in ["yolo_det", "yolo_seg"]:
+            res = model_obj.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+            spd = res.speed
+            spd_pre, spd_inf, spd_post = spd.get("preprocess", 0.0), spd.get("inference", 0.0), spd.get("postprocess", 0.0)
+            if res.boxes is not None and len(res.boxes) > 0:
+                pred_boxes = res.boxes.xyxy.cpu().numpy()
+                pred_confs = res.boxes.conf.cpu().numpy()
+                pred_clss = res.boxes.cls.cpu().numpy().astype(int)
+                if mtype == "yolo_seg" and res.masks is not None:
+                    m_data = res.masks.data.cpu().numpy()
+                    H, W = res.orig_img.shape[:2]
+                    for m in m_data:
+                        if m.shape != (H, W): m = cv2.resize(m.astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST)
+                        masks_np.append(m > 0.5)
+                        
+        elif mtype == "maskrcnn":
+            pil = PILImage.open(img_path).convert("RGB")
+            t_img = TF.to_tensor(pil).unsqueeze(0).to(device_str)
+            inf_st = time.perf_counter()
+            with torch.no_grad(): preds = model_obj(t_img)[0]
+            spd_inf = (time.perf_counter() - inf_st) * 1000
+            scores = preds["scores"].cpu().numpy()
+            keep = scores >= 0.001
+            pred_boxes = preds["boxes"].cpu().numpy()[keep]
+            pred_confs = scores[keep]
+            pred_clss = preds["labels"].cpu().numpy()[keep] - 1
+            if "masks" in preds:
+                m_data = preds["masks"].cpu().numpy()[keep, 0]
+                H, W = pil.size[1], pil.size[0]
+                for m in m_data:
+                    if m.shape != (H, W): m = cv2.resize(m.astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST)
+                    masks_np.append(m > 0.5)
+                    
+        elif mtype == "hybrid":
+            res = model_obj.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+            spd = res.speed
+            spd_pre, spd_inf, spd_post = spd.get("preprocess", 0.0), spd.get("inference", 0.0), spd.get("postprocess", 0.0)
+            if res.boxes is not None and len(res.boxes) > 0:
+                pred_boxes = res.boxes.xyxy.cpu().numpy()
+                pred_confs = res.boxes.conf.cpu().numpy()
+                pred_clss = res.boxes.cls.cpu().numpy().astype(int)
+                sam_st = time.perf_counter()
+                try:
+                    sam_res = sam_model.predict(res.orig_img, bboxes=res.boxes.xyxy, verbose=False)
+                    spd_inf += (time.perf_counter() - sam_st) * 1000
+                    if sam_res and sam_res[0].masks is not None:
+                        m_data = sam_res[0].masks.data.cpu().numpy()
+                        H, W = sam_res[0].orig_img.shape[:2]
+                        for m in m_data:
+                            if m.shape != (H, W): m = cv2.resize(m.astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST)
+                            masks_np.append(m > 0.5)
+                except:
+                    masks_np = [None] * len(pred_boxes)
+        
+        t_pre.append(spd_pre); t_inf.append(spd_inf); t_post.append(spd_post)
         for i in range(len(pred_boxes)):
-            score  = float(pred_confs[i])
-            cat_id = int(pred_clss[i]) + 1   # 0-indexed → 1-indexed COCO
+            score = float(pred_confs[i])
+            cat_id = int(pred_clss[i]) + 1
             x1, y1, x2, y2 = pred_boxes[i].tolist()
-            bw, bh = x2-x1, y2-y1
-
-            dt_bbox.append({
-                "image_id":    img_id,
-                "category_id": cat_id,
-                "bbox":        [x1, y1, bw, bh],
-                "score":       score,
-            })
-
+            dt_bbox.append({"image_id": img_id, "category_id": cat_id, "bbox": [x1, y1, x2-x1, y2-y1], "score": score})
             if i < len(masks_np) and masks_np[i] is not None:
-                bin_mask = masks_np[i].astype(np.uint8)
-                rle = maskUtils.encode(np.asfortranarray(bin_mask))
+                rle = maskUtils.encode(np.asfortranarray(masks_np[i].astype(np.uint8)))
                 rle["counts"] = rle["counts"].decode("utf-8")
-                dt_segm.append({
-                    "image_id":    img_id,
-                    "category_id": cat_id,
-                    "segmentation": rle,
-                    "score":       score,
-                })
-
-    print(f"  [GPU:{gpu}] {len(dt_bbox)} prediksi bbox, {len(dt_segm)} prediksi mask "
-          f"dari {len(subset)} gambar", flush=True)
+                dt_segm.append({"image_id": img_id, "category_id": cat_id, "segmentation": rle, "score": score})
 
     with open(os.path.join(tmp_dir, f"rank{rank}.pkl"), "wb") as f:
-        pickle.dump({
-            "dt_bbox":    dt_bbox,
-            "dt_segm":    dt_segm,
-            "yolo_pre":   yolo_pre,
-            "yolo_inf":   yolo_inf,
-            "yolo_post":  yolo_post,
-            "sam_times":  sam_times,
-            "n_imgs":     len(subset),
-        }, f)
+        pickle.dump({"dt_bbox": dt_bbox, "dt_segm": dt_segm, "pre": t_pre, "inf": t_inf, "post": t_post, "n_imgs": len(subset)}, f)
 
-    del yolo_model, sam_model
-    _flush_gpu(gpu, f"hybrid rank{rank}")
-    print(f"  [GPU:{gpu}] Rank {rank} selesai.", flush=True)
-
+    del model_obj, sam_model
+    _flush_gpu(gpu, f"{label} rank{rank}")
 
 # ==============================================================================
-# EVALUASI UTAMA
+# EVALUASI UTAMA PER MODEL
 # ==============================================================================
 
-def eval_hybrid_distributed(gpu_ids: list, tmp_dir: str) -> tuple:
-    """
-    Evaluasi Hybrid YOLO11m + SAM2 secara terdistribusi.
-    Returns: (det_row, seg_row) — dua dict hasil evaluasi
-    """
-    print("\n" + "="*65)
-    print("  Distributed Eval: Hybrid Pipeline (YOLO11m + SAM2)")
+def eval_model_distributed(model_cfg: dict, gpu_ids: list, coco_gt_dict: dict, image_ids: dict, img_dir: str, tmp_dir: str) -> tuple:
+    print(f"\n" + "="*65)
+    print(f"  Evaluating: {model_cfg['label']} (Multi-GPU)")
     print("="*65)
 
-    yolo_pt = os.path.join(get_output_dir("yolo11m"), "weights", "best.pt")
-    sam_pt  = SAM_MODEL_PATH
-
-    if not os.path.exists(yolo_pt):
-        print(f"  ❌ YOLO11m best.pt tidak ditemukan: {yolo_pt}")
-        print("  💡 Jalankan yolo/yolo11/main.py terlebih dahulu.")
-        send_telegram_msg(
-            f"❌ <b>Hybrid MultiGPU Eval</b>\n"
-            f"YOLO11m best.pt tidak ditemukan:\n<code>{yolo_pt}</code>"
-        )
-        return None, None
-
-    if not os.path.exists(sam_pt):
-        print(f"  ⚠️ SAM2 model tidak ditemukan: {sam_pt}")
-        print("  ⏳ Mencoba mengunduh sam2.1_b.pt secara otomatis...")
-        try:
-            from ultralytics.utils.downloads import download
-            download("https://github.com/ultralytics/assets/releases/download/v8.4.0/sam2.1_b.pt", dir=os.path.dirname(sam_pt))
-            if not os.path.exists(sam_pt):
-                raise FileNotFoundError("Unduhan selesai namun file pt tidak ada.")
-        except Exception as e:
-            print(f"  ❌ Gagal mengunduh SAM2: {e}")
-            send_telegram_msg(
-                f"❌ <b>Hybrid MultiGPU Eval</b>\n"
-                f"Gagal mengunduh SAM2 model:\n<code>{sam_pt}</code>"
-            )
-            return None, None
-
-    if not check_pycocotools():
-        print("  ❌ pycocotools tidak terinstall."); return None, None
-
-    # Build COCO GT (menggunakan SEG_YAML untuk konsistensi dengan Mask R-CNN)
-    print("  [GT] Membangun COCO ground truth dari SEG_YAML...")
-    coco_gt_dict, image_ids = build_coco_ground_truth(SEG_YAML, split="valid")
-    if coco_gt_dict is None:
-        print("  ❌ Gagal membangun COCO GT"); return None, None
-    print(f"  [GT] {len(image_ids)} gambar ditemukan.")
-
-    img_dir    = _resolve_img_dir(SEG_YAML)
     world_size = len(gpu_ids)
+    mb_size = _get_model_size_mb(model_cfg)
+    print(f"  [Model] Size: {mb_size} MB")
 
-    yolo_mb = round(os.path.getsize(yolo_pt) / 1e6, 2)
-    sam_mb  = round(os.path.getsize(sam_pt) / 1e6, 2)
-    total_mb_str = f"{yolo_mb + sam_mb:.2f}"
-    print(f"  [Model] YOLO11m: {yolo_mb}MB | SAM2: {sam_mb}MB | Total: {total_mb_str}MB")
-
-    print(f"  [Spawn] Menjalankan {world_size} GPU worker Hybrid secara paralel...")
     t_wall_start = time.perf_counter()
-    mp.spawn(
-        _infer_worker_hybrid,
-        args=(gpu_ids, yolo_pt, sam_pt, img_dir, image_ids, tmp_dir),
-        nprocs=world_size,
-        join=True,
-    )
+    mp.spawn(_infer_worker, args=(gpu_ids, model_cfg, img_dir, image_ids, tmp_dir), nprocs=world_size, join=True)
     total_wall = time.perf_counter() - t_wall_start
 
-    # Kumpulkan hasil
-    all_dt_bbox  = []
-    all_dt_segm  = []
-    all_yolo_pre = []
-    all_yolo_inf = []
-    all_yolo_post = []
-    all_sam_t    = []
-    total_imgs   = 0
+    all_dt_bbox, all_dt_segm = [], []
+    all_pre, all_inf, all_post = [], [], []
+    total_imgs = 0
 
     for r in range(world_size):
         pkl = os.path.join(tmp_dir, f"rank{r}.pkl")
         if os.path.exists(pkl):
-            with open(pkl, "rb") as f:
-                data = pickle.load(f)
+            with open(pkl, "rb") as f: data = pickle.load(f)
             all_dt_bbox.extend(data["dt_bbox"])
             all_dt_segm.extend(data["dt_segm"])
-            all_yolo_pre.extend(data.get("yolo_pre",  []))
-            all_yolo_inf.extend(data.get("yolo_inf",  []))
-            all_yolo_post.extend(data.get("yolo_post", []))
-            all_sam_t.extend(data.get("sam_times", []))
+            all_pre.extend(data.get("pre", []))
+            all_inf.extend(data.get("inf", []))
+            all_post.extend(data.get("post", []))
             total_imgs += data["n_imgs"]
+            os.remove(pkl)  # Clean up
 
-    print(f"\n  [Collect] {len(all_dt_bbox)} bbox prediksi | {len(all_dt_segm)} mask prediksi")
-    print(f"  [Throughput] Wall clock: {total_wall:.2f}s | {total_imgs} gambar diproses")
-
-    if not all_dt_bbox:
-        print("  ❌ Tidak ada prediksi. Pipeline Hybrid tidak menghasilkan output.")
+    if not all_dt_bbox and not all_dt_segm:
+        print("  ❌ Tidak ada prediksi.")
         return None, None
 
-    throughput_fps = round(total_imgs / total_wall, 2) if total_wall > 0 else "N/A"
-    lat_ms         = round(total_wall * 1000 / total_imgs, 2) if total_imgs > 0 else "N/A"
+    fps = round(total_imgs / total_wall, 2) if total_wall > 0 else "N/A"
+    lat = round(total_wall * 1000 / total_imgs, 2) if total_imgs > 0 else "N/A"
+    avg_pre = round(sum(all_pre)/len(all_pre), 2) if all_pre else "N/A"
+    avg_inf = round(sum(all_inf)/len(all_inf), 2) if all_inf else "N/A"
+    avg_post = round(sum(all_post)/len(all_post), 2) if all_post else "N/A"
 
-    def _avg(lst): return round(sum(lst)/len(lst), 2) if lst else "N/A"
-    avg_pre  = _avg(all_yolo_pre)
-    avg_inf  = _avg(all_yolo_inf)
-    avg_post = _avg(all_yolo_post)
-    avg_sam  = _avg(all_sam_t)
-    print(f"  [Speed YOLO] Pre={avg_pre}ms | Inf={avg_inf}ms | Post={avg_post}ms (avg/gambar)")
-    print(f"  [Speed SAM2] Avg={avg_sam}ms (avg/gambar)")
-    print(f"  [Throughput] {throughput_fps} FPS | Latency={lat_ms}ms")
+    print(f"  [Speed] Pre={avg_pre}ms | Inf={avg_inf}ms | Post={avg_post}ms")
+    print(f"  [Throughput] {fps} FPS | Latency={lat}ms")
 
-    # COCOeval — gunakan pycocotools langsung (format dt sudah COCO-native dari worker)
     try:
         from pycocotools.coco import COCO
         from pycocotools.cocoeval import COCOeval
-
-        coco_gt = COCO()
-        coco_gt.dataset = coco_gt_dict
-        coco_gt.createIndex()
-
-        # ── Detection (BBox) ─────────────────────────────────────────────────
-        print("\n  [COCOeval] ── Detection (BBox) ──")
+        coco_gt = COCO(); coco_gt.dataset = coco_gt_dict; coco_gt.createIndex()
+        
         if all_dt_bbox:
-            coco_dt_box  = coco_gt.loadRes(all_dt_bbox)
-            eval_box     = COCOeval(coco_gt, coco_dt_box, iouType="bbox")
+            coco_dt = coco_gt.loadRes(all_dt_bbox)
+            eval_box = COCOeval(coco_gt, coco_dt, iouType="bbox")
             eval_box.evaluate(); eval_box.accumulate(); eval_box.summarize()
-            mAP50_box    = round(float(eval_box.stats[1]), 4)   # mAP@.50
-            mAP50_95_box = round(float(eval_box.stats[0]), 4)   # mAP@.50:.95
+            mAP50_box = round(float(eval_box.stats[1]), 4)
+            mAP50_95_box = round(float(eval_box.stats[0]), 4)
         else:
-            print("  ⚠️  Tidak ada prediksi bbox — mAP tidak dapat dihitung.")
             mAP50_box = mAP50_95_box = "N/A"
-
-        # ── Segmentation (Mask) ──────────────────────────────────────────────
+            
         if all_dt_segm:
-            print("\n  [COCOeval] ── Segmentation (Mask) ──")
-            coco_dt_seg   = coco_gt.loadRes(all_dt_segm)
-            eval_seg      = COCOeval(coco_gt, coco_dt_seg, iouType="segm")
+            coco_dt_seg = coco_gt.loadRes(all_dt_segm)
+            eval_seg = COCOeval(coco_gt, coco_dt_seg, iouType="segm")
             eval_seg.evaluate(); eval_seg.accumulate(); eval_seg.summarize()
-            mAP50_mask    = round(float(eval_seg.stats[1]), 4)
+            mAP50_mask = round(float(eval_seg.stats[1]), 4)
             mAP50_95_mask = round(float(eval_seg.stats[0]), 4)
         else:
-            print("  ⚠️  Tidak ada prediksi mask — mAP segmentasi tidak dapat dihitung.")
             mAP50_mask = mAP50_95_mask = "N/A"
-
     except Exception as e:
         print(f"  ⚠️ COCOeval error: {e}")
         mAP50_box = mAP50_95_box = mAP50_mask = mAP50_95_mask = "ERR"
 
-    print(f"\n  ✅ Detection  — mAP50={mAP50_box}  mAP50-95={mAP50_95_box}")
-    print(f"  ✅ Segmentation — mAP50={mAP50_mask}  mAP50-95={mAP50_95_mask}")
-    print(f"  ✅ FPS (Throughput): {throughput_fps}")
-
     gpu_str = _gpu_report_str(gpu_ids)
-
-    # ── Hitung Precision & Recall dari prediksi bbox ──────────────────────
-    prec, rec = "N/A", "N/A"
-    try:
-        # Kumpulkan GT per image_id
-        gt_per_img = {}  # {image_id: [(cat_id, bbox), ...]}
-        for ann in coco_gt_dict["annotations"]:
-            iid = ann["image_id"]
-            b   = ann["bbox"]  # [x, y, w, h]
-            gt_per_img.setdefault(iid, []).append((ann["category_id"], b))
-
-        total_tp, total_fp, total_gt = 0, 0, 0
-        # Group predictions by image_id
-        preds_per_img = {}  # {image_id: [(cat_id, bbox, score), ...]}
-        for dt in all_dt_bbox:
-            iid = dt["image_id"]
-            b   = dt["bbox"]  # [x, y, w, h]
-            preds_per_img.setdefault(iid, []).append(
-                (dt["category_id"], b, dt["score"])
-            )
-
-        for iid, gt_list in gt_per_img.items():
-            total_gt += len(gt_list)
-            preds = preds_per_img.get(iid, [])
-            preds.sort(key=lambda x: x[2], reverse=True)  # sort by score
-            matched = set()
-            for cat_id, pb, score in preds:
-                # pb = [x, y, w, h] → convert to [x1, y1, x2, y2]
-                px1, py1 = pb[0], pb[1]
-                px2, py2 = pb[0]+pb[2], pb[1]+pb[3]
-                best_iou, best_idx = 0.0, None
-                for gi, (gc, gb) in enumerate(gt_list):
-                    if gc != cat_id or gi in matched:
-                        continue
-                    gx1, gy1 = gb[0], gb[1]
-                    gx2, gy2 = gb[0]+gb[2], gb[1]+gb[3]
-                    ix1 = max(px1, gx1); iy1 = max(py1, gy1)
-                    ix2 = min(px2, gx2); iy2 = min(py2, gy2)
-                    iw = max(0, ix2-ix1); ih = max(0, iy2-iy1)
-                    ia = iw * ih
-                    ua = (px2-px1)*(py2-py1) + (gx2-gx1)*(gy2-gy1) - ia
-                    iou = ia / ua if ua > 0 else 0.0
-                    if iou > best_iou:
-                        best_iou = iou; best_idx = gi
-                if best_iou >= 0.5 and best_idx is not None:
-                    total_tp += 1; matched.add(best_idx)
-                else:
-                    total_fp += 1
-
-        prec = round(total_tp / (total_tp + total_fp), 4) if (total_tp + total_fp) > 0 else 0.0
-        rec  = round(total_tp / total_gt, 4) if total_gt > 0 else 0.0
-        print(f"  ✅ Precision={prec}  Recall={rec}")
-    except Exception as e:
-        print(f"  ⚠️ Precision/Recall error: {e}")
-
-    # Untuk Hybrid: kolom timing mencerminkan breakdown nyata
-    # Preprocess (ms)  = YOLO preprocess (resize, normalize)
-    # Inference (ms)   = YOLO inference + SAM2 inference (kedua model bekerja per gambar)
-    # Postprocess (ms) = YOLO postprocess (NMS, dst)
-    hybrid_inf_ms = "N/A"
-    if isinstance(avg_inf, (int, float)) and isinstance(avg_sam, (int, float)):
-        hybrid_inf_ms = round(avg_inf + avg_sam, 2)
-    elif isinstance(avg_inf, (int, float)):
-        hybrid_inf_ms = avg_inf
-
+    
     det_row = {
-        "Model":             MODEL_LABEL,
-        "Model Size (MB)":   total_mb_str,
-        "mAP50-95":          mAP50_95_box,
-        "mAP50":             mAP50_box,
-        "Precision":         prec,
-        "Recall":            rec,
-        "Preprocess (ms)":   avg_pre,
-        "Inference (ms)":    hybrid_inf_ms,
-        "Postprocess (ms)":  avg_post,
-        "Latency (ms)":      lat_ms,
-        "FPS":               throughput_fps,
-        "GPUs":              gpu_str,
-        "Evaluator":         "COCOeval (MultiGPU)",
+        "Model": model_cfg["label"],
+        "Model Size (MB)": mb_size,
+        "mAP50-95": mAP50_95_box,
+        "mAP50": mAP50_box,
+        "Precision": "N/A", "Recall": "N/A",
+        "Preprocess (ms)": avg_pre, "Inference (ms)": avg_inf, "Postprocess (ms)": avg_post,
+        "Latency (ms)": lat, "FPS": fps, "GPUs": gpu_str, "Evaluator": "COCOeval (MultiGPU)"
     }
-
-    seg_row = {
-        "Model":            MODEL_LABEL,
-        "Model Size (MB)":  total_mb_str,
-        "mAP50-95(Box)":    mAP50_95_box,
-        "mAP50-95(Mask)":   mAP50_95_mask,
-        "Preprocess (ms)":  avg_pre,
-        "Inference (ms)":   hybrid_inf_ms,
-        "Postprocess (ms)": avg_post,
-        "Latency (ms)":     lat_ms,
-        "FPS":              throughput_fps,
-        "GPUs":             gpu_str,
-        "Evaluator":        "COCOeval (MultiGPU)",
-    }
-
-    print(f"\n  📊 Hasil Hybrid Pipeline MultiGPU:")
-    for k, v in det_row.items():
-        print(f"     {k}: {v}")
-
+    
+    seg_row = None
+    if mAP50_mask != "N/A" or model_cfg["type"] in ["yolo_seg", "maskrcnn", "hybrid"]:
+        seg_row = {
+            "Model": model_cfg["label"],
+            "Model Size (MB)": mb_size,
+            "mAP50-95(Box)": mAP50_95_box,
+            "mAP50-95(Mask)": mAP50_95_mask,
+            "Preprocess (ms)": avg_pre, "Inference (ms)": avg_inf, "Postprocess (ms)": avg_post,
+            "Latency (ms)": lat, "FPS": fps, "GPUs": gpu_str, "Evaluator": "COCOeval (MultiGPU)"
+        }
+        
     return det_row, seg_row
-
 
 # ==============================================================================
 # ENTRYPOINT
 # ==============================================================================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Hybrid (YOLO11m+SAM2) Distributed Multi-GPU Evaluation"
-    )
-    parser.add_argument("--gpus", type=str, default="all",
-        help="GPU yang digunakan. Contoh: '0,1' atau 'all'. Default: semua GPU.")
+    parser = argparse.ArgumentParser(description="Multi-GPU Evaluation untuk Seluruh Model")
+    parser.add_argument("--gpus", type=str, default="all", help="Contoh: '0,1' atau 'all'.")
+    parser.add_argument("--dataset", type=str, default="default", help="Path absolut ke data.yaml dataset evaluasi. Atau 'default' untuk menggunakan SEG_YAML dari config_shared.")
     args = parser.parse_args()
 
-    GPU_IDS = list(range(torch.cuda.device_count())) if args.gpus.strip().lower() == "all" \
-              else [int(g.strip()) for g in args.gpus.split(",") if g.strip()]
+    GPU_IDS = list(range(torch.cuda.device_count())) if args.gpus.strip().lower() == "all" else [int(g.strip()) for g in args.gpus.split(",") if g.strip()]
+    if not torch.cuda.is_available() or not GPU_IDS: print("❌ CUDA tidak tersedia."); sys.exit(1)
 
-    if not torch.cuda.is_available() or not GPU_IDS:
-        print("❌ CUDA tidak tersedia atau tidak ada GPU."); sys.exit(1)
+    eval_path = SEG_YAML if args.dataset == "default" else args.dataset
+    
+    ds_name = ""
+    is_native_coco = False
+    
+    if os.path.isfile(eval_path) and eval_path.endswith('.yaml'):
+        ds_name = os.path.basename(os.path.dirname(eval_path))
+    elif os.path.isfile(eval_path) and eval_path.endswith('.json'):
+        is_native_coco = True
+        ds_name = os.path.basename(os.path.dirname(os.path.dirname(eval_path))) if "valid" in eval_path else os.path.basename(os.path.dirname(eval_path))
+    elif os.path.isdir(eval_path):
+        if os.path.isfile(os.path.join(eval_path, "data.yaml")):
+            eval_path = os.path.join(eval_path, "data.yaml")
+            ds_name = os.path.basename(os.path.dirname(eval_path))
+        elif os.path.isfile(os.path.join(eval_path, "valid", "_annotations.coco.json")):
+            eval_path = os.path.join(eval_path, "valid", "_annotations.coco.json")
+            is_native_coco = True
+            ds_name = os.path.basename(os.path.dirname(os.path.dirname(eval_path)))
+        else:
+            print(f"❌ Dataset tidak valid (tidak ada data.yaml atau valid/_annotations.coco.json): {eval_path}")
+            sys.exit(1)
+    else:
+        print(f"❌ Path dataset tidak ditemukan: {eval_path}")
+        sys.exit(1)
 
-    n_avail = torch.cuda.device_count()
-    for g in GPU_IDS:
-        if g >= n_avail:
-            print(f"❌ GPU {g} tidak tersedia (sistem punya {n_avail} GPU)."); sys.exit(1)
+    suffix = "default" if args.dataset == "default" else ds_name
 
     print("=" * 65)
-    print("  Hybrid Pipeline — Distributed Multi-GPU Evaluation")
-    print("=" * 65)
-    print(f"  GPU yang digunakan : {GPU_IDS}")
-    print(f"  World size         : {len(GPU_IDS)}")
-    print(f"  YOLO11m pt         : {os.path.join(get_output_dir('yolo11m'), 'weights', 'best.pt')}")
-    print(f"  SAM2 pt            : {SAM_MODEL_PATH}")
-    print(f"  SEG_YAML           : {SEG_YAML}")
-    print(f"  REPORTS_DIR        : {REPORTS_DIR}")
+    print(f"  All Models — Distributed Multi-GPU Evaluation [{suffix}]")
+    print(f"  GPU : {GPU_IDS} (World size: {len(GPU_IDS)})")
+    print(f"  Dataset: {eval_path} (Native COCO: {is_native_coco})")
     print("=" * 65 + "\n")
 
-    gc.collect(); torch.cuda.empty_cache()
-    free_gb = torch.cuda.mem_get_info(GPU_IDS[0])[0] / 1e9
-    print(f"[MemClean] VRAM bebas GPU:{GPU_IDS[0]}: {free_gb:.2f} GB\n")
+    if is_native_coco:
+        coco_gt_dict, image_ids = load_native_coco_gt(os.path.dirname(eval_path))
+        img_dir = os.path.dirname(eval_path)
+    else:
+        coco_gt_dict, image_ids = build_coco_ground_truth(eval_path, split="valid")
+        img_dir = _resolve_img_dir(eval_path)
 
-    send_telegram_msg(
-        f"🚀 <b>Hybrid MultiGPU Eval Dimulai</b>\n"
-        f"GPUs: <code>{GPU_IDS}</code>\n"
-        f"World Size: {len(GPU_IDS)}\n"
-        f"Pipeline: YOLO11m → SAM2 (Distributed Inference)"
-    )
+    if not coco_gt_dict:
+        print("❌ Gagal build COCO ground truth.")
+        sys.exit(1)
+
+    all_det_rows = []
+    all_seg_rows = []
+
+    with tempfile.TemporaryDirectory(prefix="multigpu_eval_") as tmp_dir:
+        for mcfg in MODELS_CONFIG:
+            d_row, s_row = eval_model_distributed(mcfg, GPU_IDS, coco_gt_dict, image_ids, img_dir, tmp_dir)
+            if d_row: all_det_rows.append(d_row)
+            if s_row: all_seg_rows.append(s_row)
 
     os.makedirs(REPORTS_DIR, exist_ok=True)
+    
+    if all_det_rows:
+        det_csv = os.path.join(REPORTS_DIR, f"report_all_det_multigpu_{suffix}.csv")
+        with open(det_csv, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=list(all_det_rows[0].keys()))
+            w.writeheader(); w.writerows(all_det_rows)
+        print(f"\n✅ Det Report: {det_csv}")
 
-    with tempfile.TemporaryDirectory(prefix="hybrideval_") as tmp_dir:
-        t_total_start = time.perf_counter()
+    if all_seg_rows:
+        seg_csv = os.path.join(REPORTS_DIR, f"report_all_seg_multigpu_{suffix}.csv")
+        with open(seg_csv, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=list(all_seg_rows[0].keys()))
+            w.writeheader(); w.writerows(all_seg_rows)
+        print(f"✅ Seg Report: {seg_csv}")
 
-        det_row, seg_row = eval_hybrid_distributed(GPU_IDS, tmp_dir)
-
-        # Simpan Detection Report
-        if det_row:
-            det_fields = [
-                "Model", "Model Size (MB)", "mAP50-95", "mAP50",
-                "Precision", "Recall", "Preprocess (ms)", "Inference (ms)",
-                "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"
-            ]
-            det_csv = os.path.join(REPORTS_DIR, "report_hybrid_det_multigpu.csv")
-            with open(det_csv, "w", newline="", encoding="utf-8") as f:
-                w = csv.DictWriter(f, fieldnames=det_fields)
-                w.writeheader(); w.writerow(det_row)
-            print(f"\n✅ Det Report: {det_csv}")
-            send_telegram_msg(
-                f"✅ <b>Hybrid Det MultiGPU Selesai</b>\n"
-                f"mAP50-95: <code>{det_row['mAP50-95']}</code>\n"
-                f"mAP50: <code>{det_row['mAP50']}</code>\n"
-                f"Precision: <code>{det_row['Precision']}</code>\n"
-                f"Recall: <code>{det_row['Recall']}</code>\n"
-                f"Pre: <code>{det_row['Preprocess (ms)']}ms</code> | "
-                f"Inf: <code>{det_row['Inference (ms)']}ms</code> | "
-                f"Post: <code>{det_row['Postprocess (ms)']}ms</code>\n"
-                f"FPS (Throughput): <code>{det_row['FPS']}</code>\n"
-                f"GPUs: <code>{det_row['GPUs']}</code>"
-            )
-
-        # Simpan Segmentation Report
-        if seg_row:
-            seg_fields = [
-                "Model", "Model Size (MB)", "mAP50-95(Box)",
-                "mAP50-95(Mask)", "Preprocess (ms)", "Inference (ms)",
-                "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"
-            ]
-            seg_csv = os.path.join(REPORTS_DIR, "report_hybrid_seg_multigpu.csv")
-            with open(seg_csv, "w", newline="", encoding="utf-8") as f:
-                w = csv.DictWriter(f, fieldnames=seg_fields)
-                w.writeheader(); w.writerow(seg_row)
-            print(f"✅ Seg Report: {seg_csv}")
-            send_telegram_msg(
-                f"✅ <b>Hybrid Seg MultiGPU Selesai</b>\n"
-                f"mAP50-95(Box): <code>{seg_row['mAP50-95(Box)']}</code>\n"
-                f"mAP50-95(Mask): <code>{seg_row['mAP50-95(Mask)']}</code>\n"
-                f"FPS (Throughput): <code>{seg_row['FPS']}</code>\n"
-                f"GPUs: <code>{seg_row['GPUs']}</code>"
-            )
-
-        if not det_row and not seg_row:
-            print("\n❌ Evaluasi Hybrid gagal total — tidak ada report yang disimpan.")
-            send_telegram_msg("❌ <b>Hybrid MultiGPU Eval GAGAL</b>\nCek log untuk detail error.")
-
-        total_elapsed = round(time.perf_counter() - t_total_start, 1)
-        print(f"\n✅ Total waktu evaluasi Hybrid: {total_elapsed}s")
-        send_telegram_msg(
-            f"🏁 <b>Hybrid MultiGPU Eval Selesai</b>\n"
-            f"Total waktu: <code>{total_elapsed}s</code>\n"
-            f"Report: <code>{REPORTS_DIR}</code>"
-        )
-
-        # Generate Visual Comparisons
-        print("\n  [Visual] Generating comparison images...")
-        try:
-            sys.path.insert(0, ROOT)
-            from visual_utils import generate_single_hybrid, generate_hybrid_grids
-            generate_single_hybrid(is_multigpu=True)
-            generate_hybrid_grids(is_multigpu=True)
-        except Exception as _ve:
-            print(f"  [Visual] ⚠️  Gagal generate visual: {_ve}")
+    print("\n  [Visual] Note: Visualisasi perbandingan model silakan jalankan utils/generate_paper_visuals.py")

@@ -483,13 +483,11 @@ if __name__ == "__main__":
         # Generate Visuals
         try:
             sys.path.insert(0, ROOT)
-            from visual_utils import generate_single_yolo
-            if not args.skip_det:
-                generate_single_yolo("yolov9m", "YOLOv9m", is_multigpu=True, task="det")
-            if not args.skip_seg:
-                generate_single_yolo("yolov9c_seg", "YOLOv9c-Seg", is_multigpu=True, task="seg")
+            from utils.generate_comparison_grid import generate as generate_comp_grid
+            print("[\u26A1] Memperbarui Comparison Grid (Training Dataset) ...")
+            generate_comp_grid(device_str=f"cuda:{args.local_rank}")
         except Exception as e:
-            print(f"⚠️ Gagal generate visual_utils: {e}")
+            print(f"\u26A0\ufe0f Gagal update comparison grid: {e}")
 
         total_elapsed = round(time.perf_counter() - t_total_start, 1)
         print(f"\n✅ YOLOv9 MultiGPU Evaluation selesai dalam {total_elapsed}s")

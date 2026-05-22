@@ -2,11 +2,11 @@
 """
 yolo/yolo11/main.py
 ===================
-Fine-tuning YOLO11 Medium pada dataset botol plastik (RVM).
+Fine-tuning YOLO11 Large pada dataset botol plastik (RVM).
 
 Model:
-  - yolo11m.pt      → Detection  (Primary — digunakan sebagai Prompt di Hybrid)
-  - yolo11m-seg.pt  → Instance Segmentation
+  - yolo11l.pt      → Detection  (Primary — digunakan sebagai Prompt di Hybrid)
+  - yolo11l-seg.pt  → Instance Segmentation
 
 Cara menjalankan:
     python -u main.py 2>&1 | tee yolo11_train.log
@@ -47,7 +47,7 @@ from coco_eval_utils import (
     check_pycocotools
 )
 
-parser = argparse.ArgumentParser(description="YOLO11m Fine-tuning")
+parser = argparse.ArgumentParser(description="YOLO11l Fine-tuning")
 parser.add_argument("--device", type=str, default=None,
     help="GPU: '0', '1,2', '0,1,2', 'cpu'. Default: semua GPU.")
 args = parser.parse_args()
@@ -58,7 +58,7 @@ else:
     n = torch.cuda.device_count()
     DEVICE = list(range(n)) if n > 1 else (0 if n == 1 else "cpu")
 
-print(f"[Device] YOLO11m → {DEVICE}")
+print(f"[Device] YOLO11l → {DEVICE}")
 
 
 def get_gpu_report_str(device):
@@ -163,7 +163,7 @@ def _eval_seg(label, pt, yaml):
             "Latency (ms)":     total_ms,
             "FPS":             fps,
             "GPUs":            get_gpu_report_str(DEVICE),
-        "Evaluator":       "Ultralytics",
+            "Evaluator":       "Ultralytics",
         }
     except Exception as e:
         print(f"  ⚠️ {label}: {e}")
@@ -414,41 +414,41 @@ def _coco_eval_det(label, pt, yaml):
         return None  # Signal to use fallback
 
 
-print("\n" + "="*65 + "\n  YOLO11m Fine-tuning\n" + "="*65)
+print("\n" + "="*65 + "\n  YOLO11l Fine-tuning\n" + "="*65)
 
 # Download & Pindahkan model dasar terlebih dahulu
-det_model_path = download_and_move_model("yolo11m.pt")
-seg_model_path = download_and_move_model("yolo11m-seg.pt")
+det_model_path = download_and_move_model("yolo11l.pt")
+seg_model_path = download_and_move_model("yolo11l-seg.pt")
 
 # Detection — best.pt ini yang akan digunakan oleh hybrid/main.py sebagai prompt
-best_det = _train(det_model_path,     DET_YAML, "yolo11m",    "YOLO11m Detection (Primary)")
-best_seg = _train(seg_model_path, SEG_YAML, "yolo11m_seg","YOLO11m-Seg Segmentation")
+best_det = _train(det_model_path,     DET_YAML, "yolo11l",    "YOLO11l Detection (Primary)")
+best_seg = _train(seg_model_path, SEG_YAML, "yolo11l_seg","YOLO11l-Seg Segmentation")
 
 # Simpan path best_det ke file agar hybrid/main.py bisa membacanya
-det_path_file = os.path.join(get_output_dir("yolo11m"), "weights", "best_path.txt")
+det_path_file = os.path.join(get_output_dir("yolo11l"), "weights", "best_path.txt")
 with open(det_path_file, "w") as f:
     f.write(best_det)
-print(f"[Info] Path YOLO11m best.pt disimpan ke: {det_path_file}")
+print(f"[Info] Path YOLO11l best.pt disimpan ke: {det_path_file}")
 
 report_dir = REPORTS_DIR
 os.makedirs(report_dir, exist_ok=True)
 
 # Detection CSV — Coba COCOeval dulu, fallback ke _eval_det()
-print("\n" + "="*65 + "\n  Evaluasi Detection YOLO11m\n" + "="*65)
+print("\n" + "="*65 + "\n  Evaluasi Detection YOLO11l\n" + "="*65)
 print("  🔄 Mencoba evaluasi dengan COCOeval...")
 
-det_row = _coco_eval_det("YOLO11m", best_det, DET_YAML)
+det_row = _coco_eval_det("YOLO11l", best_det, DET_YAML)
 
 if det_row is None:
     print("\n  ⚠️ COCOeval gagal, menggunakan _eval_det() sebagai fallback...")
-    det_row = _eval_det("YOLO11m (Fine-tuned)", best_det, DET_YAML)
+    det_row = _eval_det("YOLO11l (Fine-tuned)", best_det, DET_YAML)
     evaluator_used_det = "Ultralytics"
 else:
     evaluator_used_det = "COCOeval"
-    det_row["Model"] = "YOLO11m"
+    det_row["Model"] = "YOLO11l"
 
 det_fields = ["Model", "Model Size (MB)", "mAP50-95", "mAP50", "Precision", "Recall", "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"]
-det_csv = os.path.join(report_dir, "report_yolo11m_det_coco.csv")
+det_csv = os.path.join(report_dir, "report_yolo11l_det_coco.csv")
 with open(det_csv, "w", newline="", encoding="utf-8") as f:
     w = csv.DictWriter(f, fieldnames=det_fields)
     w.writeheader()
@@ -456,22 +456,22 @@ with open(det_csv, "w", newline="", encoding="utf-8") as f:
 print(f"\n✅ Det Report : {det_csv}")
 
 # Segmentation CSV — Coba COCOeval dulu, fallback ke _eval_seg()
-print("\n" + "="*65 + "\n  Evaluasi Segmentasi YOLO11m-Seg\n" + "="*65)
+print("\n" + "="*65 + "\n  Evaluasi Segmentasi YOLO11l-Seg\n" + "="*65)
 print("  🔄 Mencoba evaluasi dengan COCOeval...")
 
-seg_row = _coco_eval_seg("YOLO11m-Seg", best_seg, SEG_YAML)
+seg_row = _coco_eval_seg("YOLO11l-Seg", best_seg, SEG_YAML)
 
 if seg_row is None:
     print("\n  ⚠️ COCOeval gagal, menggunakan _eval_seg() sebagai fallback...")
-    seg_row = _eval_seg("YOLO11m-Seg (Fine-tuned)", best_seg, SEG_YAML)
+    seg_row = _eval_seg("YOLO11l-Seg (Fine-tuned)", best_seg, SEG_YAML)
     evaluator_used = "Ultralytics"
 else:
     evaluator_used = "COCOeval"
     # Update label untuk menunjukkan COCOeval
-    seg_row["Model"] = "YOLO11m-Seg"
+    seg_row["Model"] = "YOLO11l-Seg"
 
 seg_fields = ["Model", "Model Size (MB)", "mAP50-95(Box)", "mAP50-95(Mask)", "Latency (ms)", "FPS", "GPUs", "Evaluator"]
-seg_csv = os.path.join(report_dir, "report_yolo11m_seg_coco.csv")
+seg_csv = os.path.join(report_dir, "report_yolo11l_seg_coco.csv")
 with open(seg_csv, "w", newline="", encoding="utf-8") as f:
     w = csv.DictWriter(f, fieldnames=seg_fields); w.writeheader(); w.writerow(seg_row)
 print(f"✅ Seg Report : {seg_csv}")
@@ -480,26 +480,26 @@ print(f"✅ Seg Report : {seg_csv}")
 try:
     sys.path.insert(0, ROOT)
     from visual_utils import generate_single_yolo
-    generate_single_yolo("yolo11m", "YOLO11m", is_multigpu=False, task="det")
-    generate_single_yolo("yolo11m_seg", "YOLO11m-Seg", is_multigpu=False, task="seg")
+    generate_single_yolo("yolo11l", "YOLO11l", is_multigpu=False, task="det")
+    generate_single_yolo("yolo11l_seg", "YOLO11l-Seg", is_multigpu=False, task="seg")
 except Exception as e:
     print(f"⚠️ Gagal generate visual_utils: {e}")
 
-# compress_run("yolo11m")
-# compress_run("yolo11m_seg")
+# compress_run("yolo11l")
+# compress_run("yolo11l_seg")
 
-print("\n✅ YOLO11m selesai.")
+print("\n✅ YOLO11l selesai.")
 
 # Telegram message dengan info evaluator
-telegram_msg = f"""✅ <b>YOLO11m Pipeline Finished</b>
+telegram_msg = f"""✅ <b>YOLO11l Pipeline Finished</b>
 📁 Workspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>
 
 📊 <b>Detection Report:</b>
-  • Model: YOLO11m (Fine-tuned)
+  • Model: YOLO11l (Fine-tuned)
   • Evaluator: Ultralytics (default)
 
 📊 <b>Segmentation Report:</b>
-  • Model: YOLO11m-Seg (Fine-tuned)
+  • Model: YOLO11l-Seg (Fine-tuned)
   • Evaluator: <code>{evaluator_used}</code>
   • mAP50-95(Mask): {seg_row.get('mAP50-95(Mask)', 'N/A')}
   • mAP50-95(Box): {seg_row.get('mAP50-95(Box)', 'N/A')}

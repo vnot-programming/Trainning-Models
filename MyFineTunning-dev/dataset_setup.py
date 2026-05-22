@@ -10,9 +10,10 @@ Credential Loading — urutan prioritas:
     2. Environment variable OS    (Docker, CI/CD)
 
 Fungsi publik:
-    load_api_key() -> str | None
-    setup_detection_dataset(key) -> (dataset_location, yaml_path)
-    setup_segmentation_dataset(key) -> (dataset_location, yaml_path)
+    load_api_key() -> tuple[str | None, str | None]
+    setup_detection_dataset(key) -> tuple[str, str]
+    setup_segmentation_dataset(key) -> tuple[str, str]
+    setup_coco_segmentation_dataset_unu(key_unu) -> str
     setup_all_datasets() -> dict
 
 # Object Detection
@@ -30,7 +31,38 @@ rf = Roboflow(api_key="F0VtV8b5YBdJHZbasy0w")
 project = rf.workspace("wbc-laboratory").project("segpoligon-me-bottle-isempty3")
 version = project.version(7)
 dataset = version.download("coco-segmentation")
-                
+
+
+# Golden Dataset Segmentation - For Evaluation
+!pip install roboflow
+from roboflow import Roboflow
+rf = Roboflow(api_key="tjeBcHkWc1oOc0oOv9kI")
+project = rf.workspace("vnot").project("me-bottle-isempty-unu3-sem-seg")
+dataset = project.version(1).download("coco-segmentation")
+
+# Golden Dataset Detection - For Evaluation
+!pip install roboflow
+from roboflow import Roboflow
+rf = Roboflow(api_key="tjeBcHkWc1oOc0oOv9kI")
+project = rf.workspace("vnot").project("me-bottle-isempty-unu3-sem-seg")
+version = project.version(7)
+dataset = version.download("coco-segmentation")
+
+# Standar Dataset Detection - For Evaluation
+!pip install roboflow
+from roboflow import Roboflow
+rf = Roboflow(api_key="tjeBcHkWc1oOc0oOv9kI")
+project = rf.workspace("vnot").project("me-bottle-isempty-ku3-h61lr")
+version = project.version(2)
+dataset = version.download("coco")
+
+# Standar Dataset Segmentation - For Evaluation
+!pip install roboflow
+from roboflow import Roboflow
+rf = Roboflow(api_key="tjeBcHkWc1oOc0oOv9kI")
+project = rf.workspace("vnot").project("me-bottle-isempty-ku3-h61lr-seg")
+version = project.version(1)
+dataset = version.download("coco-segmentation")
 """
 
 import os
@@ -94,32 +126,32 @@ def _load_dotenv() -> None:
                     os.environ.setdefault(k.strip(), v.strip())
 
 
-def load_api_key() -> str | None:
+def load_api_key() -> tuple[str | None, str | None]:
     """
     Muat Roboflow API key:
       1. File .env di root project
       2. Environment variable OS
 
-    Returns: str API key, atau None jika tidak ditemukan.
+    Returns: tuple(key_ku, key_unu), atau None pada masing-masing key jika tidak ditemukan.
     """
     _load_dotenv()
 
     key = os.environ.get(_KEY_NAME)
-    if key:
-        print(f"✅ Roboflow API Key dimuat ({_KEY_NAME}).")
-        return key
-
-    print(
-        f"⚠️  API Key '{_KEY_NAME}' tidak ditemukan.\n"
-        f"   Buat file .env di root project:\n"
-        f"   {_KEY_NAME}=your_key_here\n"
-        f"   Atau: export {_KEY_NAME}=your_key_here"
-    )
-    return None
+    key_unu = os.environ.get(_KEY_NAME_UNU)
+    
+    if key and key_unu:
+        print(f"✅ Roboflow API Key dimuat ({_KEY_NAME}, {_KEY_NAME_UNU}).")
+    else:
+        if not key:
+            print(f"⚠️  API Key '{_KEY_NAME}' tidak ditemukan.")
+        if not key_unu:
+            print(f"⚠️  API Key '{_KEY_NAME_UNU}' tidak ditemukan.")
+            
+    return key, key_unu
 
 
 # ==============================================================================
-# DATASET DETEKSI
+# DATASET DETEKSI - Khusus Training
 # ==============================================================================
 def setup_detection_dataset(key: str | None) -> tuple[str, str]:
     """
@@ -162,7 +194,7 @@ def setup_detection_dataset(key: str | None) -> tuple[str, str]:
 
 
 # ==============================================================================
-# DATASET SEGMENTASI
+# DATASET SEGMENTASI - Khusus Training
 # ==============================================================================
 def setup_segmentation_dataset(key: str | None) -> tuple[str, str]:
     """
@@ -204,18 +236,11 @@ def setup_segmentation_dataset(key: str | None) -> tuple[str, str]:
 
 
 # ==============================================================================
-# DATASET COCO SEGMENTASI (UNU)
+# DATASET COCO SEGMENTASI (UNU) - Golden Dataset
 # ==============================================================================
-def setup_coco_segmentation_dataset_unu() -> str:
+def setup_coco_segmentation_dataset_unu(key_unu: str | None) -> str:
     """
     Download dataset COCO segmentation dari workspace vnot.
-    Sesuai dengan snippet:
-    !pip install roboflow
-    key_unu = os.environ.get(_KEY_NAME_UNU)
-    from roboflow import Roboflow
-    rf = Roboflow(api_key=key_unu)
-    project = rf.workspace("vnot").project("me-bottle-isempty-unu3-sem-seg")
-    dataset = project.version(1).download("coco-segmentation")
     """
     import subprocess
     import sys
@@ -227,21 +252,20 @@ def setup_coco_segmentation_dataset_unu() -> str:
         print("📦 Menginstall roboflow...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "roboflow"])
 
-    _load_dotenv()
-    key_unu = os.environ.get(_KEY_NAME_UNU)
     if not key_unu:
         raise RuntimeError(f"❌ API Key {_KEY_NAME_UNU} tidak ditemukan di .env")
 
     print(f"\n🌐 Dataset COCO Segmentasi (UNU): Download dari Roboflow...")
+                
     try:
         from roboflow import Roboflow
         rf = Roboflow(api_key=key_unu)
         project = rf.workspace("vnot").project("me-bottle-isempty-unu3-sem-seg")
         
         datasets_dir = _get_datasets_dir()
-        target_loc = str(datasets_dir / "me-bottle-isempty-unu3-sem-seg-1-coco")
+        target_loc = str(datasets_dir / "golden_dataset_seg")
         
-        dataset = project.version(1).download(
+        dataset = project.version(7).download(
             "coco-segmentation",
             location=target_loc,
             overwrite=False
@@ -253,28 +277,160 @@ def setup_coco_segmentation_dataset_unu() -> str:
 
 
 # ==============================================================================
+# DATASET COCO DETECTION (UNU) - Golden Dataset
+# ==============================================================================
+def setup_coco_detection_dataset_unu(key_unu: str | None) -> str:
+    """
+    Download dataset COCO detection dari workspace vnot.
+    Sesuai dengan snippet:
+    !pip install roboflow
+    key_unu = os.environ.get(_KEY_NAME_UNU)
+    from roboflow import Roboflow
+    rf = Roboflow(api_key=key_unu)
+    project = rf.workspace("vnot").project("me-bottle-isempty-unu3-det")
+    dataset = project.version(1).download("coco")
+    """
+    import subprocess
+    import sys
+    
+    # Auto-install roboflow setara dengan !pip install roboflow
+    try:
+        import roboflow
+    except ImportError:
+        print("📦 Menginstall roboflow...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "roboflow"])
+
+    if not key_unu:
+        raise RuntimeError(f"❌ API Key {_KEY_NAME_UNU} tidak ditemukan di .env")
+
+    print(f"\n🌐 Dataset COCO Detection (UNU): Download dari Roboflow...")
+                
+    try:
+        from roboflow import Roboflow
+        rf = Roboflow(api_key=key_unu)
+        project = rf.workspace("vnot").project("me-bottle-isempty-unu3-det")
+        
+        datasets_dir = _get_datasets_dir()
+        target_loc = str(datasets_dir / "golden_dataset_det")
+        
+        dataset = project.version(1).download(
+            "coco",
+            location=target_loc,
+            overwrite=False
+        )
+        print(f"   → {dataset.location}")
+        return dataset.location
+    except Exception as e:
+        raise RuntimeError(f"❌ Gagal download dataset COCO segmentasi UNU: {e}") from e
+
+# ==============================================================================
+# DATASET COCO DETECTION (UNU) - Standard Datasets
+# ==============================================================================
+def setup_h61lr_detection_dataset(key_unu: str | None) -> str:
+    """
+    Download dataset me-bottle-isempty-ku3-h61lr.
+    """
+    import subprocess
+    import sys
+    try:
+        import roboflow
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "roboflow"])
+
+    if not key_unu:
+        raise RuntimeError(f"❌ API Key {_KEY_NAME_UNU} tidak ditemukan di .env")
+
+    print(f"\n🌐 Dataset Detection (h61lr): Download dari Roboflow...")
+    try:
+        from roboflow import Roboflow
+        rf = Roboflow(api_key=key_unu)
+        project = rf.workspace("vnot").project("me-bottle-isempty-ku3-h61lr")
+        
+        datasets_dir = _get_datasets_dir()
+        target_loc = str(datasets_dir / "standard_datasets_det")
+        
+        dataset = project.version(2).download(
+            "coco",
+            location=target_loc,
+            overwrite=False
+        )
+        print(f"   → {dataset.location}")
+        return os.path.join(dataset.location, "data.yaml")
+    except Exception as e:
+        raise RuntimeError(f"❌ Gagal download dataset h61lr detection: {e}") from e
+
+# ==============================================================================
+# DATASET COCO SEGMENTASI (UNU) - Standard Datasets
+# ==============================================================================
+def setup_h61lr_segmentation_dataset(key_unu: str | None) -> str:
+    """
+    Download dataset me-bottle-isempty-ku3-h61lr-seg.
+    """
+    import subprocess
+    import sys
+    try:
+        import roboflow
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "roboflow"])
+
+    if not key_unu:
+        raise RuntimeError(f"❌ API Key {_KEY_NAME_UNU} tidak ditemukan di .env")
+
+    print(f"\n🌐 Dataset Segmentation (h61lr): Download dari Roboflow...")
+    try:
+        from roboflow import Roboflow
+        rf = Roboflow(api_key=key_unu)
+        project = rf.workspace("vnot").project("me-bottle-isempty-ku3-h61lr-seg")
+        
+        datasets_dir = _get_datasets_dir()
+        target_loc = str(datasets_dir / "standard_datasets_seg")
+        
+        dataset = project.version(1).download(
+            "coco-segmentation",
+            location=target_loc,
+            overwrite=False
+        )
+        print(f"   → {dataset.location}")
+        return os.path.join(dataset.location, "data.yaml")
+    except Exception as e:
+        raise RuntimeError(f"❌ Gagal download dataset h61lr segmentation: {e}") from e
+
+# ==============================================================================
 # SETUP SEMUA DATASET
 # ==============================================================================
 def setup_all_datasets() -> dict:
     """
-    Load API key dan siapkan kedua dataset sekaligus.
+    Load API key dan siapkan semua dataset sekaligus.
 
-    Returns: dict {det_location, det_yaml, seg_location, seg_yaml, key}
+    Returns: dict {det_location, det_yaml, seg_location, seg_yaml, unu_location, key, key_unu}
     """
-    key = load_api_key()
+    key, key_unu = load_api_key()
 
     det_location, det_yaml = setup_detection_dataset(key)
     seg_location, seg_yaml = setup_segmentation_dataset(key)
+    coco_seg_location = setup_coco_segmentation_dataset_unu(key_unu)
+    coco_det_location = setup_coco_detection_dataset_unu(key_unu)
+    h61lr_det_yaml = setup_h61lr_detection_dataset(key_unu)
+    h61lr_seg_yaml = setup_h61lr_segmentation_dataset(key_unu)
 
     print(f"\n[Dataset] ✅ Deteksi    : {det_location}")
     print(f"[Dataset] ✅ Segmentasi : {seg_location}")
+    print(f"[Dataset] ✅ Golden Seg   : {coco_seg_location}")
+    print(f"[Dataset] ✅ Golden Det   : {coco_det_location}")
+    print(f"[Dataset] ✅ Standart Det  : {h61lr_det_yaml}")
+    print(f"[Dataset] ✅ Standart Seg  : {h61lr_seg_yaml}")
 
+        # "det_location": det_location,
+        # "det_yaml":     det_yaml,
+        # "seg_location": seg_location,
+        # "seg_yaml":     seg_yaml,
     return {
-        "det_location": det_location,
-        "det_yaml":     det_yaml,
-        "seg_location": seg_location,
-        "seg_yaml":     seg_yaml,
+        "coco_seg_location": coco_seg_location,
+        "coco_det_location": coco_det_location,
+        "h61lr_det_yaml": h61lr_det_yaml,
+        "h61lr_seg_yaml": h61lr_seg_yaml,
         "key":          key,
+        "key_unu":      key_unu,
     }
 
 
@@ -286,5 +442,5 @@ if __name__ == "__main__":
     result = setup_all_datasets()
     print("\n[Hasil]")
     for k, v in result.items():
-        if k != "key":
+        if k not in ("key", "key_unu"):
             print(f"  {k}: {v}")

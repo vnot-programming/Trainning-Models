@@ -2,12 +2,12 @@
 """
 yolo/yolo11/eval_multigpu.py
 =============================
-Distributed Multi-GPU Evaluation untuk YOLO11m (Detection + Segmentation).
+Distributed Multi-GPU Evaluation untuk YOLO11l (Detection + Segmentation).
 
-Catatan penting untuk YOLO11m:
-  - Model ini adalah "prompt model" untuk pipeline Hybrid (YOLO11m + SAM2)
+Catatan penting untuk YOLO11l:
+  - Model ini adalah "prompt model" untuk pipeline Hybrid (YOLO11l + SAM2)
   - best.pt dari deteksi digunakan bersama oleh hybrid/eval_multigpu.py
-  - Evaluasi distributed ini menghasilkan baseline perbandingan YOLO11m mandiri vs Hybrid
+  - Evaluasi distributed ini menghasilkan baseline perbandingan YOLO11l mandiri vs Hybrid
 
 Strategi:
   - mp.spawn: setiap GPU memproses subset gambar secara paralel
@@ -24,8 +24,8 @@ Cara menjalankan:
       python -u eval_multigpu.py 2>&1 | tee eval_multigpu.log"
 
 Output:
-    <REPORTS_DIR>/report_yolo11m_det_multigpu.csv
-    <REPORTS_DIR>/report_yolo11m_seg_multigpu.csv
+    <REPORTS_DIR>/report_yolo11l_det_multigpu.csv
+    <REPORTS_DIR>/report_yolo11l_seg_multigpu.csv
 """
 
 import os, sys, gc, csv, time, argparse, pickle, tempfile
@@ -49,8 +49,8 @@ from coco_eval_utils import (
     build_coco_ground_truth, evaluate_coco_predictions, check_pycocotools
 )
 
-MODEL_LABEL_DET = "YOLO11m"
-MODEL_LABEL_SEG = "YOLO11m-Seg"
+MODEL_LABEL_DET = "YOLO11l"
+MODEL_LABEL_SEG = "YOLO11l-Seg"
 
 # ==============================================================================
 # HELPERS
@@ -166,7 +166,7 @@ def _infer_worker_det(rank: int, gpu_ids: list, pt_path: str,
 
     gpu = gpu_ids[rank]
     torch.cuda.set_device(gpu)
-    print(f"  [GPU:{gpu}] Rank {rank} mulai inferens deteksi YOLO11m...", flush=True)
+    print(f"  [GPU:{gpu}] Rank {rank} mulai inferens deteksi YOLO11l...", flush=True)
 
     model  = YOLO(pt_path)
     subset = _partition_images(img_dir, rank, len(gpu_ids))
@@ -208,7 +208,7 @@ def _infer_worker_seg(rank: int, gpu_ids: list, pt_path: str,
 
     gpu = gpu_ids[rank]
     torch.cuda.set_device(gpu)
-    print(f"  [GPU:{gpu}] Rank {rank} mulai inferens segmentasi YOLO11m-Seg...", flush=True)
+    print(f"  [GPU:{gpu}] Rank {rank} mulai inferens segmentasi YOLO11l-Seg...", flush=True)
 
     model  = YOLO(pt_path)
     subset = _partition_images(img_dir, rank, len(gpu_ids))
@@ -252,14 +252,14 @@ def _infer_worker_seg(rank: int, gpu_ids: list, pt_path: str,
 
 def eval_detection_distributed(gpu_ids: list, tmp_dir: str) -> dict | None:
     print("\n" + "="*65)
-    print("  Distributed Eval: YOLO11m Detection (Prompt Model for Hybrid)")
+    print("  Distributed Eval: YOLO11l Detection (Prompt Model for Hybrid)")
     print("="*65)
 
-    pt_path = os.path.join(get_output_dir("yolo11m"), "weights", "best.pt")
+    pt_path = os.path.join(get_output_dir("yolo11l"), "weights", "best.pt")
     if not os.path.exists(pt_path):
         print(f"  ❌ best.pt tidak ditemukan: {pt_path}")
         print("  💡 Jalankan yolo/yolo11/main.py terlebih dahulu untuk training.")
-        send_telegram_msg(f"❌ <b>YOLO11m MultiGPU Eval</b>\nDet best.pt tidak ditemukan:\n<code>{pt_path}</code>")
+        send_telegram_msg(f"❌ <b>YOLO11l MultiGPU Eval</b>\nDet best.pt tidak ditemukan:\n<code>{pt_path}</code>")
         return None
 
     if not check_pycocotools():
@@ -318,13 +318,13 @@ def eval_detection_distributed(gpu_ids: list, tmp_dir: str) -> dict | None:
 
 def eval_segmentation_distributed(gpu_ids: list, tmp_dir: str) -> dict | None:
     print("\n" + "="*65)
-    print("  Distributed Eval: YOLO11m-Seg Segmentation")
+    print("  Distributed Eval: YOLO11l-Seg Segmentation")
     print("="*65)
 
-    pt_path = os.path.join(get_output_dir("yolo11m_seg"), "weights", "best.pt")
+    pt_path = os.path.join(get_output_dir("yolo11l_seg"), "weights", "best.pt")
     if not os.path.exists(pt_path):
         print(f"  ❌ best.pt tidak ditemukan: {pt_path}")
-        send_telegram_msg(f"❌ <b>YOLO11m-Seg MultiGPU Eval</b>\nSeg best.pt tidak ditemukan:\n<code>{pt_path}</code>")
+        send_telegram_msg(f"❌ <b>YOLO11l-Seg MultiGPU Eval</b>\nSeg best.pt tidak ditemukan:\n<code>{pt_path}</code>")
         return None
 
     if not check_pycocotools():
@@ -381,7 +381,7 @@ def eval_segmentation_distributed(gpu_ids: list, tmp_dir: str) -> dict | None:
 # ==============================================================================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="YOLO11m Distributed Multi-GPU Evaluation")
+    parser = argparse.ArgumentParser(description="YOLO11l Distributed Multi-GPU Evaluation")
     parser.add_argument("--gpus", type=str, default="all",
         help="GPU yang digunakan. Contoh: '0,1' atau 'all'. Default: semua GPU.")
     parser.add_argument("--skip-det", action="store_true", help="Lewati evaluasi detection.")
@@ -400,7 +400,7 @@ if __name__ == "__main__":
             print(f"❌ GPU {g} tidak tersedia (sistem punya {n_avail} GPU)."); sys.exit(1)
 
     print("=" * 65)
-    print("  YOLO11m — Distributed Multi-GPU Evaluation")
+    print("  YOLO11l — Distributed Multi-GPU Evaluation")
     print("=" * 65)
     print(f"  GPU yang digunakan : {GPU_IDS}")
     print(f"  World size         : {len(GPU_IDS)}")
@@ -414,10 +414,10 @@ if __name__ == "__main__":
     print(f"[MemClean] VRAM bebas GPU:{GPU_IDS[0]}: {free_gb:.2f} GB\n")
 
     send_telegram_msg(
-        f"🚀 <b>YOLO11m MultiGPU Eval Dimulai</b>\n"
+        f"🚀 <b>YOLO11l MultiGPU Eval Dimulai</b>\n"
         f"GPUs: <code>{GPU_IDS}</code>\n"
         f"World Size: {len(GPU_IDS)}\n"
-        f"ℹ️ YOLO11m det best.pt akan digunakan juga oleh Hybrid pipeline."
+        f"ℹ️ YOLO11l det best.pt akan digunakan juga oleh Hybrid pipeline."
     )
 
     os.makedirs(REPORTS_DIR, exist_ok=True)
@@ -427,7 +427,7 @@ if __name__ == "__main__":
 
         det_row = None
         if not args.skip_det:
-            send_telegram_msg("🔍 <b>YOLO11m Det Eval</b>\nMemulai distributed inference deteksi...", force=False)
+            send_telegram_msg("🔍 <b>YOLO11l Det Eval</b>\nMemulai distributed inference deteksi...", force=False)
             det_row = eval_detection_distributed(GPU_IDS, tmp_dir)
             if det_row:
                 det_fields = [
@@ -435,13 +435,13 @@ if __name__ == "__main__":
                     "Precision", "Recall", "Preprocess (ms)", "Inference (ms)",
                     "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"
                 ]
-                det_csv = os.path.join(REPORTS_DIR, "report_yolo11m_det_multigpu.csv")
+                det_csv = os.path.join(REPORTS_DIR, "report_yolo11l_det_multigpu.csv")
                 with open(det_csv, "w", newline="", encoding="utf-8") as f:
                     w = csv.DictWriter(f, fieldnames=det_fields)
                     w.writeheader(); w.writerow(det_row)
                 print(f"\n✅ Det Report: {det_csv}")
                 send_telegram_msg(
-                    f"✅ <b>YOLO11m Det MultiGPU Selesai</b>\n"
+                    f"✅ <b>YOLO11l Det MultiGPU Selesai</b>\n"
                     f"mAP50-95: <code>{det_row['mAP50-95']}</code>\n"
                     f"mAP50: <code>{det_row['mAP50']}</code>\n"
                     f"Precision: <code>{det_row['Precision']}</code>\n"
@@ -452,20 +452,20 @@ if __name__ == "__main__":
 
         seg_row = None
         if not args.skip_seg:
-            send_telegram_msg("🔍 <b>YOLO11m-Seg Eval</b>\nMemulai distributed inference segmentasi...", force=False)
+            send_telegram_msg("🔍 <b>YOLO11l-Seg Eval</b>\nMemulai distributed inference segmentasi...", force=False)
             seg_row = eval_segmentation_distributed(GPU_IDS, tmp_dir)
             if seg_row:
                 seg_fields = [
                     "Model", "Model Size (MB)", "mAP50-95(Box)",
                     "mAP50-95(Mask)", "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"
                 ]
-                seg_csv = os.path.join(REPORTS_DIR, "report_yolo11m_seg_multigpu.csv")
+                seg_csv = os.path.join(REPORTS_DIR, "report_yolo11l_seg_multigpu.csv")
                 with open(seg_csv, "w", newline="", encoding="utf-8") as f:
                     w = csv.DictWriter(f, fieldnames=seg_fields)
                     w.writeheader(); w.writerow(seg_row)
                 print(f"✅ Seg Report: {seg_csv}")
                 send_telegram_msg(
-                    f"✅ <b>YOLO11m-Seg MultiGPU Selesai</b>\n"
+                    f"✅ <b>YOLO11l-Seg MultiGPU Selesai</b>\n"
                     f"mAP50-95(Box): <code>{seg_row['mAP50-95(Box)']}</code>\n"
                     f"mAP50-95(Mask): <code>{seg_row['mAP50-95(Mask)']}</code>\n"
                     f"FPS (Throughput): <code>{seg_row['FPS']}</code>\n"
@@ -475,18 +475,16 @@ if __name__ == "__main__":
         # Generate Visuals
         try:
             sys.path.insert(0, ROOT)
-            from visual_utils import generate_single_yolo
-            if not args.skip_det:
-                generate_single_yolo("yolo11m", "YOLO11m", is_multigpu=True, task="det")
-            if not args.skip_seg:
-                generate_single_yolo("yolo11m_seg", "YOLO11m-Seg", is_multigpu=True, task="seg")
+            from utils.generate_comparison_grid import generate as generate_comp_grid
+            print("[\u26A1] Memperbarui Comparison Grid (Training Dataset) ...")
+            generate_comp_grid(device_str=f"cuda:{args.local_rank}")
         except Exception as e:
-            print(f"⚠️ Gagal generate visual_utils: {e}")
+            print(f"\u26A0\ufe0f Gagal update comparison grid: {e}")
 
         total_elapsed = round(time.perf_counter() - t_total_start, 1)
-        print(f"\n✅ YOLO11m MultiGPU Evaluation selesai dalam {total_elapsed}s")
+        print(f"\n✅ YOLO11l MultiGPU Evaluation selesai dalam {total_elapsed}s")
         send_telegram_msg(
-            f"🏁 <b>YOLO11m MultiGPU Eval Selesai</b>\n"
+            f"🏁 <b>YOLO11l MultiGPU Eval Selesai</b>\n"
             f"Total waktu: <code>{total_elapsed}s</code>\n"
             f"Report: <code>{REPORTS_DIR}</code>"
         )
