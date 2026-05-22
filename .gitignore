@@ -1,5 +1,38 @@
 # === Zip/Binary ===
 *.zip
 
+# === Binary / Large Files ===
+datasets/
+models/
+data-files/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.zip
+*.tar.gz
+
+# === Python ===
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# === Logs ===
+*.log
+
+# === OS / IDE ===
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# === Rclone config (credentials) ===
+rclone.conf
+.env
+.workspace_id
+
 # === Hanya kirim MyFineTunning-RunPOD (dan file root) ===
 # File besar di dalam MyFineTunning-RunPOD diatur oleh .gitignore di dalam folder tersebut
