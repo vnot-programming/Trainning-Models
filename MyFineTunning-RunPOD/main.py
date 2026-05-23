@@ -112,7 +112,10 @@ for folder in workspace_folders:
     os.makedirs(full, exist_ok=True)
     print(f"  📁 {full}")
 
-global_folders = [DATASETS_DIR, MODELS_DIR, REPORTS_DIR, PAPER1_CSV_DIR, VISUALS_DIR, IMAGE_SAMPLES_DIR]
+_PIPELINE_VISUALS_DIR = os.path.join(REPORTS_DIR, "visuals")
+_PIPELINE_COMPARISON_DIR = os.path.join(_PIPELINE_VISUALS_DIR, "comparison")
+global_folders = [DATASETS_DIR, MODELS_DIR, REPORTS_DIR, PAPER1_CSV_DIR, VISUALS_DIR, IMAGE_SAMPLES_DIR,
+                  _PIPELINE_VISUALS_DIR, _PIPELINE_COMPARISON_DIR]
 for folder in global_folders:
     os.makedirs(folder, exist_ok=True)
     print(f"  📁 {folder}")

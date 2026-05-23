@@ -34,6 +34,7 @@ import torch
 from config_shared import (
     DATASETS_DIR, IMAGE_SIZE, NUM_CLASSES,
     get_output_dir, VISUALS_DIR, MODEL_COLORS, PAPER1_VIS_DIR,
+    REPORTS_DIR,
 )
 from telegram_utils import send_telegram_msg
 
@@ -50,8 +51,8 @@ def _get_training_dataset_valid_dir():
     return os.path.join(DATASETS_DIR, "segpoligon-me-bottle-isempty3-7", "valid")
 
 TRAIN_VALID_DIR  = _get_training_dataset_valid_dir()
-TRAIN_ANNOTATIONS = os.path.join(TRAIN_VALID_DIR, "_annotations.coco.json")
-COMPARISON_DIR    = os.path.join(VISUALS_DIR, "training_evaluation", "comparison")
+PIPELINE_VISUALS_DIR = os.path.join(REPORTS_DIR, "visuals")
+COMPARISON_DIR    = os.path.join(PIPELINE_VISUALS_DIR, "comparison")
 _HYBRID_DIR     = os.path.join(ROOT, "hybrid")
 
 TITLE_BAR_H = 30
@@ -219,21 +220,27 @@ def _build_maskrcnn(device):
 def generate(device_str: str = "cuda:0"):
     from ultralytics import YOLO, SAM
 
+    # Pastikan folder pipeline/visuals ada
+    os.makedirs(PIPELINE_VISUALS_DIR, exist_ok=True)
     os.makedirs(COMPARISON_DIR, exist_ok=True)
     device = torch.device(device_str if torch.cuda.is_available() else "cpu")
 
     global CLASS_NAMES
-    import json, glob
-    # Ambil class names dari dataset
-    with open(TRAIN_ANNOTATIONS) as f:
-        coco_data = json.load(f)
-    cats = [c for c in coco_data.get('categories', []) if c['id'] > 0]
-    cats = sorted(cats, key=lambda x: x['id'])
-    CLASS_NAMES = [c['name'] for c in cats]
+    import yaml as _yaml, glob
+    # Ambil class names dari data.yaml (bukan _annotations.coco.json)
+    _data_yaml_path = os.path.join(os.path.dirname(TRAIN_VALID_DIR), "data.yaml")
+    with open(_data_yaml_path, "r") as f:
+        _data_cfg = _yaml.safe_load(f)
+    _names = _data_cfg.get("names", [])
+    if isinstance(_names, dict):
+        CLASS_NAMES = [_names[k] for k in sorted(_names.keys())]
+    else:
+        CLASS_NAMES = list(_names)
     
     # Gunakan image sample dari TRAINING dataset validasi
-    IMG_SAMPLE_DIR = TRAIN_VALID_DIR
-    import glob
+    IMG_SAMPLE_DIR = os.path.join(TRAIN_VALID_DIR, "images")
+    if not os.path.isdir(IMG_SAMPLE_DIR):
+        IMG_SAMPLE_DIR = TRAIN_VALID_DIR  # fallback jika struktur flat
     img_files = sorted(glob.glob(os.path.join(IMG_SAMPLE_DIR, "*.jpg")) + glob.glob(os.path.join(IMG_SAMPLE_DIR, "*.png")))
     samples = [{"file_name": os.path.basename(f)} for f in img_files][:N_SAMPLES]
     print(f"[CompGrid] {len(samples)} gambar dari {IMG_SAMPLE_DIR}.")
@@ -352,9 +359,8 @@ def generate(device_str: str = "cuda:0"):
     tar_name = f"new_methods_comparison_{timestamp}.tar.gz"
     tar_path = os.path.join(VISUALS_DIR, tar_name)
     
-    new_methods_dir = os.path.join(VISUALS_DIR, "new_methods")
     with tarfile.open(tar_path, "w:gz") as tar:
-        tar.add(new_methods_dir, arcname="new_methods")
+        tar.add(PIPELINE_VISUALS_DIR, arcname="visuals")
         
     print(f"✅ Arsip visual berhasil dibuat di: {tar_path}")
 

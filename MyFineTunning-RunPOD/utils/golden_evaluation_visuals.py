@@ -9,7 +9,7 @@ Menggunakan dataset yang sama persis dengan golden_evaluation.py:
   - GOLDEN_SEG_DATASET_LOCATION (golden_dataset_seg)
 
 Cara pakai:
-  tmux new-session -d -s gold_visuals "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/golden_evaluation_visuals.py 2>&1 | tee utils/golden_evaluation_visuals.log"
+  tmux new-session -d -s gold_visuals "cd /root/Trainning-Models/MyFineTunning-RunPOD && python3 -u utils/golden_evaluation_visuals.py 2>&1 | tee utils/golden_evaluation_visuals.log"
 
 """
 import os
