@@ -35,7 +35,7 @@ import torch.multiprocessing as mp
 from config_shared import (
     WORKSPACE_DIR, SEG_YAML, DET_YAML, IMAGE_SIZE, NUM_CLASSES,
     get_output_dir, REPORTS_DIR, DATA_FILES_DIR, SEG_DATASET_LOCATION, DET_DATASET_LOCATION,
-    PAPER1_CSV_DIR
+    PAPER1_CSV_DIR, EVAL_CONF, EVAL_IOU
 )
 from telegram_utils import send_telegram_msg
 from coco_eval_utils import (
@@ -207,7 +207,7 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
         spd_pre, spd_inf, spd_post = 0.0, 0.0, 0.0
         
         if mtype in ["yolo_det", "yolo_seg"]:
-            res = model_obj.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+            res = model_obj.predict(img_path, conf=EVAL_CONF, iou=EVAL_IOU, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
             spd = res.speed
             spd_pre, spd_inf, spd_post = spd.get("preprocess", 0.0), spd.get("inference", 0.0), spd.get("postprocess", 0.0)
             if res.boxes is not None and len(res.boxes) > 0:
@@ -258,7 +258,7 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
             spd_post = (t5 - t4) * 1000
                     
         elif mtype == "hybrid":
-            res = model_obj.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+            res = model_obj.predict(img_path, conf=EVAL_CONF, iou=EVAL_IOU, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
             spd = res.speed
             spd_pre = spd.get("preprocess", 0.0)
             yolo_inf = spd.get("inference", 0.0)

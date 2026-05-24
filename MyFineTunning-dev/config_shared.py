@@ -133,7 +133,11 @@ NUM_CLASSES         = 7
 YOLO_BATCH_SIZE     = 16   # 64    # DDP total (dibagi ke semua GPU oleh Ultralytics)
 MASKRCNN_BATCH_SIZE = 8    # 4     # Single GPU cuda:0
 NUM_WORKERS         = 10    # 16
-
+EVAL_CONF           = 0.001 # Ambang batas confidence minimum untuk evaluasi (YOLO)
+EVAL_IOU            = 0.6   # Ambang batas IOU untuk evaluasi NMS (YOLO)
+VISUAL_CONF         = 0.25  # Ambang batas confidence untuk visualisasi
+VISUAL_IOU          = 0.6   # Ambang batas IOU untuk NMS saat visualisasi
+# IOU => iou berfungsi sebagai filter tumpang tindih.
 # ==============================================================================
 # HYPERPARAMETER RunPOD
 # ==============================================================================

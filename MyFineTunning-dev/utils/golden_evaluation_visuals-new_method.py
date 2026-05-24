@@ -34,7 +34,8 @@ sys.path.insert(0, ROOT)
 from ultralytics import YOLO, SAM
 from config_shared import (
     get_output_dir, NUM_CLASSES, IMAGE_SIZE, PAPER1_VIS_DIR, WORKSPACE_DIR, IMAGE_SAMPLES_DIR,
-    GOLDEN_DET_DATASET_LOCATION, GOLDEN_SEG_DATASET_LOCATION
+    GOLDEN_DET_DATASET_LOCATION, GOLDEN_SEG_DATASET_LOCATION,
+    VISUAL_CONF, VISUAL_IOU
 )
 from eval_unu_helpers import flush_gpu
 from eval_paper import load_maskrcnn
@@ -45,7 +46,7 @@ from eval_paper import load_maskrcnn
 YOLO11L_DET_PATH  = os.path.join(WORKSPACE_DIR, "runs", "yolo11l", "weights", "best.pt")
 YOLO11L_SEG_PATH  = os.path.join(WORKSPACE_DIR, "runs", "yolo11l_seg", "weights", "best.pt")
 
-# Output Directory — paper1/visuals/new-method/golden
+# Output Directory — paper1/visuals/new-method
 GOLD_VIS_DIR    = os.path.join(PAPER1_VIS_DIR, "new-method", "golden")
 IMG_SAMPLE_DIR = os.path.join(GOLD_VIS_DIR, "images_sample")
 DET_OUT_DIR    = os.path.join(GOLD_VIS_DIR, "detection")
@@ -260,7 +261,7 @@ def main():
 
         # --- TAHAP 1: DETECTION ---
         # 1. YOLOv8m
-        res8_det = yolo8_det.predict(img_path, conf=0.25, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+        res8_det = yolo8_det.predict(img_path, conf=VISUAL_CONF, iou=VISUAL_IOU, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b8  = res8_det.boxes.xyxy.cpu().numpy() if res8_det.boxes else []
         c8  = res8_det.boxes.conf.cpu().numpy() if res8_det.boxes else []
         cls8 = res8_det.boxes.cls.cpu().numpy() if res8_det.boxes else []
@@ -268,7 +269,7 @@ def main():
         if img8_det is not None: cv2.imwrite(os.path.join(DET_OUT_DIR, f"yolov8m_{img_name}"), img8_det)
 
         # 2. YOLOv9m
-        res9_det = yolo9_det.predict(img_path, conf=0.25, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+        res9_det = yolo9_det.predict(img_path, conf=VISUAL_CONF, iou=VISUAL_IOU, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b9  = res9_det.boxes.xyxy.cpu().numpy() if res9_det.boxes else []
         c9  = res9_det.boxes.conf.cpu().numpy() if res9_det.boxes else []
         cls9 = res9_det.boxes.cls.cpu().numpy() if res9_det.boxes else []
@@ -276,7 +277,7 @@ def main():
         if img9_det is not None: cv2.imwrite(os.path.join(DET_OUT_DIR, f"yolov9m_{img_name}"), img9_det)
 
         # 3. YOLO11l (Deteksi)
-        res11_det = yolo11_det.predict(img_path, conf=0.25, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+        res11_det = yolo11_det.predict(img_path, conf=VISUAL_CONF, iou=VISUAL_IOU, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b11  = res11_det.boxes.xyxy.cpu().numpy() if res11_det.boxes else []
         c11  = res11_det.boxes.conf.cpu().numpy() if res11_det.boxes else []
         cls11 = res11_det.boxes.cls.cpu().numpy() if res11_det.boxes else []
@@ -329,7 +330,7 @@ def main():
 
         # --- TAHAP 2: SEGMENTATION ---
         # 1. YOLOv8m-Seg
-        res8_seg = yolo8_seg.predict(img_path, conf=0.25, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+        res8_seg = yolo8_seg.predict(img_path, conf=VISUAL_CONF, iou=VISUAL_IOU, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b8s  = res8_seg.boxes.xyxy.cpu().numpy() if res8_seg.boxes else []
         c8s  = res8_seg.boxes.conf.cpu().numpy() if res8_seg.boxes else []
         cls8s = res8_seg.boxes.cls.cpu().numpy() if res8_seg.boxes else []
@@ -342,7 +343,7 @@ def main():
         if img8_seg is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"yolov8m_seg_{img_name}"), img8_seg)
 
         # 2. YOLOv9c-Seg
-        res9_seg = yolo9_seg.predict(img_path, conf=0.25, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+        res9_seg = yolo9_seg.predict(img_path, conf=VISUAL_CONF, iou=VISUAL_IOU, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b9s  = res9_seg.boxes.xyxy.cpu().numpy() if res9_seg.boxes else []
         c9s  = res9_seg.boxes.conf.cpu().numpy() if res9_seg.boxes else []
         cls9s = res9_seg.boxes.cls.cpu().numpy() if res9_seg.boxes else []
@@ -355,7 +356,7 @@ def main():
         if img9_seg is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"yolov9c_seg_{img_name}"), img9_seg)
 
         # 3. YOLO11l-Seg
-        res11_seg = yolo11_seg.predict(img_path, conf=0.25, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+        res11_seg = yolo11_seg.predict(img_path, conf=VISUAL_CONF, iou=VISUAL_IOU, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b11s  = res11_seg.boxes.xyxy.cpu().numpy() if res11_seg.boxes else []
         c11s  = res11_seg.boxes.conf.cpu().numpy() if res11_seg.boxes else []
         cls11s = res11_seg.boxes.cls.cpu().numpy() if res11_seg.boxes else []
