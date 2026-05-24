@@ -168,7 +168,14 @@ NUM_WORKERS         = 14    # 16
 # ==============================================================================
 PARALLEL_TRAINING        = True  # Skenario 1 GPU = 1 Model
 EARLY_STOPPING_PATIENCE  = 20    # Patience untuk YOLO dan Mask R-CNN
-PARALLEL_GPUS            = "0,1"  # Default GPU list untuk parallel training
+# Secara cerdas mendeteksi seluruh GPU CUDA yang tersedia di instance RunPOD/Server secara dinamis
+import torch as _torch
+if _torch.cuda.is_available():
+    _num_gpus = _torch.cuda.device_count()
+    PARALLEL_GPUS = ",".join(str(i) for i in range(_num_gpus))
+else:
+    PARALLEL_GPUS = "0"
+
 
 
 
