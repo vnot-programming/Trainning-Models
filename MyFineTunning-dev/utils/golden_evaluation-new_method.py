@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-utils/standar_evaluation-new_method.py
+utils/golden_evaluation-new_method.py
 ========================
 Distributed Multi-GPU Evaluation untuk Seluruh Pipeline menggunakan metode hybrid baru (YOLO11l + SAM2).
 
@@ -9,10 +9,10 @@ Menggunakan model YOLO11l hasil training terbaru:
   - YOLO11l Segmentasi: /home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l_seg/weights/best.pt
 
 Cara pakai:
-  python3 utils/standar_evaluation-new_method.py --dataset default --gpus 0,1
+  python3 utils/golden_evaluation-new_method.py --dataset default --gpus 0,1
 
 # Default dari path manapun
-  tmux new-session -d -s standar_evaluation "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/standar_evaluation-new_method.py 2>&1 | tee utils/standar_evaluation-new_method.log"
+  tmux new-session -d -s golden_evaluation_new "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/golden_evaluation-new_method.py 2>&1 | tee utils/golden_evaluation-new_method.log"
 
 """
 
@@ -34,7 +34,7 @@ import torch.multiprocessing as mp
 
 from config_shared import (
     WORKSPACE_DIR, SEG_YAML, DET_YAML, IMAGE_SIZE, NUM_CLASSES,
-    get_output_dir, REPORTS_DIR, DATA_FILES_DIR, SEG_DATASET_LOCATION, DET_DATASET_LOCATION
+    get_output_dir, REPORTS_DIR, DATA_FILES_DIR, GOLDEN_SEG_DATASET_LOCATION, GOLDEN_DET_DATASET_LOCATION
 )
 from telegram_utils import send_telegram_msg
 from coco_eval_utils import (
@@ -513,8 +513,8 @@ if __name__ == "__main__":
 
     if args.dataset == "default":
         print("\n[Setup] Mode Auto: Memuat Dataset Deteksi & Segmentasi secara terpisah...\n")
-        det_info = _prepare_dataset(DET_DATASET_LOCATION, args.coco, args.yolo)
-        seg_info = _prepare_dataset(SEG_DATASET_LOCATION, args.coco, args.yolo)
+        det_info = _prepare_dataset(GOLDEN_DET_DATASET_LOCATION, args.coco, args.yolo)
+        seg_info = _prepare_dataset(GOLDEN_SEG_DATASET_LOCATION, args.coco, args.yolo)
         suffix = "default"
     else:
         info = _prepare_dataset(args.dataset, args.coco, args.yolo)
@@ -566,17 +566,17 @@ if __name__ == "__main__":
     os.makedirs(NEW_CSV_DIR, exist_ok=True)
     
     if all_det_rows:
-        det_csv = os.path.join(NEW_CSV_DIR, "standart_det.csv")
+        det_csv = os.path.join(NEW_CSV_DIR, "golden_det.csv")
         with open(det_csv, "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=list(all_det_rows[0].keys()))
             w.writeheader(); w.writerows(all_det_rows)
         print(f"\n✅ Det Report [New Method]: {det_csv}")
 
     if all_seg_rows:
-        seg_csv = os.path.join(NEW_CSV_DIR, "standart_seg.csv")
+        seg_csv = os.path.join(NEW_CSV_DIR, "golden_seg.csv")
         with open(seg_csv, "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=list(all_seg_rows[0].keys()))
             w.writeheader(); w.writerows(all_seg_rows)
         print(f"✅ Seg Report [New Method]: {seg_csv}")
 
-    print("\n  [Visual] Note: Untuk visualisasi new-method silakan jalankan utils/standar_evaluation_visuals-new_method.py")
+    print("\n  [Visual] Note: Untuk visualisasi new-method silakan jalankan utils/golden_evaluation_visuals-new_method.py")
