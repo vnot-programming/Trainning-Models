@@ -409,7 +409,7 @@ def eval_model_distributed(model_cfg: dict, gpu_ids: list, coco_gt_dict: dict, i
     gpu_str = _gpu_report_str(gpu_ids)
     
     det_row = None
-    if model_cfg["type"] in ["yolo_det", "hybrid"]:
+    if model_cfg["type"] in ["yolo_det", "hybrid_det"]:
         det_row = {
             "Model": model_cfg["label"],
             "Weights Size (MB)": weights_mb,
@@ -423,7 +423,7 @@ def eval_model_distributed(model_cfg: dict, gpu_ids: list, coco_gt_dict: dict, i
         }
     
     seg_row = None
-    if mAP50_mask != "N/A" or model_cfg["type"] in ["yolo_seg", "maskrcnn", "hybrid"]:
+    if mAP50_mask != "N/A" or model_cfg["type"] in ["yolo_seg", "maskrcnn", "hybrid_seg"]:
         seg_row = {
             "Model": model_cfg["label"],
             "Weights Size (MB)": weights_mb,
