@@ -21,7 +21,7 @@ Fungsi publik:
 from roboflow import Roboflow
 rf = Roboflow(api_key="F0VtV8b5YBdJHZbasy0w")
 project = rf.workspace("wbc-laboratory").project("me-bottle-isempty-ku3")
-version = project.version(8)
+version = project.version(12)
 dataset = version.download("coco")
 
 # Instance Segmentation
@@ -29,9 +29,8 @@ dataset = version.download("coco")
 from roboflow import Roboflow
 rf = Roboflow(api_key="F0VtV8b5YBdJHZbasy0w")
 project = rf.workspace("wbc-laboratory").project("segpoligon-me-bottle-isempty3")
-version = project.version(7)
+version = project.version(10)
 dataset = version.download("coco-segmentation")
-
 
 # Golden Dataset Segmentation - For Evaluation
 !pip install roboflow
@@ -44,7 +43,7 @@ dataset = project.version(1).download("coco-segmentation")
 !pip install roboflow
 from roboflow import Roboflow
 rf = Roboflow(api_key="tjeBcHkWc1oOc0oOv9kI")
-project = rf.workspace("vnot").project("me-bottle-isempty-unu3-sem-seg")
+project = rf.workspace("vnot").project("me-bottle-isempty-unu3-det")
 version = project.version(7)
 dataset = version.download("coco-segmentation")
 
@@ -74,26 +73,35 @@ _KEY_NAME     = "ROBOFLOW_KU_KEY1"
 _KEY_NAME_UNU = "ROBOFLOW_UNU_KEY1"
 
 # Roboflow project info
-# _DET_WORKSPACE  = "wbc-laboratory"
-# _DET_PROJECT    = "me-bottle-isempty-ku3"
-# _DET_VERSION    = 7
-# _DET_FORMAT     = "yolov11"
-
-# _SEG_WORKSPACE  = "wbc-laboratory"
-# _SEG_PROJECT    = "segpoligon-me-bottle-isempty3"
-# _SEG_VERSION    = 5
-# _SEG_FORMAT     = "yolov11"
-
 _DET_WORKSPACE  = "wbc-laboratory"
 _DET_PROJECT    = "me-bottle-isempty-ku3"
-_DET_VERSION    = 8
+_DET_VERSION    = 12
 _DET_FORMAT     = "yolov11"
 
 _SEG_WORKSPACE  = "wbc-laboratory"
 _SEG_PROJECT    = "segpoligon-me-bottle-isempty3"
-_SEG_VERSION    = 7
+_SEG_VERSION    = 10
 _SEG_FORMAT     = "yolov11"
 
+GOLDEN_SEG_WORKSPACE  = "vnot"
+GOLDEN_SEG_PROJECT    = "me-bottle-isempty-unu3-sem-seg"
+GOLDEN_SEG_VERSION    = 1
+GOLDEN_SEG_FORMAT     = "coco-segmentation"
+
+GOLDEN_DET_WORKSPACE  = "vnot"
+GOLDEN_DET_PROJECT    = "me-bottle-isempty-unu3-det"
+GOLDEN_DET_VERSION    = 7
+GOLDEN_DET_FORMAT     = "coco"
+
+STANDAR_SEG_WORKSPACE  = "vnot"
+STANDAR_SEG_PROJECT    = "me-bottle-isempty-ku3-h61lr-seg"
+STANDAR_SEG_VERSION    = 1
+STANDAR_SEG_FORMAT     = "coco-segmentation"
+
+STANDAR_DET_WORKSPACE  = "vnot"
+STANDAR_DET_PROJECT    = "me-bottle-isempty-ku3-h61lr"
+STANDAR_DET_VERSION    = 2
+STANDAR_DET_FORMAT     = "coco"
 
 # ==============================================================================
 # DATASETS_DIR — dari config_shared (jika sudah diimport), atau fallback manual
@@ -151,7 +159,7 @@ def load_api_key() -> tuple[str | None, str | None]:
 
 
 # ==============================================================================
-# DATASET DETEKSI
+# DATASET DETEKSI - Khusus Training
 # ==============================================================================
 def setup_detection_dataset(key: str | None) -> tuple[str, str]:
     """
@@ -194,7 +202,7 @@ def setup_detection_dataset(key: str | None) -> tuple[str, str]:
 
 
 # ==============================================================================
-# DATASET SEGMENTASI
+# DATASET SEGMENTASI - Khusus Training
 # ==============================================================================
 def setup_segmentation_dataset(key: str | None) -> tuple[str, str]:
     """
@@ -260,13 +268,13 @@ def setup_coco_segmentation_dataset_unu(key_unu: str | None) -> str:
     try:
         from roboflow import Roboflow
         rf = Roboflow(api_key=key_unu)
-        project = rf.workspace("vnot").project("me-bottle-isempty-unu3-sem-seg")
+        project = rf.workspace(GOLDEN_SEG_WORKSPACE).project(GOLDEN_SEG_PROJECT)
         
         datasets_dir = _get_datasets_dir()
         target_loc = str(datasets_dir / "golden_dataset_seg")
         
-        dataset = project.version(7).download(
-            "coco-segmentation",
+        dataset = project.version(GOLDEN_SEG_VERSION).download(
+            GOLDEN_SEG_FORMAT,
             location=target_loc,
             overwrite=False
         )
@@ -308,13 +316,13 @@ def setup_coco_detection_dataset_unu(key_unu: str | None) -> str:
     try:
         from roboflow import Roboflow
         rf = Roboflow(api_key=key_unu)
-        project = rf.workspace("vnot").project("me-bottle-isempty-unu3-det")
+        project = rf.workspace(GOLDEN_DET_WORKSPACE).project(GOLDEN_DET_PROJECT)
         
         datasets_dir = _get_datasets_dir()
         target_loc = str(datasets_dir / "golden_dataset_det")
         
-        dataset = project.version(1).download(
-            "coco",
+        dataset = project.version(GOLDEN_DET_VERSION).download(
+            GOLDEN_DET_FORMAT,
             location=target_loc,
             overwrite=False
         )
@@ -344,13 +352,13 @@ def setup_h61lr_detection_dataset(key_unu: str | None) -> str:
     try:
         from roboflow import Roboflow
         rf = Roboflow(api_key=key_unu)
-        project = rf.workspace("vnot").project("me-bottle-isempty-ku3-h61lr")
+        project = rf.workspace(STANDAR_DET_WORKSPACE).project(STANDAR_DET_PROJECT)
         
         datasets_dir = _get_datasets_dir()
         target_loc = str(datasets_dir / "standard_datasets_det")
         
-        dataset = project.version(2).download(
-            "coco",
+        dataset = project.version(STANDAR_DET_VERSION).download(
+            STANDAR_DET_FORMAT,
             location=target_loc,
             overwrite=False
         )
@@ -380,13 +388,13 @@ def setup_h61lr_segmentation_dataset(key_unu: str | None) -> str:
     try:
         from roboflow import Roboflow
         rf = Roboflow(api_key=key_unu)
-        project = rf.workspace("vnot").project("me-bottle-isempty-ku3-h61lr-seg")
+        project = rf.workspace(STANDAR_SEG_WORKSPACE).project(STANDAR_SEG_PROJECT)
         
         datasets_dir = _get_datasets_dir()
         target_loc = str(datasets_dir / "standard_datasets_seg")
         
-        dataset = project.version(1).download(
-            "coco-segmentation",
+        dataset = project.version(STANDAR_SEG_VERSION).download(
+            STANDAR_SEG_FORMAT,
             location=target_loc,
             overwrite=False
         )
