@@ -163,6 +163,15 @@ YOLO_BATCH_SIZE     = 64   # DDP total (dibagi ke semua GPU oleh Ultralytics)
 MASKRCNN_BATCH_SIZE = 8    # 4
 NUM_WORKERS         = 14    # 16
 
+# ==============================================================================
+# HYPERPARAMETER PARALEL & EARLY STOPPING (Standard 2026)
+# ==============================================================================
+PARALLEL_TRAINING        = True  # Skenario 1 GPU = 1 Model
+EARLY_STOPPING_PATIENCE  = 20    # Patience untuk YOLO dan Mask R-CNN
+PARALLEL_GPUS            = "0,1"  # Default GPU list untuk parallel training
+
+
+
 # Cara menghitung manualnya didasarkan pada **kapasitas VRAM GPU** dan **jumlah CPU Core** yang tersedia. Berikut adalah panduan hitungan manual untuk meningkatkan performa di RunPod Anda:
 
 # ### 1. Menghitung `YOLO_BATCH_SIZE` (Total Batch)

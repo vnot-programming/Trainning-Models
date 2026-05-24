@@ -29,7 +29,8 @@ except ImportError:
 from config_shared import (
     WORKSPACE_DIR, DET_YAML, SEG_YAML, MODELS_DIR,
     EPOCHS, IMAGE_SIZE, YOLO_BATCH_SIZE, get_output_dir, compress_run,
-    save_yolo_visual_samples, parse_device, download_and_move_model, REPORTS_DIR
+    save_yolo_visual_samples, parse_device, download_and_move_model, REPORTS_DIR,
+    EARLY_STOPPING_PATIENCE
 )
 from telegram_utils import get_yolo_callbacks, send_telegram_msg
 import argparse
@@ -53,6 +54,8 @@ parser.add_argument(
     help="GPU yang digunakan. Contoh: '0', '1,2', '0,1,2', 'cpu'. "
          "Default: semua GPU tersedia."
 )
+parser.add_argument("--skip-eval", action="store_true",
+    help="Skip automatic evaluation after training")
 args = parser.parse_args()
 
 if args.device is not None:
@@ -95,7 +98,7 @@ def _train(model_pt, yaml_path, run_name, label):
         # Tambahkan Telegram Callbacks (meskipun resume)
         for k, v in get_yolo_callbacks(label).items():
             model.add_callback(k, v)
-        model.train(resume=True)
+        model.train(resume=True, patience=EARLY_STOPPING_PATIENCE)
     else:
         print(f"\n{'='*60}\n  {label}\n{'='*60}")
         model = YOLO(model_pt)
@@ -105,7 +108,7 @@ def _train(model_pt, yaml_path, run_name, label):
             
         model.train(data=yaml_path, epochs=EPOCHS, imgsz=IMAGE_SIZE, batch=YOLO_BATCH_SIZE,
                     project=os.path.dirname(out_dir), name=os.path.basename(out_dir),
-                    exist_ok=True, device=DEVICE)
+                    exist_ok=True, device=DEVICE, patience=EARLY_STOPPING_PATIENCE)
 
     # Tandai training selesai
     with open(done_flag, "w") as f:
@@ -438,13 +441,17 @@ report_dir = REPORTS_DIR
 os.makedirs(report_dir, exist_ok=True)
 
 # Evaluasi Multi-GPU menggunakan eval_multigpu.py
-print("\n" + "="*65 + "\n  Menjalankan Evaluasi Multi-GPU YOLOv8m & YOLOv8m-Seg\n" + "="*65)
-import subprocess
-import sys
-try:
-    subprocess.run([sys.executable, "-u", "eval_multigpu.py", "--gpus", "all"], check=True)
-except subprocess.CalledProcessError as e:
-    print(f"\n⚠️ Evaluasi Multi-GPU gagal: {e}")
+if not args.skip_eval:
+    print("\n" + "="*65 + "\n  Menjalankan Evaluasi Multi-GPU YOLOv8m & YOLOv8m-Seg\n" + "="*65)
+    import subprocess
+    import sys
+    eval_gpu = args.device if args.device is not None else "all"
+    try:
+        subprocess.run([sys.executable, "-u", "eval_multigpu.py", "--gpus", str(eval_gpu)], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"\n⚠️ Evaluasi Multi-GPU gagal: {e}")
+else:
+    print("\n[Skip] Evaluasi Multi-GPU dilewati karena argumen --skip-eval aktif.")
 
 # ------ Kompres folder hasil training ------
 try:

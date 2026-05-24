@@ -41,8 +41,16 @@ import cv2
 import numpy as np
 from ultralytics import YOLO, SAM
 
-DEVICE = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
-print(f"[Device] {DEVICE}")
+import argparse
+parser = argparse.ArgumentParser(description="Hybrid Pipeline Evaluation")
+parser.add_argument("--device", type=str, default="0",
+                    help="GPU device index to use (e.g. '0' or '1')")
+parser.add_argument("--skip-eval", action="store_true",
+                    help="Skip step 9 distributed DDP evaluation")
+args = parser.parse_args()
+
+DEVICE = torch.device(f"cuda:{args.device}") if torch.cuda.is_available() and args.device.lower() != "cpu" else torch.device("cpu")
+print(f"[Device] Hybrid Eval → {DEVICE}")
 def get_gpu_report_str():
     """Get GPU report string (e.g., '1x NVIDIA RTX 3060' or '2x NVIDIA RTX 3060')."""
     if not torch.cuda.is_available():
@@ -840,11 +848,14 @@ if __name__ == "__main__":
     evaluate_hybrid_map()
 
     # --- 9. Distributed Multi-GPU Evaluation ---
-    print("\n[9] Distributed Multi-GPU Evaluation...")
-    try:
-        import subprocess
-        subprocess.run([sys.executable, "-u", "eval_multigpu.py", "--gpus", "all"], check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"⚠️ Evaluasi Multi-GPU gagal: {e}")
+    if not args.skip_eval:
+        print("\n[9] Distributed Multi-GPU Evaluation...")
+        try:
+            import subprocess
+            subprocess.run([sys.executable, "-u", "eval_multigpu.py", "--gpus", str(args.device)], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️ Evaluasi Multi-GPU gagal: {e}")
+    else:
+        print("\n[9] [Skip] Distributed Multi-GPU Evaluation dilewati karena argumen --skip-eval aktif.")
 
     send_telegram_msg(f"✅ <b>Hybrid Pipeline Finished</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>")

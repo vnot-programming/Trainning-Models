@@ -61,7 +61,7 @@ sys.path.insert(0, _TRAIN_ENGINE)
 from config_shared import (
     WORKSPACE_DIR, SEG_DATASET_LOCATION, REPORTS_DIR, VISUALS_DIR,
     IMAGE_SAMPLES_DIR, MODEL_COLORS, NUM_CLASSES, EPOCHS,
-    MASKRCNN_BATCH_SIZE, NUM_WORKERS, compress_run
+    MASKRCNN_BATCH_SIZE, NUM_WORKERS, compress_run, EARLY_STOPPING_PATIENCE
 )
 from telegram_utils import send_telegram_msg
 
@@ -300,6 +300,7 @@ def train_worker(local_rank: int, gpu_ids: list, best_pt_path: str, world_size: 
     scheduler = StepLR(optimizer, step_size=LR_STEP, gamma=LR_GAMMA)
 
     best_val_loss = float("inf")
+    patience_counter = 0
     start_epoch   = 1
 
     # ── Resume dari checkpoint jika ada ─────────────────────────────────────
@@ -347,7 +348,21 @@ def train_worker(local_rank: int, gpu_ids: list, best_pt_path: str, world_size: 
 
             if avg_val_sync < best_val_loss:
                 best_val_loss = avg_val_sync
+                patience_counter = 0
                 save_best_model(model, best_pt_path, best_val_loss)
+            else:
+                patience_counter += 1
+                print(f"  [EarlyStopping] Patience: {patience_counter}/{EARLY_STOPPING_PATIENCE}")
+                if patience_counter >= EARLY_STOPPING_PATIENCE:
+                    print(f"  [EarlyStopping] Patience threshold reached on rank 0!")
+
+        # Sync stop flag across all processes in DDP group
+        stop_tensor = torch.tensor(1 if patience_counter >= EARLY_STOPPING_PATIENCE else 0, device=device)
+        dist.all_reduce(stop_tensor, op=dist.ReduceOp.MAX)
+        if stop_tensor.item() == 1:
+            if local_rank == 0:
+                print(f"  [EarlyStopping] Synchronized early stopping triggered across all GPUs at epoch {epoch}.")
+            break
 
     if local_rank == 0:
         print(f"\n✅ Training selesai. Best model: {best_pt_path}")
@@ -687,6 +702,10 @@ if __name__ == "__main__":
         help="GPU index yang digunakan, pisahkan koma. Default: 'all' (semua GPU). "
              "Contoh: '1,2' untuk GPU 1 dan 2, '0' untuk single GPU 0."
     )
+    parser.add_argument(
+        "--skip-eval", action="store_true",
+        help="Skip evaluation phase after training"
+    )
     args = parser.parse_args()
 
     # Auto-detect semua GPU jika --gpus tidak dispesifikasi atau "all"
@@ -763,48 +782,47 @@ if __name__ == "__main__":
     # ── Post-training: latency + report + visual (semua di GPU pertama) ──────
     eval_device = torch.device(f"cuda:{GPU_IDS[0]}")
 
-    if not os.path.exists(best_pt):
-        print("❌ best.pt tidak ditemukan setelah training. Cek log untuk error.")
-        sys.exit(1)
+    if not args.skip_eval:
+        size_mb         = round(os.path.getsize(best_pt) / 1e6, 2)
+        lat_ms, fps_val = measure_latency(best_pt, eval_device)
+        map_box, map_mask = evaluate_map(best_pt, eval_device)
 
-    size_mb         = round(os.path.getsize(best_pt) / 1e6, 2)
-    lat_ms, fps_val = measure_latency(best_pt, eval_device)
-    map_box, map_mask = evaluate_map(best_pt, eval_device)
+        # ── CSV Report ───────────────────────────────────────────────────────────
+        os.makedirs(REPORT_DIR, exist_ok=True)
+        csv_path = os.path.join(REPORT_DIR, "report_maskrcnn_ddp_seg.csv")
+        fields   = ["Model", "Model Size (MB)", "mAP50-95(Box)",
+                    "mAP50-95(Mask)", "Latency (ms)", "FPS", "GPUs", "Evaluator"]
 
-    # ── CSV Report ───────────────────────────────────────────────────────────
-    os.makedirs(REPORT_DIR, exist_ok=True)
-    csv_path = os.path.join(REPORT_DIR, "report_maskrcnn_ddp_seg.csv")
-    fields   = ["Model", "Model Size (MB)", "mAP50-95(Box)",
-                "mAP50-95(Mask)", "Latency (ms)", "FPS", "GPUs", "Evaluator"]
+        # Ambil nama merk GPU & hitung jumlahnya (e.g. "2x NVIDIA RTX 3060")
+        from collections import Counter
+        gpu_names = [torch.cuda.get_device_name(i) for i in GPU_IDS]
+        counts = Counter(gpu_names)
+        gpu_report_str = ", ".join([f"{count}x {name}" for name, count in counts.items()])
 
-    # Ambil nama merk GPU & hitung jumlahnya (e.g. "2x NVIDIA RTX 3060")
-    from collections import Counter
-    gpu_names = [torch.cuda.get_device_name(i) for i in GPU_IDS]
-    counts = Counter(gpu_names)
-    gpu_report_str = ", ".join([f"{count}x {name}" for name, count in counts.items()])
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=fields)
+            w.writeheader()
+            w.writerow({
+                "Model":           "Mask R-CNN ResNet-50 FPN-v2",
+                "Model Size (MB)": size_mb,
+                "mAP50-95(Box)":   map_box,
+                "mAP50-95(Mask)":  map_mask,
+                "Latency (ms)":     lat_ms,
+                "FPS":             fps_val,
+                "GPUs":            gpu_report_str,
+                "Evaluator":       "COCOeval",
+            })
+        print(f"\n✅ Report: {csv_path}")
 
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fields)
-        w.writeheader()
-        w.writerow({
-            "Model":           "Mask R-CNN ResNet-50 FPN-v2",
-            "Model Size (MB)": size_mb,
-            "mAP50-95(Box)":   map_box,
-            "mAP50-95(Mask)":  map_mask,
-            "Latency (ms)":     lat_ms,
-            "FPS":             fps_val,
-            "GPUs":            gpu_report_str,
-            "Evaluator":       "COCOeval",
-        })
-    print(f"\n✅ Report: {csv_path}")
-
-    # ── Evaluasi Multi-GPU ───────────────────────────────────────────────────────
-    print("\n" + "="*65 + "\n  Menjalankan Evaluasi Multi-GPU Mask R-CNN\n" + "="*65)
-    try:
-        import subprocess
-        subprocess.run([sys.executable, "-u", "eval_multigpu.py", "--gpus", "all"], check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"⚠️ Evaluasi Multi-GPU gagal: {e}")
+        # ── Evaluasi Multi-GPU ───────────────────────────────────────────────────────
+        print("\n" + "="*65 + "\n  Menjalankan Evaluasi Multi-GPU Mask R-CNN\n" + "="*65)
+        try:
+            import subprocess
+            subprocess.run([sys.executable, "-u", "eval_multigpu.py", "--gpus", args.gpus], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"⚠️ Evaluasi Multi-GPU gagal: {e}")
+    else:
+        print("\n[Skip] Evaluasi Mask R-CNN dilewati karena argumen --skip-eval aktif.")
 
     # ── Kompres folder hasil training ───────────────────────────────────────
     compress_run(OUTPUT_KEY)
