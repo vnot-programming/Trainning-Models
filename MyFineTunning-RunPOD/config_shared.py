@@ -146,22 +146,22 @@ GPU_COOLDOWN_SEC       = 15     # Jeda (detik) setelah training selesai
 # ==============================================================================
 # HYPERPARAMETER RunPOD
 # ==============================================================================
-EPOCHS              = 100
-IMAGE_SIZE          = 640
-NUM_CLASSES         = 7
-YOLO_BATCH_SIZE     = 96   # DDP total (dibagi ke semua GPU oleh Ultralytics)
-MASKRCNN_BATCH_SIZE = 10    # 4
-NUM_WORKERS         = 14    # 16
+# EPOCHS              = 100
+# IMAGE_SIZE          = 640
+# NUM_CLASSES         = 7
+# YOLO_BATCH_SIZE     = 96   # DDP total (dibagi ke semua GPU oleh Ultralytics)
+# MASKRCNN_BATCH_SIZE = 10    # 4
+# NUM_WORKERS         = 14    # 16
 
 # ==============================================================================
 # HYPERPARAMETER RunPOD - Opsi Lain
 # ==============================================================================
-# EPOCHS              = 100
-# IMAGE_SIZE          = 640
-# NUM_CLASSES         = 7
-# YOLO_BATCH_SIZE     = 80    # Sangat aman dan optimal
-# MASKRCNN_BATCH_SIZE = 12    # Titik tengah yang paling aman untuk VRAM 20GB
-# NUM_WORKERS         = 10    # Jangan dinaikkan, CPU Core Anda 48
+EPOCHS              = 100
+IMAGE_SIZE          = 640
+NUM_CLASSES         = 7
+YOLO_BATCH_SIZE     = 64   # DDP total (dibagi ke semua GPU oleh Ultralytics)
+MASKRCNN_BATCH_SIZE = 8    # 4
+NUM_WORKERS         = 14    # 16
 
 # Cara menghitung manualnya didasarkan pada **kapasitas VRAM GPU** dan **jumlah CPU Core** yang tersedia. Berikut adalah panduan hitungan manual untuk meningkatkan performa di RunPod Anda:
 

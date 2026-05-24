@@ -133,20 +133,25 @@ NUM_CLASSES         = 7
 YOLO_BATCH_SIZE     = 16   # 64    # DDP total (dibagi ke semua GPU oleh Ultralytics)
 MASKRCNN_BATCH_SIZE = 8    # 4     # Single GPU cuda:0
 NUM_WORKERS         = 10    # 16
-EVAL_CONF           = 0.001 # Ambang batas confidence minimum untuk evaluasi (YOLO)
-EVAL_IOU            = 0.6   # Ambang batas IOU untuk evaluasi NMS (YOLO)
-VISUAL_CONF         = 0.25  # Ambang batas confidence untuk visualisasi
-VISUAL_IOU          = 0.6   # Ambang batas IOU untuk NMS saat visualisasi
-# IOU => iou berfungsi sebagai filter tumpang tindih.
+Default_EVAL_CONF   = 0.001
+Default_EVAL_IOU    = 0.6
+Default_VISUAL_CONF = 0.75
+Default_VISUAL_IOU  = 0.15
+EVAL_CONF           = 0.75 # Ambang batas confidence minimum untuk evaluasi (YOLO)
+EVAL_IOU            = 0.15   # Ambang batas IOU untuk evaluasi NMS (YOLO)
+VISUAL_CONF         = 0.75  # Ambang batas confidence untuk visualisasi
+VISUAL_IOU          = 0.15   # Ambang batas IOU untuk NMS saat visualisasi
+# IOU => iou berfungsi sebagai filter tumpang tindih. Proses menyaring kotak yang tumpang tindih ini secara teknis disebut sebagai NMS (Non-Maximum Suppression), dan nilai iou adalah alat ukur yang digunakan untuk menentukannya.
+# CONF => conf berfungsi sebagai filter penentu "jadi dideteksi atau tidak". Jika tingkat keyakinan model terhadap sebuah objek di bawah nilai conf ➡️ Dibuang (dianggap tidak valid / tidak dideteksi). Jika tingkat keyakinan model di atas atau sama dengan nilai conf ➡️ Diterima (diloloskan sebagai hasil deteksi). Jadi, jika ingin model hanya menampilkan objek yang benar-benar ia yakini 100% (agar tidak ada salah tebak)
 # ==============================================================================
 # HYPERPARAMETER RunPOD
 # ==============================================================================
 # EPOCHS              = 100
 # IMAGE_SIZE          = 640
 # NUM_CLASSES         = 7
-# YOLO_BATCH_SIZE     = 160   # DDP total (dibagi ke semua GPU oleh Ultralytics)
-# MASKRCNN_BATCH_SIZE = 16    # 4
-# NUM_WORKERS         = 32    # 16
+# YOLO_BATCH_SIZE     = 160
+# MASKRCNN_BATCH_SIZE = 16
+# NUM_WORKERS         = 32
 
 # Cara menghitung manualnya didasarkan pada **kapasitas VRAM GPU** dan **jumlah CPU Core** yang tersedia. Berikut adalah panduan hitungan manual untuk meningkatkan performa di RunPod Anda:
 
