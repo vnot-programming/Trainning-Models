@@ -54,7 +54,8 @@ MODELS_CONFIG = [
     {"label": "YOLOv9c-Seg", "key": "yolov9c_seg", "type": "yolo_seg"},
     {"label": "YOLO11l-Seg", "key": "yolo11l_seg", "type": "yolo_seg"},
     {"label": "Mask R-CNN", "key": "maskrcnn", "type": "maskrcnn"},
-    {"label": "Hybrid", "key": "hybrid", "type": "hybrid"}
+    {"label": "Hybrid", "key": "hybrid", "type": "hybrid_det"},
+    {"label": "Hybrid", "key": "hybrid", "type": "hybrid_seg"}
 ]
 
 # ==============================================================================
@@ -174,10 +175,10 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
             pt = os.path.join(get_output_dir("maskrcnn"), "weights", "best.pt")
             model_obj.load_state_dict(torch.load(pt, map_location=device_str, weights_only=True))
             model_obj.to(device_str).eval()
-        elif mtype == "hybrid":
+        elif mtype in ["hybrid_det", "hybrid_seg"]:
             from ultralytics import YOLO, SAM
             # Dinamis memilih model dasar berdasarkan target dataset (deteksi vs segmentasi)
-            is_seg = "seg" in img_dir.lower()
+            is_seg = mtype == "hybrid_seg"
             if is_seg:
                 print(f"  [GPU:{gpu}] Hybrid menggunakan YOLO11l-Seg untuk generator prompt.")
                 model_obj = YOLO(YOLO11L_SEG_PATH)
@@ -257,7 +258,7 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
             t5 = time.perf_counter()
             spd_post = (t5 - t4) * 1000
                     
-        elif mtype == "hybrid":
+        elif mtype in ["hybrid_det", "hybrid_seg"]:
             res = model_obj.predict(img_path, conf=EVAL_CONF, iou=EVAL_IOU, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
             spd = res.speed
             spd_pre = spd.get("preprocess", 0.0)
@@ -538,9 +539,9 @@ if __name__ == "__main__":
 
     with tempfile.TemporaryDirectory(prefix="multigpu_eval_") as tmp_dir:
         for mcfg in MODELS_CONFIG:
-            if mcfg["type"] in ["yolo_det"]:
+            if mcfg["type"] in ["yolo_det", "hybrid_det"]:
                 target_info = det_info
-            elif mcfg["type"] in ["yolo_seg", "maskrcnn"]:
+            elif mcfg["type"] in ["yolo_seg", "maskrcnn", "hybrid_seg"]:
                 target_info = seg_info
             else:
                 target_info = seg_info
@@ -551,11 +552,11 @@ if __name__ == "__main__":
                 is_det_dataset = "det" in ep.lower()
                 is_seg_dataset = "seg" in ep.lower()
                 if is_det_dataset and not is_seg_dataset:
-                    if mcfg["type"] not in ["yolo_det", "hybrid"]:
+                    if mcfg["type"] not in ["yolo_det", "hybrid_det"]:
                         print(f"⏭️  Skip {mcfg['label']} (bukan model deteksi)")
                         continue
                 elif is_seg_dataset and not is_det_dataset:
-                    if mcfg["type"] not in ["yolo_seg", "maskrcnn", "hybrid"]:
+                    if mcfg["type"] not in ["yolo_seg", "maskrcnn", "hybrid_seg"]:
                         print(f"⏭️  Skip {mcfg['label']} (bukan model segmentasi)")
                         continue
 

@@ -324,7 +324,7 @@ def main():
         # Plot Grid Detection
         plot_grid(
             [img8_det, img9_det, img11_det, img_mrcnn_det, img_hybrid_det, img_gt_det],
-            ["YOLOv8m", "YOLOv9m", "YOLO11l (New)", "Mask R-CNN", "Hybrid (SAM2)", "Ground Truth"],
+            ["YOLOv8m", "YOLOv9m", "YOLO11l (New)", "Mask R-CNN", "Hybrid (Det)", "Ground Truth"],
             os.path.join(COMP_DET_DIR, f"grid_det_{img_name}")
         )
 
@@ -399,7 +399,7 @@ def main():
         # Plot Grid Seg
         plot_grid(
             [img8_seg, img9_seg, img11_seg, img_mrcnn_seg, img_hybrid_seg, img_gt_seg],
-            ["YOLOv8m-Seg", "YOLOv9c-Seg", "YOLO11l-Seg", "Mask R-CNN", "Hybrid (SAM2)", "Ground Truth"],
+            ["YOLOv8m-Seg", "YOLOv9c-Seg", "YOLO11l-Seg", "Mask R-CNN", "Hybrid (Seg)", "Ground Truth"],
             os.path.join(COMP_SEG_DIR, f"grid_seg_{img_name}")
         )
 
