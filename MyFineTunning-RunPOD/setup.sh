@@ -1,26 +1,23 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# setup.sh — Setup environment untuk MyFineTunning (RunPOD)
+# setup.sh — Setup environment untuk MyFineTunning (RunPOD / GPU Server)
 # ==============================================================================
 #
 # Cara pakai:
 #
-# 1. Background Execution (TMUX):
-#    tmux new-session -d -s setup_session "cd /root/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh 2>&1 | tee SetupReport.log"
-#    atau
-#    tmux new-session -d -s setup_session "cd C:\Users\Server\Documents\~S3\Tunning\MyFineTunning-20260502_134510-RunPOD && bash setup.sh 2>&1 | tee SetupReport.log"
+# 1. Background Execution via TMUX (Sangat Direkomendasikan untuk Cloud):
+#    tmux new-session -d -s setup_session "cd /home/my/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh 2>&1 | tee SetupReport.log"
 #
 # 2. Direct Execution:
-#    cd /home/my/Trainning-Models/MyFineTunning-dev && bash setup.sh
-#    atau
-#    cd /mnt/c/Users/Server/Documents/~S3/Tunning/MyFineTunning-20260502_134510-RunPOD && bash setup.sh
-# 3. Mode Options:
-#    bash setup.sh            ← Standard (New .venv)
-#    bash setup.sh --reuse    ← Reuse MyTrainEngine .venv
+#    cd /home/my/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh
 #
-# Setelah setup:
+# 3. Mode Options:
+#    bash setup.sh            ← Standar (Membuat/memperbarui .venv lokal terisolasi)
+#    bash setup.sh --reuse    ← Menggunakan ulang .venv bersama dari MyTrainEngine
+#
+# Setelah setup sukses:
 #   source .venv/bin/activate
-#   python main.py           ← Jalankan root setup
+#   python run_pipeline_parallel.py              ← Menjalankan Multi-GPU Parallel Pipeline Scheduler (Cerdas)
 # ==============================================================================
 
 set -e  # Exit langsung jika ada error
