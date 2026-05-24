@@ -12,7 +12,7 @@ Cara pakai:
   python3 utils/standar_evaluation-new_method.py --dataset default --gpus 0,1
 
 # Default dari path manapun
-  tmux new-session -d -s standar_evaluation "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/standar_evaluation-new_method.py 2>&1 | tee utils/standar_evaluation-new_method.log"
+  tmux new-session -d -s standar_evaluation-new_method "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/standar_evaluation-new_method.py 2>&1 | tee utils/standar_evaluation-new_method.log"
 
 """
 
@@ -390,7 +390,7 @@ def eval_model_distributed(model_cfg: dict, gpu_ids: list, coco_gt_dict: dict, i
             p_valid = p_iou50[p_iou50 > -1]
             precision_box = round(float(np.mean(p_valid)), 4) if len(p_valid) > 0 else "N/A"
             
-        if all_dt_segm:
+        if all_dt_segm and is_seg:
             coco_dt_seg = coco_gt.loadRes(all_dt_segm)
             eval_seg = COCOeval(coco_gt, coco_dt_seg, iouType="segm")
             eval_seg.evaluate(); eval_seg.accumulate(); eval_seg.summarize()
