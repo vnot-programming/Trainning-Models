@@ -563,7 +563,7 @@ if __name__ == "__main__":
             if d_row: all_det_rows.append(d_row)
             if s_row: all_seg_rows.append(s_row)
 
-    NEW_CSV_DIR = "/home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/reports/paper1/csv/new-method"
+    NEW_CSV_DIR = os.path.join(PAPER1_CSV_DIR, "new-method")
     os.makedirs(NEW_CSV_DIR, exist_ok=True)
     
     if all_det_rows:
