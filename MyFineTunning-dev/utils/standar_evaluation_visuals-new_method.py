@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-utils/standar_evaluation_visuals.py
+utils/standar_evaluation_visuals-new_method.py
 ====================================
-Visualisasi bukti konsep untuk evaluasi Standard Dataset.
+Visualisasi bukti konsep untuk evaluasi Standard Dataset menggunakan metode hybrid baru (YOLO11l + SAM2).
 
-Menggunakan dataset yang sama persis dengan standar_evaluation.py:
-  - DET_DATASET_LOCATION (standard_datasets_det)
-  - SEG_DATASET_LOCATION (standard_datasets_seg)
+Menggunakan model YOLO11l hasil training terbaru:
+  - YOLO11l Deteksi:  /home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l/weights/best.pt
+  - YOLO11l Segmentasi: /home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l_seg/weights/best.pt
 
 Cara pakai:
-  tmux new-session -d -s standar_evaluation_visuals "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/standar_evaluation_visuals.py 2>&1 | tee utils/standar_evaluation_visuals.log"
+  python3 utils/standar_evaluation_visuals-new_method.py
 
+# Default dari path manapun
+  tmux new-session -d -s standar_evaluation_visuals "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/standar_evaluation_visuals-new_method.py 2>&1 | tee utils/standar_evaluation_visuals-new_method.log"
 """
 import os
 import sys
@@ -30,31 +32,21 @@ sys.path.insert(0, ROOT)
 
 from ultralytics import YOLO, SAM
 from config_shared import (
-    get_output_dir, NUM_CLASSES, IMAGE_SIZE, PAPER1_VIS_DIR,
+    get_output_dir, NUM_CLASSES, IMAGE_SIZE,
     DET_DATASET_LOCATION, SEG_DATASET_LOCATION
 )
 from eval_unu_helpers import flush_gpu
 from eval_paper import load_maskrcnn
 
 # ====================================================================
-# Konfigurasi Direktori — Standard Dataset
+# Konfigurasi Direktori — Standard Dataset & New Method
 # ====================================================================
-# Resolusi otomatis: cari valid/ subdirectory
-def _resolve_valid_dir(dataset_loc):
-    """Cari folder valid/ di dalam dataset location."""
-    valid = os.path.join(dataset_loc, "valid")
-    if os.path.isdir(valid):
-        return valid
-    # Fallback: jika dataset_loc sendiri berisi gambar
-    if any(f.lower().endswith(('.jpg', '.png')) for f in os.listdir(dataset_loc)):
-        return dataset_loc
-    raise FileNotFoundError(f"Tidak ditemukan valid/ di {dataset_loc}")
+IMAGE_SAMPLES_DIR = "/home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/image_samples"
+YOLO11L_DET_PATH  = "/home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l/weights/best.pt"
+YOLO11L_SEG_PATH  = "/home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l_seg/weights/best.pt"
 
-STD_DET_DIR = _resolve_valid_dir(DET_DATASET_LOCATION)
-STD_SEG_DIR = _resolve_valid_dir(SEG_DATASET_LOCATION)
-
-# Output Directory — paper1/visuals/standard/
-STD_VIS_DIR    = os.path.join(PAPER1_VIS_DIR, "standard")
+# Output Directory — paper1/visuals/standard-new-method/
+STD_VIS_DIR    = "/home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/reports/paper1/visuals/standard-new-method"
 IMG_SAMPLE_DIR = os.path.join(STD_VIS_DIR, "images_sample")
 DET_OUT_DIR    = os.path.join(STD_VIS_DIR, "detection")
 SEG_OUT_DIR    = os.path.join(STD_VIS_DIR, "segmentation")
@@ -74,7 +66,9 @@ COLORS = []
 
 def init_classes_from_coco(coco_dir):
     global CLASS_NAMES, COLORS
-    json_path = os.path.join(coco_dir, "_annotations.coco.json")
+    json_path = os.path.join(coco_dir, "valid", "_annotations.coco.json")
+    if not os.path.exists(json_path):
+        json_path = os.path.join(coco_dir, "_annotations.coco.json")
     if not os.path.exists(json_path):
         CLASS_NAMES = ["Class"] * NUM_CLASSES
         COLORS = [(0, 255, 0)] * NUM_CLASSES
@@ -113,6 +107,7 @@ def draw_custom(image_path, boxes, masks, confs, clss, color=None):
         overlay = img.copy()
         for i in range(len(masks)):
             m = masks[i]
+            if m is None: continue
             c_color = color if color is not None else COLORS[int(clss[i]) % len(COLORS)]
             c_color_arr = np.array(c_color, dtype=np.uint8)
             colored_mask = np.zeros_like(img, dtype=np.uint8)
@@ -142,7 +137,7 @@ def draw_custom(image_path, boxes, masks, confs, clss, color=None):
     return img
 
 def load_gt_annotations(coco_dir):
-    json_path = os.path.join(coco_dir, "_annotations.coco.json")
+    json_path = os.path.join(coco_dir, "valid", "_annotations.coco.json")
     if not os.path.exists(json_path):
         return None
     from pycocotools.coco import COCO
@@ -196,7 +191,7 @@ def plot_grid(images, titles, save_path):
 # Main Execution
 # ====================================================================
 def main():
-    parser = argparse.ArgumentParser(description="Multi-GPU Evaluation Visuals")
+    parser = argparse.ArgumentParser(description="Multi-GPU Evaluation Visuals [New Method]")
     parser.add_argument("--gpus", type=str, default="all", help="Contoh: '0,1' atau 'all'.")
     args = parser.parse_args()
 
@@ -210,53 +205,62 @@ def main():
             print(f"❌ GPU {g} tidak tersedia (sistem punya {n_avail} GPU)."); sys.exit(1)
 
     print("=" * 65)
-    print("  Distributed Multi-GPU Evaluation Visuals")
+    print("  Distributed Multi-GPU Evaluation Visuals [New Method]")
     print("=" * 65)
     print(f"  GPU yang digunakan : {GPU_IDS}")
     print(f"  World size         : {len(GPU_IDS)}")
-    print(f"  Det Dataset: {STD_DET_DIR}")
-    print(f"  Seg Dataset: {STD_SEG_DIR}")
-    print(f"  Output Dir : {STD_VIS_DIR}\n")
+    print(f"  Image Samples Dir   : {IMAGE_SAMPLES_DIR}")
+    print(f"  YOLO11l Det Weights : {YOLO11L_DET_PATH}")
+    print(f"  YOLO11l Seg Weights : {YOLO11L_SEG_PATH}")
+    print(f"  Output Dir          : {STD_VIS_DIR}\n")
 
     device = torch.device(f"cuda:{GPU_IDS[0]}" if GPU_IDS else "cpu")
     device_str = ",".join(map(str, GPU_IDS))
 
-    # Inisialisasi Class Names secara dinamis
-    init_classes_from_coco(STD_SEG_DIR)
+    # Inisialisasi Class Names secara dinamis dari dataset asli
+    init_classes_from_coco(SEG_DATASET_LOCATION)
     print(f"✅ Kelas terdeteksi ({len(CLASS_NAMES)}): {CLASS_NAMES}")
 
-    # 1. Load Models (Detection)
+    # 1. Load Models (Detection & Segmentation)
     print("Loading Detection Models...")
     yolo8_det  = YOLO(os.path.join(get_output_dir("yolov8m"), "weights", "best.pt"))
     yolo9_det  = YOLO(os.path.join(get_output_dir("yolov9m"), "weights", "best.pt"))
-    yolo11_det = YOLO(os.path.join(get_output_dir("yolo11l"), "weights", "best.pt"))
+    
+    # YOLO11l menggunakan model deteksi terlatih terbaru
+    print(f"  -> Loading YOLO11l-Det: {YOLO11L_DET_PATH}")
+    yolo11_det = YOLO(YOLO11L_DET_PATH)
+    
     mrcnn_det  = load_maskrcnn(device)
 
     # 2. Load Models (Segmentation)
     print("Loading Segmentation Models...")
     yolo8_seg  = YOLO(os.path.join(get_output_dir("yolov8m_seg"), "weights", "best.pt"))
     yolo9_seg  = YOLO(os.path.join(get_output_dir("yolov9c_seg"), "weights", "best.pt"))
-    yolo11_seg = YOLO(os.path.join(get_output_dir("yolo11l_seg"), "weights", "best.pt"))
+    
+    # YOLO11l-Seg menggunakan model segmentasi terlatih terbaru
+    print(f"  -> Loading YOLO11l-Seg: {YOLO11L_SEG_PATH}")
+    yolo11_seg = YOLO(YOLO11L_SEG_PATH)
+    
     sam2_model = SAM(SAM_MODEL_PATH)
 
     # 3. Load GT
-    coco_det = load_gt_annotations(STD_DET_DIR)
-    coco_seg = load_gt_annotations(STD_SEG_DIR)
+    coco_det = load_gt_annotations(DET_DATASET_LOCATION)
+    coco_seg = load_gt_annotations(SEG_DATASET_LOCATION)
 
-    # Ambil daftar gambar dari SEG dataset
-    img_names = sorted([f for f in os.listdir(STD_SEG_DIR) if f.lower().endswith(('.jpg', '.png', '.jpeg'))])
-    print(f"Total gambar ditemukan: {len(img_names)}")
+    # Ambil daftar gambar dari folder image_samples
+    img_names = sorted([f for f in os.listdir(IMAGE_SAMPLES_DIR) if f.lower().endswith(('.jpg', '.png', '.jpeg'))])
+    print(f"Total gambar ditemukan di image_samples: {len(img_names)}")
 
     for idx, img_name in enumerate(img_names):
         print(f"[{idx+1}/{len(img_names)}] Memproses {img_name}...")
-        img_path = os.path.join(STD_SEG_DIR, img_name)
+        img_path = os.path.join(IMAGE_SAMPLES_DIR, img_name)
 
         # Simpan ke images_sample
         shutil.copy(img_path, os.path.join(IMG_SAMPLE_DIR, img_name))
 
         # --- TAHAP 1: DETECTION ---
         # 1. YOLOv8m
-        res8_det = yolo8_det.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+        res8_det = yolo8_det.predict(img_path, conf=0.25, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b8  = res8_det.boxes.xyxy.cpu().numpy() if res8_det.boxes else []
         c8  = res8_det.boxes.conf.cpu().numpy() if res8_det.boxes else []
         cls8 = res8_det.boxes.cls.cpu().numpy() if res8_det.boxes else []
@@ -264,15 +268,15 @@ def main():
         if img8_det is not None: cv2.imwrite(os.path.join(DET_OUT_DIR, f"yolov8m_{img_name}"), img8_det)
 
         # 2. YOLOv9m
-        res9_det = yolo9_det.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+        res9_det = yolo9_det.predict(img_path, conf=0.25, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b9  = res9_det.boxes.xyxy.cpu().numpy() if res9_det.boxes else []
         c9  = res9_det.boxes.conf.cpu().numpy() if res9_det.boxes else []
         cls9 = res9_det.boxes.cls.cpu().numpy() if res9_det.boxes else []
         img9_det = draw_custom(img_path, b9, None, c9, cls9, color=(255, 0, 0))
         if img9_det is not None: cv2.imwrite(os.path.join(DET_OUT_DIR, f"yolov9m_{img_name}"), img9_det)
 
-        # 3. YOLO11l
-        res11_det = yolo11_det.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+        # 3. YOLO11l (Deteksi)
+        res11_det = yolo11_det.predict(img_path, conf=0.25, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b11  = res11_det.boxes.xyxy.cpu().numpy() if res11_det.boxes else []
         c11  = res11_det.boxes.conf.cpu().numpy() if res11_det.boxes else []
         cls11 = res11_det.boxes.cls.cpu().numpy() if res11_det.boxes else []
@@ -287,7 +291,7 @@ def main():
         with torch.no_grad():
             preds = mrcnn_det(t_img)[0]
         scores_mrcnn = preds["scores"].cpu().numpy()
-        keep = scores_mrcnn >= 0.001
+        keep = scores_mrcnn >= 0.25
         bmrcnn   = preds["boxes"].cpu().numpy()[keep]
         cmrcnn   = scores_mrcnn[keep]
         clsmrcnn = preds["labels"].cpu().numpy()[keep] - 1
@@ -296,8 +300,20 @@ def main():
         img_mrcnn_det = draw_custom(img_path, bmrcnn, None, cmrcnn, clsmrcnn, color=(0, 255, 255))
         if img_mrcnn_det is not None: cv2.imwrite(os.path.join(DET_OUT_DIR, f"maskrcnn_{img_name}"), img_mrcnn_det)
 
-        # 5. Hybrid Detection (Sama dengan YOLO11l bbox)
-        img_hybrid_det = draw_custom(img_path, b11, None, c11, cls11, color=(255, 0, 255))
+        # 5. Hybrid Detection (YOLO11l-Det + SAM2)
+        sam_m_det = None
+        if len(b11) > 0:
+            try:
+                # Menggunakan format pemanggilan callable seperti di contoh_hybrid.py
+                sam_res_det = sam2_model(res11_det.orig_img, bboxes=b11.tolist(), device=device_str, verbose=False)[0]
+                if sam_res_det.masks is not None:
+                    sam_m_det = sam_res_det.masks.data.cpu().numpy()
+                    h, w = sam_res_det.orig_img.shape[:2]
+                    sam_m_det = np.array([cv2.resize(m.astype(np.float32), (w, h), interpolation=cv2.INTER_NEAREST) for m in sam_m_det])
+            except Exception as e:
+                print(f"  [SAM2-Det-Error] Gagal segmentasi hybrid det untuk {img_name}: {e}")
+
+        img_hybrid_det = draw_custom(img_path, b11, sam_m_det, c11, cls11, color=(255, 0, 255))
         if img_hybrid_det is not None: cv2.imwrite(os.path.join(DET_OUT_DIR, f"hybrid_{img_name}"), img_hybrid_det)
 
         # 6. GT Detection
@@ -307,13 +323,13 @@ def main():
         # Plot Grid Detection
         plot_grid(
             [img8_det, img9_det, img11_det, img_mrcnn_det, img_hybrid_det, img_gt_det],
-            ["YOLOv8m", "YOLOv9m", "YOLO11l", "Mask R-CNN", "Hybrid (YOLO11l)", "Ground Truth"],
+            ["YOLOv8m", "YOLOv9m", "YOLO11l (New)", "Mask R-CNN", "Hybrid (SAM2)", "Ground Truth"],
             os.path.join(COMP_DET_DIR, f"grid_det_{img_name}")
         )
 
         # --- TAHAP 2: SEGMENTATION ---
         # 1. YOLOv8m-Seg
-        res8_seg = yolo8_seg.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+        res8_seg = yolo8_seg.predict(img_path, conf=0.25, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b8s  = res8_seg.boxes.xyxy.cpu().numpy() if res8_seg.boxes else []
         c8s  = res8_seg.boxes.conf.cpu().numpy() if res8_seg.boxes else []
         cls8s = res8_seg.boxes.cls.cpu().numpy() if res8_seg.boxes else []
@@ -326,7 +342,7 @@ def main():
         if img8_seg is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"yolov8m_seg_{img_name}"), img8_seg)
 
         # 2. YOLOv9c-Seg
-        res9_seg = yolo9_seg.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+        res9_seg = yolo9_seg.predict(img_path, conf=0.25, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b9s  = res9_seg.boxes.xyxy.cpu().numpy() if res9_seg.boxes else []
         c9s  = res9_seg.boxes.conf.cpu().numpy() if res9_seg.boxes else []
         cls9s = res9_seg.boxes.cls.cpu().numpy() if res9_seg.boxes else []
@@ -339,7 +355,7 @@ def main():
         if img9_seg is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"yolov9c_seg_{img_name}"), img9_seg)
 
         # 3. YOLO11l-Seg
-        res11_seg = yolo11_seg.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
+        res11_seg = yolo11_seg.predict(img_path, conf=0.25, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b11s  = res11_seg.boxes.xyxy.cpu().numpy() if res11_seg.boxes else []
         c11s  = res11_seg.boxes.conf.cpu().numpy() if res11_seg.boxes else []
         cls11s = res11_seg.boxes.cls.cpu().numpy() if res11_seg.boxes else []
@@ -359,15 +375,20 @@ def main():
         img_mrcnn_seg = draw_custom(img_path, bmrcnn, mmrcnn_resized, cmrcnn, clsmrcnn, color=(0, 255, 255))
         if img_mrcnn_seg is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"maskrcnn_{img_name}"), img_mrcnn_seg)
 
-        # 5. Hybrid Seg (YOLO11l + SAM2)
-        sam_m = None
-        if len(b11) > 0:
-            sam_res = sam2_model.predict(img_path, bboxes=b11, device=device_str, verbose=False)[0]
-            if sam_res.masks is not None:
-                sam_m = sam_res.masks.data.cpu().numpy()
-                h, w = sam_res.orig_img.shape[:2]
-                sam_m = np.array([cv2.resize(m.astype(np.float32), (w, h), interpolation=cv2.INTER_NEAREST) for m in sam_m])
-        img_hybrid_seg = draw_custom(img_path, b11, sam_m, c11, cls11, color=(255, 0, 255))
+        # 5. Hybrid Seg (YOLO11l-Seg + SAM2)
+        sam_m_seg = None
+        if len(b11s) > 0:
+            try:
+                # Menggunakan bbox dari YOLO11l-Seg sebagai prompt ke SAM2
+                sam_res_seg = sam2_model(res11_seg.orig_img, bboxes=b11s.tolist(), device=device_str, verbose=False)[0]
+                if sam_res_seg.masks is not None:
+                    sam_m_seg = sam_res_seg.masks.data.cpu().numpy()
+                    h, w = sam_res_seg.orig_img.shape[:2]
+                    sam_m_seg = np.array([cv2.resize(m.astype(np.float32), (w, h), interpolation=cv2.INTER_NEAREST) for m in sam_m_seg])
+            except Exception as e:
+                print(f"  [SAM2-Seg-Error] Gagal segmentasi hybrid seg untuk {img_name}: {e}")
+
+        img_hybrid_seg = draw_custom(img_path, b11s, sam_m_seg, c11s, cls11s, color=(255, 0, 255))
         if img_hybrid_seg is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"hybrid_{img_name}"), img_hybrid_seg)
 
         # 6. GT Seg
@@ -383,7 +404,7 @@ def main():
 
         flush_gpu("Per Image")
 
-    print(f"\n✅ Standard Evaluation Visuals selesai.")
+    print(f"\n✅ Standard Evaluation Visuals [New Method - Dual Path] selesai.")
     print(f"   Output: {STD_VIS_DIR}")
 
 if __name__ == "__main__":

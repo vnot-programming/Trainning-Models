@@ -1,26 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-hybrid/eval_multigpu.py
+utils/standar_evaluation-new_method.py
 ========================
-Distributed Multi-GPU Evaluation untuk Seluruh Pipeline (YOLO, Mask R-CNN, Hybrid).
+Distributed Multi-GPU Evaluation untuk Seluruh Pipeline menggunakan metode hybrid baru (YOLO11l + SAM2).
 
-Strategi Evaluasi Terdistribusi:
-  - Setiap GPU memuat model (YOLO, Mask R-CNN, atau Hybrid) secara terpisah
-  - Setiap GPU memproses subset gambar yang berbeda (data parallelism)
-  - Hasil prediksi dikumpulkan dan dievaluasi via COCOeval di proses utama
+Menggunakan model YOLO11l hasil training terbaru:
+  - YOLO11l Deteksi:  /home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l/weights/best.pt
+  - YOLO11l Segmentasi: /home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l_seg/weights/best.pt
 
-python hybrid/eval_multigpu.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/me-bottle-isempty-ku3-h61lr-2-yolov11/data.yaml
-
-tmux new-session -d -s standar_evaluation "cd Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/me-bottle-isempty-unu3-sem-seg-1-coco/valid/_annotations.coco.json 2>&1 | tee utils/standar_evaluation.log"
-
-# Evaluasi khusus Deteksi
-tmux new-session -d -s standard_datasets_det "cd Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/standard_datasets_det --coco 2>&1 | tee utils/standard_datasets_det.log"
-
-# Evaluasi khusus Segmentasi
-tmux new-session -d -s standard_datasets_seg "cd Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/standard_datasets_seg --coco 2>&1 | tee utils/standard_datasets_seg.log"
+Cara pakai:
+  python3 utils/standar_evaluation-new_method.py --dataset default --gpus 0,1
 
 # Default dari path manapun
-tmux new-session -d -s standar_evaluation "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/standar_evaluation.py 2>&1 | tee utils/standar_evaluation.log"
+  tmux new-session -d -s standar_evaluation "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/standar_evaluation-new_method.py 2>&1 | tee utils/standar_evaluation-new_method.log"
 
 """
 
@@ -42,7 +34,7 @@ import torch.multiprocessing as mp
 
 from config_shared import (
     WORKSPACE_DIR, SEG_YAML, DET_YAML, IMAGE_SIZE, NUM_CLASSES,
-    get_output_dir, REPORTS_DIR, DATA_FILES_DIR, SEG_DATASET_LOCATION, DET_DATASET_LOCATION, PAPER1_CSV_DIR
+    get_output_dir, REPORTS_DIR, DATA_FILES_DIR, SEG_DATASET_LOCATION, DET_DATASET_LOCATION
 )
 from telegram_utils import send_telegram_msg
 from coco_eval_utils import (
@@ -50,6 +42,8 @@ from coco_eval_utils import (
 )
 
 SAM_MODEL_PATH = os.path.join(ROOT, "models", "sam2.1_t.pt")
+YOLO11L_DET_PATH  = "/home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l/weights/best.pt"
+YOLO11L_SEG_PATH  = "/home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l_seg/weights/best.pt"
 
 MODELS_CONFIG = [
     {"label": "YOLOv8m", "key": "yolov8m", "type": "yolo_det"},
@@ -101,10 +95,13 @@ def _get_model_metrics(model_cfg: dict, is_seg: bool = False) -> dict:
         mtype, mkey = model_cfg["type"], model_cfg["key"]
         if mtype in ["yolo_det", "yolo_seg"]:
             from ultralytics import YOLO
-            pt = os.path.join(get_output_dir(mkey), "weights", "best.pt")
+            if mkey == "yolo11l":
+                pt = YOLO11L_DET_PATH
+            elif mkey == "yolo11l_seg":
+                pt = YOLO11L_SEG_PATH
+            else:
+                pt = os.path.join(get_output_dir(mkey), "weights", "best.pt")
             m = YOLO(pt)
-            params = m.model.parameters()
-            buffers = m.model.buffers()
             total_params = sum(p.nelement() for p in m.model.parameters())
             sz = sum(p.nelement() * p.element_size() for p in m.model.parameters()) + sum(b.nelement() * b.element_size() for b in m.model.buffers())
             del m; gc.collect()
@@ -126,10 +123,11 @@ def _get_model_metrics(model_cfg: dict, is_seg: bool = False) -> dict:
             result["parameters_m"] = round(total_params / 1e6, 2)
         elif mtype == "hybrid":
             from ultralytics import YOLO, SAM
+            # Pendekatan moderat untuk parameter/metrik hybrid
             if is_seg:
-                y_m = YOLO(os.path.join(get_output_dir("yolo11l_seg"), "weights", "best.pt"))
+                y_m = YOLO(YOLO11L_SEG_PATH)
             else:
-                y_m = YOLO(os.path.join(get_output_dir("yolo11l"), "weights", "best.pt"))
+                y_m = YOLO(YOLO11L_DET_PATH)
             s_m = SAM(SAM_MODEL_PATH)
             y_params = sum(p.nelement() for p in y_m.model.parameters())
             s_params = sum(p.nelement() for p in s_m.model.parameters())
@@ -157,7 +155,12 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
     try:
         if mtype in ["yolo_det", "yolo_seg"]:
             from ultralytics import YOLO
-            model_obj = YOLO(os.path.join(get_output_dir(mkey), "weights", "best.pt"))
+            if mkey == "yolo11l":
+                model_obj = YOLO(YOLO11L_DET_PATH)
+            elif mkey == "yolo11l_seg":
+                model_obj = YOLO(YOLO11L_SEG_PATH)
+            else:
+                model_obj = YOLO(os.path.join(get_output_dir(mkey), "weights", "best.pt"))
         elif mtype == "maskrcnn":
             import torchvision
             from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
@@ -172,11 +175,14 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
             model_obj.to(device_str).eval()
         elif mtype == "hybrid":
             from ultralytics import YOLO, SAM
-            is_seg_infer = "seg" in img_dir.lower()
-            if is_seg_infer:
-                model_obj = YOLO(os.path.join(get_output_dir("yolo11l_seg"), "weights", "best.pt"))
+            # Dinamis memilih model dasar berdasarkan target dataset (deteksi vs segmentasi)
+            is_seg = "seg" in img_dir.lower()
+            if is_seg:
+                print(f"  [GPU:{gpu}] Hybrid menggunakan YOLO11l-Seg untuk generator prompt.")
+                model_obj = YOLO(YOLO11L_SEG_PATH)
             else:
-                model_obj = YOLO(os.path.join(get_output_dir("yolo11l"), "weights", "best.pt"))
+                print(f"  [GPU:{gpu}] Hybrid menggunakan YOLO11l-Det untuk generator prompt.")
+                model_obj = YOLO(YOLO11L_DET_PATH)
             sam_model = SAM(SAM_MODEL_PATH)
     except Exception as e:
         print(f"  [GPU:{gpu}] ❌ Gagal load {label}: {e}", flush=True)
@@ -215,7 +221,7 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
                         masks_np.append(m > 0.5)
                         
         elif mtype == "maskrcnn":
-            # 1. PREPROCESS (Open image, convert to tensor, transfer to VRAM)
+            # 1. PREPROCESS
             torch.cuda.synchronize()
             t0 = time.perf_counter()
             pil = PILImage.open(img_path).convert("RGB")
@@ -224,7 +230,7 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
             t1 = time.perf_counter()
             spd_pre = (t1 - t0) * 1000
 
-            # 2. INFERENCE (Forward Pass)
+            # 2. INFERENCE
             torch.cuda.synchronize()
             t2 = time.perf_counter()
             with torch.no_grad(): preds = model_obj(t_img)[0]
@@ -232,7 +238,7 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
             t3 = time.perf_counter()
             spd_inf = (t3 - t2) * 1000
 
-            # 3. POSTPROCESS (Thresholding, resize, GPU-to-CPU transfer, binarization)
+            # 3. POSTPROCESS
             torch.cuda.synchronize()
             t4 = time.perf_counter()
             scores = preds["scores"].cpu().numpy()
@@ -262,15 +268,15 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
                 pred_confs = res.boxes.conf.cpu().numpy()
                 pred_clss = res.boxes.cls.cpu().numpy().astype(int)
                 
-                # 1. SAM2 Inference
+                # 1. SAM2 Inference (menggunakan model callable berdasarkan list bbox koordinat seperti di contoh_hybrid.py)
                 torch.cuda.synchronize()
                 sam_inf_st = time.perf_counter()
                 try:
-                    sam_res = sam_model.predict(res.orig_img, bboxes=res.boxes.xyxy, device=device_str, verbose=False)
+                    sam_res = sam_model(res.orig_img, bboxes=pred_boxes.tolist(), device=device_str, verbose=False)
                     torch.cuda.synchronize()
                     sam_inf_et = time.perf_counter()
                     sam_inf_time = (sam_inf_et - sam_inf_st) * 1000
-                except:
+                except Exception as e:
                     sam_res = None
                     sam_inf_time = 0.0
 
@@ -346,7 +352,7 @@ def eval_model_distributed(model_cfg: dict, gpu_ids: list, coco_gt_dict: dict, i
             all_inf.extend(data.get("inf", []))
             all_post.extend(data.get("post", []))
             total_imgs += data["n_imgs"]
-            os.remove(pkl)  # Clean up
+            os.remove(pkl)
 
     if not all_dt_bbox and not all_dt_segm:
         print("  ❌ Tidak ada prediksi.")
@@ -374,13 +380,11 @@ def eval_model_distributed(model_cfg: dict, gpu_ids: list, coco_gt_dict: dict, i
             coco_dt = coco_gt.loadRes(all_dt_bbox)
             eval_box = COCOeval(coco_gt, coco_dt, iouType="bbox")
             eval_box.evaluate(); eval_box.accumulate(); eval_box.summarize()
-            mAP50_95_box = round(float(eval_box.stats[0]), 4)  # AP @ IoU=0.50:0.95
-            mAP50_box    = round(float(eval_box.stats[1]), 4)  # AP @ IoU=0.50
-            recall_box   = round(float(eval_box.stats[8]), 4)  # AR @ IoU=0.50:0.95 maxDets=100
-            # Precision sejati: ekstrak dari matriks internal [T x R x K x A x M]
-            # IoU=0.50 → index 0, area=all → index 0, maxDets=100 → index 2
+            mAP50_95_box = round(float(eval_box.stats[0]), 4)
+            mAP50_box    = round(float(eval_box.stats[1]), 4)
+            recall_box   = round(float(eval_box.stats[8]), 4)
             p_matrix = eval_box.eval['precision']
-            p_iou50 = p_matrix[0, :, :, 0, 2]  # semua recall thresholds, semua kelas
+            p_iou50 = p_matrix[0, :, :, 0, 2]
             p_valid = p_iou50[p_iou50 > -1]
             precision_box = round(float(np.mean(p_valid)), 4) if len(p_valid) > 0 else "N/A"
             
@@ -403,7 +407,6 @@ def eval_model_distributed(model_cfg: dict, gpu_ids: list, coco_gt_dict: dict, i
     gpu_str = _gpu_report_str(gpu_ids)
     
     det_row = None
-    # Hanya masukkan model deteksi dan hybrid ke dalam report Detection
     if model_cfg["type"] in ["yolo_det", "hybrid"]:
         det_row = {
             "Model": model_cfg["label"],
@@ -440,7 +443,7 @@ def eval_model_distributed(model_cfg: dict, gpu_ids: list, coco_gt_dict: dict, i
 # ==============================================================================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Multi-GPU Evaluation untuk Seluruh Model")
+    parser = argparse.ArgumentParser(description="Multi-GPU Evaluation [New Method - Dual Path]")
     parser.add_argument("--gpus", type=str, default="all", help="Contoh: '0,1' atau 'all'.")
     parser.add_argument("--dataset", type=str, default="default", help="Path direktori atau file. 'default' menggunakan SEG_DATASET_LOCATION.")
     parser.add_argument("--coco", action="store_true", help="Paksa gunakan format COCO (mencari _annotations.coco.json)")
@@ -457,7 +460,7 @@ if __name__ == "__main__":
             print(f"❌ GPU {g} tidak tersedia (sistem punya {n_avail} GPU)."); sys.exit(1)
 
     print("=" * 65)
-    print("  Distributed Multi-GPU Evaluation")
+    print("  Distributed Multi-GPU Evaluation [New Method]")
     print("=" * 65)
     print(f"  GPU yang digunakan : {GPU_IDS}")
     print(f"  World size         : {len(GPU_IDS)}\n")
@@ -520,7 +523,7 @@ if __name__ == "__main__":
         suffix = info["ds_name"]
 
     print("=" * 65)
-    print(f"  All Models — Distributed Multi-GPU Evaluation [{suffix}]")
+    print(f"  All Models — Distributed Multi-GPU Evaluation [New Method - Dual Path] [{suffix}]")
     print(f"  GPU : {GPU_IDS} (World size: {len(GPU_IDS)})")
     if args.dataset == "default":
         print(f"  Det Dataset: {det_info['eval_path']} (Native COCO: {det_info['is_native_coco']})")
@@ -534,48 +537,46 @@ if __name__ == "__main__":
 
     with tempfile.TemporaryDirectory(prefix="multigpu_eval_") as tmp_dir:
         for mcfg in MODELS_CONFIG:
-            # Pilih info dataset yang sesuai (Det info atau Seg info)
             if mcfg["type"] in ["yolo_det"]:
                 target_info = det_info
             elif mcfg["type"] in ["yolo_seg", "maskrcnn"]:
                 target_info = seg_info
-            else: # hybrid
-                # Evaluasi BBox dan Mask hybrid di dataset segmentasi agar bisa mengevaluasi keduanya
+            else:
                 target_info = seg_info
                 
             ep = target_info["eval_path"]
             
-            # Smart Model Filtering: Jika args.dataset TIDAK default, skip model jika tipenya tidak cocok dengan target manual.
             if args.dataset != "default":
                 is_det_dataset = "det" in ep.lower()
                 is_seg_dataset = "seg" in ep.lower()
                 if is_det_dataset and not is_seg_dataset:
                     if mcfg["type"] not in ["yolo_det", "hybrid"]:
-                        print(f"⏭️  Skip {mcfg['label']} (bukan model deteksi, sedangkan target dataset adalah Detection)")
+                        print(f"⏭️  Skip {mcfg['label']} (bukan model deteksi)")
                         continue
                 elif is_seg_dataset and not is_det_dataset:
                     if mcfg["type"] not in ["yolo_seg", "maskrcnn", "hybrid"]:
-                        print(f"⏭️  Skip {mcfg['label']} (bukan model segmentasi, sedangkan target dataset adalah Segmentation)")
+                        print(f"⏭️  Skip {mcfg['label']} (bukan model segmentasi)")
                         continue
 
             d_row, s_row = eval_model_distributed(mcfg, GPU_IDS, target_info["coco_gt_dict"], target_info["image_ids"], target_info["img_dir"], tmp_dir)
             if d_row: all_det_rows.append(d_row)
             if s_row: all_seg_rows.append(s_row)
 
-    os.makedirs(PAPER1_CSV_DIR, exist_ok=True)
+    NEW_CSV_DIR = "/home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/reports/paper1/csv/standard-new-method"
+    os.makedirs(NEW_CSV_DIR, exist_ok=True)
     
     if all_det_rows:
-        det_csv = os.path.join(PAPER1_CSV_DIR, "standart_det.csv")
+        det_csv = os.path.join(NEW_CSV_DIR, "standart_det.csv")
         with open(det_csv, "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=list(all_det_rows[0].keys()))
             w.writeheader(); w.writerows(all_det_rows)
-        print(f"\n✅ Det Report: {det_csv}")
+        print(f"\n✅ Det Report [New Method]: {det_csv}")
 
     if all_seg_rows:
-        seg_csv = os.path.join(PAPER1_CSV_DIR, "standart_seg.csv")
+        seg_csv = os.path.join(NEW_CSV_DIR, "standart_seg.csv")
         with open(seg_csv, "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=list(all_seg_rows[0].keys()))
             w.writeheader(); w.writerows(all_seg_rows)
-        print(f"✅ Seg Report: {seg_csv}")
+        print(f"✅ Seg Report [New Method]: {seg_csv}")
 
-    print("\n  [Visual] Note: Visualisasi perbandingan model silakan jalankan utils/generate_paper_visuals.py")
+    print("\n  [Visual] Note: Untuk visualisasi new-method silakan jalankan utils/standar_evaluation_visuals-new_method.py")

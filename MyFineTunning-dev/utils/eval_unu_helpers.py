@@ -115,8 +115,6 @@ def flush_gpu(label: str = ""):
     torch.cuda.empty_cache()
     if torch.cuda.is_available():
         torch.cuda.synchronize()
-        free, total = torch.cuda.mem_get_info(0)
-        print(f"  [MemFlush] {label} — VRAM: {free/1e9:.2f}/{total/1e9:.2f} GB", flush=True)
 
 
 def gpu_str() -> str:

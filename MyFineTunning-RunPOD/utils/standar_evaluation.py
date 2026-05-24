@@ -259,7 +259,7 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
                 torch.cuda.synchronize()
                 sam_inf_st = time.perf_counter()
                 try:
-                    sam_res = sam_model.predict(res.orig_img, bboxes=res.boxes.xyxy, verbose=False)
+                    sam_res = sam_model.predict(res.orig_img, bboxes=res.boxes.xyxy, device=device_str, verbose=False)
                     torch.cuda.synchronize()
                     sam_inf_et = time.perf_counter()
                     sam_inf_time = (sam_inf_et - sam_inf_st) * 1000
@@ -440,7 +440,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     GPU_IDS = list(range(torch.cuda.device_count())) if args.gpus.strip().lower() == "all" else [int(g.strip()) for g in args.gpus.split(",") if g.strip()]
-    if not torch.cuda.is_available() or not GPU_IDS: print("❌ CUDA tidak tersedia."); sys.exit(1)
+    if not torch.cuda.is_available() or not GPU_IDS: 
+        print("❌ CUDA tidak tersedia atau tidak ada GPU."); sys.exit(1)
+
+    n_avail = torch.cuda.device_count()
+    for g in GPU_IDS:
+        if g >= n_avail:
+            print(f"❌ GPU {g} tidak tersedia (sistem punya {n_avail} GPU)."); sys.exit(1)
+
+    print("=" * 65)
+    print("  Distributed Multi-GPU Evaluation (RunPOD)")
+    print("=" * 65)
+    print(f"  GPU yang digunakan : {GPU_IDS}")
+    print(f"  World size         : {len(GPU_IDS)}\n")
 
     def _prepare_dataset(raw_path, force_coco, force_yolo):
         ep = raw_path
