@@ -13,7 +13,7 @@
 #
 # 3. Mode Options:
 #    bash setup.sh            ← Standar (Membuat/memperbarui .venv lokal terisolasi)
-#    bash setup.sh --reuse    ← Menggunakan ulang .venv bersama dari MyTrainEngine
+#    bash setup.sh --reuse    ← Menggunakan ulang .venv dari MyFineTunning-dev
 #
 # Setelah setup sukses:
 #   source .venv/bin/activate
@@ -24,7 +24,7 @@ set -e  # Exit langsung jika ada error
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/.venv"
-REUSE_PATH="/root/MyTrainEngine/.venv"
+REUSE_PATH="/home/my/Trainning-Models/MyFineTunning-dev/.venv"
 
 echo "============================================================"
 echo "  MyFineTunning — Setup Environment"
@@ -32,7 +32,7 @@ echo "  Dir: $SCRIPT_DIR"
 echo "============================================================"
 
 # ------------------------------------------------------------------------------
-# Opsi --reuse: symlink ke .venv MyTrainEngine yang sudah lengkap
+# Opsi --reuse: symlink ke .venv MyFineTunning-dev yang sudah lengkap
 # ------------------------------------------------------------------------------
 if [[ "$1" == "--reuse" ]]; then
     if [[ -d "$REUSE_PATH" ]]; then
