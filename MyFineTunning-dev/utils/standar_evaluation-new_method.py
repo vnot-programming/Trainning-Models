@@ -34,7 +34,8 @@ import torch.multiprocessing as mp
 
 from config_shared import (
     WORKSPACE_DIR, SEG_YAML, DET_YAML, IMAGE_SIZE, NUM_CLASSES,
-    get_output_dir, REPORTS_DIR, DATA_FILES_DIR, SEG_DATASET_LOCATION, DET_DATASET_LOCATION
+    get_output_dir, REPORTS_DIR, DATA_FILES_DIR, SEG_DATASET_LOCATION, DET_DATASET_LOCATION,
+    PAPER1_CSV_DIR
 )
 from telegram_utils import send_telegram_msg
 from coco_eval_utils import (
@@ -42,8 +43,8 @@ from coco_eval_utils import (
 )
 
 SAM_MODEL_PATH = os.path.join(ROOT, "models", "sam2.1_t.pt")
-YOLO11L_DET_PATH  = "/home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l/weights/best.pt"
-YOLO11L_SEG_PATH  = "/home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l_seg/weights/best.pt"
+YOLO11L_DET_PATH  = os.path.join(WORKSPACE_DIR, "runs", "yolo11l", "weights", "best.pt")
+YOLO11L_SEG_PATH  = os.path.join(WORKSPACE_DIR, "runs", "yolo11l_seg", "weights", "best.pt")
 
 MODELS_CONFIG = [
     {"label": "YOLOv8m", "key": "yolov8m", "type": "yolo_det"},
@@ -562,7 +563,7 @@ if __name__ == "__main__":
             if d_row: all_det_rows.append(d_row)
             if s_row: all_seg_rows.append(s_row)
 
-    NEW_CSV_DIR = "/home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/reports/paper1/csv/new-method"
+    NEW_CSV_DIR = os.path.join(PAPER1_CSV_DIR, "new-method")
     os.makedirs(NEW_CSV_DIR, exist_ok=True)
     
     if all_det_rows:

@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-utils/standar_evaluation_visuals-new_method.py
+utils/golden_evaluation_visuals-new_method.py
 ====================================
-Visualisasi bukti konsep untuk evaluasi Standard Dataset menggunakan metode hybrid baru (YOLO11l + SAM2).
+Visualisasi bukti konsep untuk evaluasi Golden Dataset menggunakan metode hybrid baru (YOLO11l + SAM2).
 
 Menggunakan model YOLO11l hasil training terbaru:
   - YOLO11l Deteksi:  /home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l/weights/best.pt
   - YOLO11l Segmentasi: /home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l_seg/weights/best.pt
 
 Cara pakai:
-  python3 utils/standar_evaluation_visuals-new_method.py
+  python3 utils/golden_evaluation_visuals-new_method.py
 
 # Default dari path manapun
-  tmux new-session -d -s standar_evaluation_visuals_new "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/standar_evaluation_visuals-new_method.py --gpus all 2>&1 | tee utils/standar_evaluation_visuals-new_method.log"
+  tmux new-session -d -s golden_evaluation_visuals_new "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/golden_evaluation_visuals-new_method.py --gpus all 2>&1 | tee utils/golden_evaluation_visuals-new_method.log"
 
 """
 import os
@@ -33,8 +33,8 @@ sys.path.insert(0, ROOT)
 
 from ultralytics import YOLO, SAM
 from config_shared import (
-    get_output_dir, NUM_CLASSES, IMAGE_SIZE, WORKSPACE_DIR, IMAGE_SAMPLES_DIR,
-    DET_DATASET_LOCATION, SEG_DATASET_LOCATION, PAPER1_VIS_DIR
+    get_output_dir, NUM_CLASSES, IMAGE_SIZE, PAPER1_VIS_DIR, WORKSPACE_DIR, IMAGE_SAMPLES_DIR,
+    GOLDEN_DET_DATASET_LOCATION, GOLDEN_SEG_DATASET_LOCATION
 )
 from eval_unu_helpers import flush_gpu
 from eval_paper import load_maskrcnn
@@ -45,13 +45,13 @@ from eval_paper import load_maskrcnn
 YOLO11L_DET_PATH  = os.path.join(WORKSPACE_DIR, "runs", "yolo11l", "weights", "best.pt")
 YOLO11L_SEG_PATH  = os.path.join(WORKSPACE_DIR, "runs", "yolo11l_seg", "weights", "best.pt")
 
-# Output Directory — paper1/visuals/new-method/standard
-STD_VIS_DIR    = os.path.join(PAPER1_VIS_DIR, "new-method", "standard")
-IMG_SAMPLE_DIR = os.path.join(STD_VIS_DIR, "images_sample")
-DET_OUT_DIR    = os.path.join(STD_VIS_DIR, "detection")
-SEG_OUT_DIR    = os.path.join(STD_VIS_DIR, "segmentation")
-COMP_DET_DIR   = os.path.join(STD_VIS_DIR, "comparison", "detection")
-COMP_SEG_DIR   = os.path.join(STD_VIS_DIR, "comparison", "segmentation")
+# Output Directory — paper1/visuals/new-method/golden
+GOLD_VIS_DIR    = os.path.join(PAPER1_VIS_DIR, "new-method", "golden")
+IMG_SAMPLE_DIR = os.path.join(GOLD_VIS_DIR, "images_sample")
+DET_OUT_DIR    = os.path.join(GOLD_VIS_DIR, "detection")
+SEG_OUT_DIR    = os.path.join(GOLD_VIS_DIR, "segmentation")
+COMP_DET_DIR   = os.path.join(GOLD_VIS_DIR, "comparison", "detection")
+COMP_SEG_DIR   = os.path.join(GOLD_VIS_DIR, "comparison", "segmentation")
 
 for d in [IMG_SAMPLE_DIR, DET_OUT_DIR, SEG_OUT_DIR, COMP_DET_DIR, COMP_SEG_DIR]:
     os.makedirs(d, exist_ok=True)
@@ -205,20 +205,20 @@ def main():
             print(f"❌ GPU {g} tidak tersedia (sistem punya {n_avail} GPU)."); sys.exit(1)
 
     print("=" * 65)
-    print("  Distributed Multi-GPU Evaluation Visuals [New Method]")
+    print("  Distributed Multi-GPU Evaluation Visuals [Golden Dataset - New Method]")
     print("=" * 65)
     print(f"  GPU yang digunakan : {GPU_IDS}")
     print(f"  World size         : {len(GPU_IDS)}")
     print(f"  Image Samples Dir   : {IMAGE_SAMPLES_DIR}")
     print(f"  YOLO11l Det Weights : {YOLO11L_DET_PATH}")
     print(f"  YOLO11l Seg Weights : {YOLO11L_SEG_PATH}")
-    print(f"  Output Dir          : {STD_VIS_DIR}\n")
+    print(f"  Output Dir          : {GOLD_VIS_DIR}\n")
 
     device = torch.device(f"cuda:{GPU_IDS[0]}" if GPU_IDS else "cpu")
     device_str = ",".join(map(str, GPU_IDS))
 
     # Inisialisasi Class Names secara dinamis dari dataset asli
-    init_classes_from_coco(SEG_DATASET_LOCATION)
+    init_classes_from_coco(GOLDEN_SEG_DATASET_LOCATION)
     print(f"✅ Kelas terdeteksi ({len(CLASS_NAMES)}): {CLASS_NAMES}")
 
     # 1. Load Models (Detection & Segmentation)
@@ -244,8 +244,8 @@ def main():
     sam2_model = SAM(SAM_MODEL_PATH)
 
     # 3. Load GT
-    coco_det = load_gt_annotations(DET_DATASET_LOCATION)
-    coco_seg = load_gt_annotations(SEG_DATASET_LOCATION)
+    coco_det = load_gt_annotations(GOLDEN_DET_DATASET_LOCATION)
+    coco_seg = load_gt_annotations(GOLDEN_SEG_DATASET_LOCATION)
 
     # Ambil daftar gambar dari folder image_samples
     img_names = sorted([f for f in os.listdir(IMAGE_SAMPLES_DIR) if f.lower().endswith(('.jpg', '.png', '.jpeg'))])
@@ -404,8 +404,8 @@ def main():
 
         flush_gpu("Per Image")
 
-    print(f"\n✅ Standard Evaluation Visuals [New Method - Dual Path] selesai.")
-    print(f"   Output: {STD_VIS_DIR}")
+    print(f"\n✅ Golden Evaluation Visuals [New Method - Dual Path] selesai.")
+    print(f"   Output: {GOLD_VIS_DIR}")
 
 if __name__ == "__main__":
     main()
