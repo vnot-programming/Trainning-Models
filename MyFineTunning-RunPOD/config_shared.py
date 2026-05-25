@@ -136,12 +136,12 @@ GPU_COOLDOWN_SEC       = 15     # Jeda (detik) setelah training selesai
 # ==============================================================================
 # HYPERPARAMETER Test
 # ==============================================================================
-# EPOCHS              = 2 # 100
-# IMAGE_SIZE          = 640
-# NUM_CLASSES         = 7
-# YOLO_BATCH_SIZE     = 80    # 160 menyebabkan OOM pada YOLO11l (Large) di VRAM 20GB. 80 / 5 = 16 per GPU.
-# MASKRCNN_BATCH_SIZE = 8     # Diturunkan ke 8 agar lebih aman (menghindari OOM).
-# NUM_WORKERS         = 10    # 16
+EPOCHS              = 1
+IMAGE_SIZE          = 640
+NUM_CLASSES         = 7
+YOLO_BATCH_SIZE     = 16
+MASKRCNN_BATCH_SIZE = 8
+NUM_WORKERS         = 10
 
 # ==============================================================================
 # HYPERPARAMETER RunPOD
@@ -156,12 +156,12 @@ GPU_COOLDOWN_SEC       = 15     # Jeda (detik) setelah training selesai
 # ==============================================================================
 # HYPERPARAMETER RunPOD - Opsi Lain
 # ==============================================================================
-EPOCHS              = 100
-IMAGE_SIZE          = 640
-NUM_CLASSES         = 7
-YOLO_BATCH_SIZE     = 64   # DDP total (dibagi ke semua GPU oleh Ultralytics)
-MASKRCNN_BATCH_SIZE = 8    # 4
-NUM_WORKERS         = 10    # 16
+# EPOCHS              = 100
+# IMAGE_SIZE          = 640
+# NUM_CLASSES         = 7
+# YOLO_BATCH_SIZE     = 64   # DDP total (dibagi ke semua GPU oleh Ultralytics)
+# MASKRCNN_BATCH_SIZE = 8    # 4
+# NUM_WORKERS         = 10    # 16
 
 # ==============================================================================
 # HYPERPARAMETER PARALEL & EARLY STOPPING (Standard 2026)
