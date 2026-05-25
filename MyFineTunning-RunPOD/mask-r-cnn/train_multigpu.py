@@ -781,6 +781,7 @@ if __name__ == "__main__":
 
     # ── Post-training: latency + report + visual (semua di GPU pertama) ──────
     eval_device = torch.device(f"cuda:{GPU_IDS[0]}")
+    csv_path = "N/A"
 
     csv_path = "N/A"
     if not args.skip_eval:
