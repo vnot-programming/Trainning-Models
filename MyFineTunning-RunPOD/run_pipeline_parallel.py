@@ -15,7 +15,7 @@ Cara menjalankan:
 
     tmux new-session -d -s run_pipeline_parallel "cd /root/Trainning-Models/MyFineTunning-RunPOD && source .venv/bin/activate && python3 run_pipeline_parallel.py --gpus 0,1,2,3 2>&1 | tee run_pipeline_parallel.log"
 
-    tmux new-session -d -s run_pipeline_parallel "cd /home/my/Trainning-Models/MyFineTunning-RunPOD && source .venv/bin/activate && python3 run_pipeline_parallel.py 2>&1 | tee run_pipeline_parallel.log"
+    tmux new-session -d -s run_pipeline_parallel "cd /root/Trainning-Models/MyFineTunning-RunPOD && source .venv/bin/activate && python3 run_pipeline_parallel.py 2>&1 | tee run_pipeline_parallel.log"
 """
 
 import os

@@ -159,9 +159,9 @@ GPU_COOLDOWN_SEC       = 15     # Jeda (detik) setelah training selesai
 EPOCHS              = 100
 IMAGE_SIZE          = 640
 NUM_CLASSES         = 7
-YOLO_BATCH_SIZE     = 16    # Optimal & aman untuk YOLOv8m/v9m/11l pada 16GB VRAM (bebas OOM)
-MASKRCNN_BATCH_SIZE = 4     # Sweet spot maksimal untuk Mask R-CNN pada 16GB VRAM
-NUM_WORKERS         = 8     # Sweet spot worker per GPU (total 32 workers)
+YOLO_BATCH_SIZE     = 26
+MASKRCNN_BATCH_SIZE = 8
+NUM_WORKERS         = 32
 
 # ==============================================================================
 # HYPERPARAMETER PARALEL & EARLY STOPPING (Standard 2026)
@@ -183,7 +183,6 @@ else:
 
 # ### 1. Menghitung `YOLO_BATCH_SIZE` (Total Batch)
 # YOLO menggunakan DDP (Distributed Data Parallel), jadi angkanya adalah total untuk 4 GPU.
-
 # *   **Rumus:** `(Target VRAM per GPU / VRAM saat ini) * Batch per GPU saat ini * Jumlah GPU`
 # *   **Logika Manual:**
 #     *   Saat ini: Batch total **80** (artinya **20 per GPU**) menggunakan **10-15GB**.
