@@ -136,12 +136,12 @@ GPU_COOLDOWN_SEC       = 15     # Jeda (detik) setelah training selesai
 # ==============================================================================
 # HYPERPARAMETER Test
 # ==============================================================================
-EPOCHS              = 1
-IMAGE_SIZE          = 640
-NUM_CLASSES         = 7
-YOLO_BATCH_SIZE     = 16
-MASKRCNN_BATCH_SIZE = 8
-NUM_WORKERS         = 10
+# EPOCHS              = 1
+# IMAGE_SIZE          = 640
+# NUM_CLASSES         = 7
+# YOLO_BATCH_SIZE     = 16
+# MASKRCNN_BATCH_SIZE = 8
+# NUM_WORKERS         = 10
 
 # ==============================================================================
 # HYPERPARAMETER RunPOD
@@ -156,12 +156,12 @@ NUM_WORKERS         = 10
 # ==============================================================================
 # HYPERPARAMETER RunPOD - Opsi Lain
 # ==============================================================================
-# EPOCHS              = 100
-# IMAGE_SIZE          = 640
-# NUM_CLASSES         = 7
-# YOLO_BATCH_SIZE     = 64   # DDP total (dibagi ke semua GPU oleh Ultralytics)
-# MASKRCNN_BATCH_SIZE = 8    # 4
-# NUM_WORKERS         = 10    # 16
+EPOCHS              = 100
+IMAGE_SIZE          = 640
+NUM_CLASSES         = 7
+YOLO_BATCH_SIZE     = 16    # Optimal & aman untuk YOLOv8m/v9m/11l pada 16GB VRAM (bebas OOM)
+MASKRCNN_BATCH_SIZE = 4     # Sweet spot maksimal untuk Mask R-CNN pada 16GB VRAM
+NUM_WORKERS         = 8     # Sweet spot worker per GPU (total 32 workers)
 
 # ==============================================================================
 # HYPERPARAMETER PARALEL & EARLY STOPPING (Standard 2026)

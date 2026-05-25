@@ -6,7 +6,7 @@
 # Cara pakai:
 #
 # 1. Background Execution via TMUX (Sangat Direkomendasikan untuk Cloud):
-#    tmux new-session -d -s setup_session "cd /home/my/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh 2>&1 | tee setup_session.log"
+#    tmux new-session -d -s setup_session "cd /root/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh 2>&1 | tee setup_session.log"
 #
 # 2. Direct Execution:
 #    cd /home/my/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh

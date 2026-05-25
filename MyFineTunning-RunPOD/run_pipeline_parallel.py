@@ -13,7 +13,7 @@ Cara menjalankan:
     python run_pipeline_parallel.py --gpus 0,1
     python3 run_pipeline_parallel.py --gpus 0,1,2,3
 
-    tmux new-session -d -s run_pipeline_parallel "cd /home/my/Trainning-Models/MyFineTunning-RunPOD && source .venv/bin/activate && python3 run_pipeline_parallel.py --gpus 0,1,2,3 2>&1 | tee run_pipeline_parallel.log"
+    tmux new-session -d -s run_pipeline_parallel "cd /root/Trainning-Models/MyFineTunning-RunPOD && source .venv/bin/activate && python3 run_pipeline_parallel.py --gpus 0,1,2,3 2>&1 | tee run_pipeline_parallel.log"
 
     tmux new-session -d -s run_pipeline_parallel "cd /home/my/Trainning-Models/MyFineTunning-RunPOD && source .venv/bin/activate && python3 run_pipeline_parallel.py 2>&1 | tee run_pipeline_parallel.log"
 """
@@ -250,34 +250,41 @@ class ParallelScheduler:
                 ready_task["state"] = "RUNNING"
                 ready_task["start_time"] = time.perf_counter()
                 
+                # Setup isolated environment for subprocess using CUDA_VISIBLE_DEVICES
+                env = os.environ.copy()
+                
                 # Susun argumen perintah
-                # Format arguments dengan menyisipkan device/gpus
-                cmd = [
-                    _VENV_PYTHON, "-u", ready_task["script"],
-                    ready_task["device_arg"], str(gpu_id)
-                ]
-                # Jika global eval, berikan daftar semua GPU aktif
                 if ready_task["id"] == "eval_global_multigpu":
+                    # Global evaluation needs to see all targeted GPUs
                     gpus_str = ",".join(map(str, self.gpu_list))
+                    env["CUDA_VISIBLE_DEVICES"] = gpus_str
                     cmd = [_VENV_PYTHON, "-u", ready_task["script"], "--gpus", gpus_str]
+                else:
+                    # Single-GPU tasks only see their assigned GPU isolated as device "0"
+                    env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+                    cmd = [
+                        _VENV_PYTHON, "-u", ready_task["script"],
+                        ready_task["device_arg"], "0"
+                    ]
                     
                 cmd.extend(ready_task["args"])
                 
                 # Tulis log terpisah
                 log_file = open(ready_task["logfile"], "w", encoding="utf-8")
                 
-                print(_c(f"\n[Scheduler] 🚀 Memulai {ready_task['label']} pada GPU {gpu_id}", _CYAN, _BOLD))
+                print(_c(f"\n[Scheduler] 🚀 Memulai {ready_task['label']} pada GPU {gpu_id} (Isolated via CUDA_VISIBLE_DEVICES={env.get('CUDA_VISIBLE_DEVICES')})", _CYAN, _BOLD))
                 print(f"  Logfile : {ready_task['logfile']}")
                 print(f"  Command : {' '.join(cmd)}")
                 
-                # Launch subprocess
+                # Launch subprocess with clean env
                 ready_task["proc"] = subprocess.Popen(
                     cmd,
                     cwd=ready_task["cwd"],
                     stdout=log_file,
                     stderr=log_file,
                     bufsize=1,
-                    universal_newlines=True
+                    universal_newlines=True,
+                    env=env
                 )
                 
                 # Telegram Notification
