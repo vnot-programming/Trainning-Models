@@ -756,7 +756,7 @@ def evaluate_hybrid_map():
             
     if det_rows_all:
         with open(combined_det_csv, "w", newline="", encoding="utf-8") as fout:
-            writer = csv.DictWriter(fout, fieldnames=det_fields)
+            writer = csv.DictWriter(fout, fieldnames=det_fields, extrasaction='ignore')
             writer.writeheader()
             writer.writerows(det_rows_all)
         print(f"  ✅ Combined Detection: {combined_det_csv}")
@@ -776,7 +776,7 @@ def evaluate_hybrid_map():
             
     if seg_rows_all:
         with open(combined_seg_csv, "w", newline="", encoding="utf-8") as fout:
-            writer = csv.DictWriter(fout, fieldnames=seg_fields)
+            writer = csv.DictWriter(fout, fieldnames=seg_fields, extrasaction='ignore')
             writer.writeheader()
             writer.writerows(seg_rows_all)
         print(f"  ✅ Combined Segmentation: {combined_seg_csv}")
