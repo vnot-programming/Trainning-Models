@@ -85,18 +85,18 @@ _SEG_FORMAT     = "yolov11"
 
 GOLDEN_SEG_WORKSPACE  = "vnot"
 GOLDEN_SEG_PROJECT    = "me-bottle-isempty-unu3-sem-seg"
-GOLDEN_SEG_VERSION    = 1
+GOLDEN_SEG_VERSION    = 7
 GOLDEN_SEG_FORMAT     = "coco-segmentation"
 
 GOLDEN_DET_WORKSPACE  = "vnot"
 GOLDEN_DET_PROJECT    = "me-bottle-isempty-unu3-det"
-GOLDEN_DET_VERSION    = 7
+GOLDEN_DET_VERSION    = 1
 GOLDEN_DET_FORMAT     = "coco"
 
 STANDAR_SEG_WORKSPACE  = "vnot"
 STANDAR_SEG_PROJECT    = "me-bottle-isempty-ku3-h61lr-seg"
 STANDAR_SEG_VERSION    = 1
-STANDAR_SEG_FORMAT     = "coco-segmentation"
+STANDAR_SEG_FORMAT     = "coco"
 
 STANDAR_DET_WORKSPACE  = "vnot"
 STANDAR_DET_PROJECT    = "me-bottle-isempty-ku3-h61lr"
@@ -169,13 +169,11 @@ def setup_detection_dataset(key: str | None) -> tuple[str, str]:
     Returns: (dataset_location, yaml_path)
     """
     datasets_dir = _get_datasets_dir()
-    # Cek apakah dataset sudah ada (cari folder yang mengandung data.yaml)
-    for entry in datasets_dir.iterdir() if datasets_dir.exists() else []:
-        if entry.is_dir() and (entry / "data.yaml").exists():
-            if _DET_PROJECT.split("-ku")[0] in entry.name.lower() or "isempty" in entry.name.lower():
-                if "seg" not in entry.name.lower():
-                    print(f"\n📁 Dataset Deteksi: ditemukan lokal → {entry}")
-                    return str(entry), str(entry / "data.yaml")
+    # Cek apakah dataset sudah ada
+    target_dir = datasets_dir / "train_det"
+    if target_dir.is_dir() and (target_dir / "data.yaml").exists():
+        print(f"\n📁 Dataset Deteksi: ditemukan lokal → {target_dir}")
+        return str(target_dir), str(target_dir / "data.yaml")
 
     print(f"\n🌐 Dataset Deteksi: belum ada. Download dari Roboflow...")
     if not key:
@@ -189,8 +187,8 @@ def setup_detection_dataset(key: str | None) -> tuple[str, str]:
         project = rf.workspace(_DET_WORKSPACE).project(_DET_PROJECT)
         dataset = project.version(_DET_VERSION).download(
             _DET_FORMAT,
-            location=str(datasets_dir / f"{_DET_PROJECT}-{_DET_VERSION}"),
-            overwrite=False,
+            location=str(datasets_dir / "train_det"),
+            overwrite=True,
         )
         location = dataset.location
     except Exception as e:
@@ -213,11 +211,10 @@ def setup_segmentation_dataset(key: str | None) -> tuple[str, str]:
     """
     datasets_dir = _get_datasets_dir()
     # Cek apakah dataset segmentasi sudah ada
-    for entry in datasets_dir.iterdir() if datasets_dir.exists() else []:
-        if entry.is_dir() and (entry / "data.yaml").exists():
-            if "seg" in entry.name.lower() and "isempty" in entry.name.lower():
-                print(f"\n📁 Dataset Segmentasi: ditemukan lokal → {entry}")
-                return str(entry), str(entry / "data.yaml")
+    target_dir = datasets_dir / "train_seg"
+    if target_dir.is_dir() and (target_dir / "data.yaml").exists():
+        print(f"\n📁 Dataset Segmentasi: ditemukan lokal → {target_dir}")
+        return str(target_dir), str(target_dir / "data.yaml")
 
     print(f"\n🌐 Dataset Segmentasi: belum ada. Download dari Roboflow...")
     if not key:
@@ -231,8 +228,8 @@ def setup_segmentation_dataset(key: str | None) -> tuple[str, str]:
         project = rf.workspace(_SEG_WORKSPACE).project(_SEG_PROJECT)
         dataset = project.version(_SEG_VERSION).download(
             _SEG_FORMAT,
-            location=str(datasets_dir / f"{_SEG_PROJECT}-{_SEG_VERSION}"),
-            overwrite=False,
+            location=str(datasets_dir / "train_seg"),
+            overwrite=True,
         )
         location = dataset.location
     except Exception as e:
@@ -428,11 +425,11 @@ def setup_all_datasets() -> dict:
     print(f"[Dataset] ✅ Standart Det  : {h61lr_det_yaml}")
     print(f"[Dataset] ✅ Standart Seg  : {h61lr_seg_yaml}")
 
-        # "det_location": det_location,
-        # "det_yaml":     det_yaml,
-        # "seg_location": seg_location,
-        # "seg_yaml":     seg_yaml,
     return {
+        "det_location": det_location,
+        "det_yaml":     det_yaml,
+        "seg_location": seg_location,
+        "seg_yaml":     seg_yaml,
         "coco_seg_location": coco_seg_location,
         "coco_det_location": coco_det_location,
         "h61lr_det_yaml": h61lr_det_yaml,

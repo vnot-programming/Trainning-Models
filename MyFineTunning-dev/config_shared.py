@@ -61,11 +61,11 @@ IMAGE_SAMPLES_DIR = os.path.join(WORKSPACE_DIR, "image_samples")
 # ==============================================================================
 DET_DATASET_LOCATION = os.environ.get(
     "DET_DATASET",
-    os.path.join(DATASETS_DIR, "standard_datasets_det")
+    os.path.join(DATASETS_DIR, "train_det")
 )
 SEG_DATASET_LOCATION = os.environ.get(
     "SEG_DATASET",
-    os.path.join(DATASETS_DIR, "standard_datasets_seg")
+    os.path.join(DATASETS_DIR, "train_seg")
 )
 
 DET_YAML = os.path.join(DET_DATASET_LOCATION, "data.yaml")
