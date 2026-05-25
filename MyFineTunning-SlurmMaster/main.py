@@ -8,14 +8,14 @@ Jalankan ini SEKALI sebelum menjalankan sub-modul fine-tuning per model.
 Cara pakai:
     python main.py
 atau
-    source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate
+    source /data/programs/anaconda3/bin/activate && conda activate yolo_env
     python3 /home/my/Trainning-Models/MyFineTunning-dev/main.py
 tmux new-session -d -s main_session "cd /home/my/Trainning-Models/MyFineTunning-dev && python3 main.py 2>&1 | tee MainReport.log"
 
-YOLO8 = tmux new-session -d -s yolo8training "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev/yolo/yolo8 && python -u main.py 2>&1 | tee yolo8training.log"
-YOLO9 = tmux new-session -d -s yolo9training "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev/yolo/yolo9 && python -u main.py 2>&1 | tee yolo9training.log"
-YOLO11 = tmux new-session -d -s yolo11training "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev/yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log"
-MaskRCNN = tmux new-session -d -s masktraining "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev/mask-r-cnn && python -u train_multigpu.py 2>&1 | tee masktraining.log"
+YOLO8 = tmux new-session -d -s yolo8training "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd /home/my/Trainning-Models/MyFineTunning-dev/yolo/yolo8 && python -u main.py 2>&1 | tee yolo8training.log"
+YOLO9 = tmux new-session -d -s yolo9training "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd /home/my/Trainning-Models/MyFineTunning-dev/yolo/yolo9 && python -u main.py 2>&1 | tee yolo9training.log"
+YOLO11 = tmux new-session -d -s yolo11training "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd /home/my/Trainning-Models/MyFineTunning-dev/yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log"
+MaskRCNN = tmux new-session -d -s masktraining "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd /home/my/Trainning-Models/MyFineTunning-dev/mask-r-cnn && python -u train_multigpu.py 2>&1 | tee masktraining.log"
 
 """
 
@@ -83,7 +83,7 @@ try:
     print(f"[Setup] ✅ Golden Det: {golden_det}")
     print(f"[Setup] ✅ Standard Det: {std_det}")
     print(f"[Setup] ✅ Standard Seg: {std_seg}")
-    print("[Setup] ⚠️ Fine-tuning datasets (ku3-8 & unu3-7) sedang di-bypass.")
+    print("[Setup] ✅ Fine-tuning datasets diatur ke folder lokal: `training_det` dan `training_seg`.")
 except RuntimeError as _e:
     print(f"\n❌ Dataset gagal disiapkan: {_e}")
     send_telegram_msg(f"❌ <b>Setup Gagal</b>\nDataset tidak tersedia:\n<code>{_e}</code>")
@@ -168,11 +168,11 @@ print(f"""
   💡 Tips GPU: Tambahkan '--device 1,2' jika ingin menggunakan GPU nomor 1 dan 2 saja.
 
   🛠️ Background Execution (tmux):
-  - YOLO8 : tmux new-session -d -s yolo8training "source .venv/bin/activate && cd yolo/yolo8 && python -u main.py 2>&1 | tee yolo8training.log"
-  - YOLO9 : tmux new-session -d -s yolo9training "source .venv/bin/activate && cd yolo/yolo9 && python -u main.py 2>&1 | tee yolo9training.log"
-  - YOLO11: tmux new-session -d -s yolo11training "source .venv/bin/activate && cd yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log"
-  - MaskRCNN: tmux new-session -d -s maskrcnntraining "source .venv/bin/activate && cd . && python -u mask-r-cnn/train_multigpu.py 2>&1 | tee maskrcnntraining.log"
-  - Hybrid: tmux new-session -d -s hybridtraining "source .venv/bin/activate && cd hybrid && python -u main.py 2>&1 | tee hybridtraining.log"
+  - YOLO8 : tmux new-session -d -s yolo8training "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd yolo/yolo8 && python -u main.py 2>&1 | tee yolo8training.log"
+  - YOLO9 : tmux new-session -d -s yolo9training "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd yolo/yolo9 && python -u main.py 2>&1 | tee yolo9training.log"
+  - YOLO11: tmux new-session -d -s yolo11training "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log"
+  - MaskRCNN: tmux new-session -d -s maskrcnntraining "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd . && python -u mask-r-cnn/train_multigpu.py 2>&1 | tee maskrcnntraining.log"
+  - Hybrid: tmux new-session -d -s hybridtraining "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd hybrid && python -u main.py 2>&1 | tee hybridtraining.log"
 
   Setiap script menghasilkan CSV report di:
   {REPORTS_DIR}

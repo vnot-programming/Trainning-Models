@@ -14,10 +14,10 @@ python hybrid/eval_multigpu.py --dataset /home/my/Trainning-Models/MyFineTunning
 tmux new-session -d -s standar_evaluation "cd /root/Trainning-Models/MyFineTunning-RunPOD && python3 -u utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/me-bottle-isempty-unu3-sem-seg-1-coco/valid/_annotations.coco.json 2>&1 | tee utils/standar_evaluation.log"
 
 # Evaluasi khusus Deteksi
-tmux new-session -d -s standard_datasets_det "cd Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/standard_datasets_det --coco 2>&1 | tee utils/standard_datasets_det.log"
+tmux new-session -d -s standard_datasets_det "cd Trainning-Models/MyFineTunning-dev && source /data/programs/anaconda3/bin/activate && conda activate yolo_env && python3 utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/standard_datasets_det --coco 2>&1 | tee utils/standard_datasets_det.log"
 
 # Evaluasi khusus Segmentasi
-tmux new-session -d -s standard_datasets_seg "cd Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/standard_datasets_seg --coco 2>&1 | tee utils/standard_datasets_seg.log"
+tmux new-session -d -s standard_datasets_seg "cd Trainning-Models/MyFineTunning-dev && source /data/programs/anaconda3/bin/activate && conda activate yolo_env && python3 utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/standard_datasets_seg --coco 2>&1 | tee utils/standard_datasets_seg.log"
 
 # Default dari path manapun
 tmux new-session -d -s standar_evaluation "cd /root/Trainning-Models/MyFineTunning-RunPOD && python3 -u utils/standar_evaluation.py 2>&1 | tee utils/standar_evaluation.log"

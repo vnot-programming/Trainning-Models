@@ -35,7 +35,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PYTHON_BIN="${SCRIPT_DIR}/.venv/bin/python"
+PYTHON_BIN="python3"
 
 # Fallback ke python sistem jika venv tidak ada
 if [[ ! -f "$PYTHON_BIN" ]]; then

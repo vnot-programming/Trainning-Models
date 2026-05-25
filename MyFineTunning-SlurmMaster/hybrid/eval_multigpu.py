@@ -11,7 +11,7 @@ Strategi Evaluasi Terdistribusi:
 
 python hybrid/eval_multigpu.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/me-bottle-isempty-ku3-h61lr-2-yolov11/data.yaml
 
-tmux new-session -d -s eval_multigpu "cd Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u hybrid/eval_multigpu.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/me-bottle-isempty-ku3-h61lr-2-yolov11/data.yaml 2>&1 | tee hybrid/eval_multigpu-h61lr-2-yolov11.log"
+tmux new-session -d -s eval_multigpu "cd Trainning-Models/MyFineTunning-dev && source /data/programs/anaconda3/bin/activate && conda activate yolo_env && python3 -u hybrid/eval_multigpu.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/me-bottle-isempty-ku3-h61lr-2-yolov11/data.yaml 2>&1 | tee hybrid/eval_multigpu-h61lr-2-yolov11.log"
 
 """
 

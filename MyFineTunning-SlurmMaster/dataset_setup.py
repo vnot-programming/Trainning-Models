@@ -66,6 +66,7 @@ dataset = version.download("coco-segmentation")
 
 import os
 from pathlib import Path
+from typing import Optional, Tuple
 
 # Root project = direktori file ini
 _PROJECTROOT = Path(__file__).resolve().parent
@@ -85,18 +86,18 @@ _SEG_FORMAT     = "yolov11"
 
 GOLDEN_SEG_WORKSPACE  = "vnot"
 GOLDEN_SEG_PROJECT    = "me-bottle-isempty-unu3-sem-seg"
-GOLDEN_SEG_VERSION    = 1
+GOLDEN_SEG_VERSION    = 7
 GOLDEN_SEG_FORMAT     = "coco-segmentation"
 
 GOLDEN_DET_WORKSPACE  = "vnot"
 GOLDEN_DET_PROJECT    = "me-bottle-isempty-unu3-det"
-GOLDEN_DET_VERSION    = 7
+GOLDEN_DET_VERSION    = 1
 GOLDEN_DET_FORMAT     = "coco"
 
 STANDAR_SEG_WORKSPACE  = "vnot"
 STANDAR_SEG_PROJECT    = "me-bottle-isempty-ku3-h61lr-seg"
 STANDAR_SEG_VERSION    = 1
-STANDAR_SEG_FORMAT     = "coco-segmentation"
+STANDAR_SEG_FORMAT     = "coco"
 
 STANDAR_DET_WORKSPACE  = "vnot"
 STANDAR_DET_PROJECT    = "me-bottle-isempty-ku3-h61lr"
@@ -134,7 +135,7 @@ def _load_dotenv() -> None:
                     os.environ.setdefault(k.strip(), v.strip())
 
 
-def load_api_key() -> tuple[str | None, str | None]:
+def load_api_key() -> Tuple[Optional[str], Optional[str]]:
     """
     Muat Roboflow API key:
       1. File .env di root project
@@ -161,7 +162,7 @@ def load_api_key() -> tuple[str | None, str | None]:
 # ==============================================================================
 # DATASET DETEKSI - Khusus Training
 # ==============================================================================
-def setup_detection_dataset(key: str | None) -> tuple[str, str]:
+def setup_detection_dataset(key: Optional[str]) -> Tuple[str, str]:
     """
     Siapkan dataset deteksi (YOLOv11 format).
     Download ke DATASETS_DIR jika belum ada.
@@ -172,10 +173,9 @@ def setup_detection_dataset(key: str | None) -> tuple[str, str]:
     # Cek apakah dataset sudah ada (cari folder yang mengandung data.yaml)
     for entry in datasets_dir.iterdir() if datasets_dir.exists() else []:
         if entry.is_dir() and (entry / "data.yaml").exists():
-            if _DET_PROJECT.split("-ku")[0] in entry.name.lower() or "isempty" in entry.name.lower():
-                if "seg" not in entry.name.lower():
-                    print(f"\n📁 Dataset Deteksi: ditemukan lokal → {entry}")
-                    return str(entry), str(entry / "data.yaml")
+            if entry.name == "training_det":
+                print(f"\n📁 Dataset Deteksi: ditemukan lokal → {entry}")
+                return str(entry), str(entry / "data.yaml")
 
     print(f"\n🌐 Dataset Deteksi: belum ada. Download dari Roboflow...")
     if not key:
@@ -189,7 +189,7 @@ def setup_detection_dataset(key: str | None) -> tuple[str, str]:
         project = rf.workspace(_DET_WORKSPACE).project(_DET_PROJECT)
         dataset = project.version(_DET_VERSION).download(
             _DET_FORMAT,
-            location=str(datasets_dir / f"{_DET_PROJECT}-{_DET_VERSION}"),
+            location=str(datasets_dir / "training_det"),
             overwrite=False,
         )
         location = dataset.location
@@ -204,7 +204,7 @@ def setup_detection_dataset(key: str | None) -> tuple[str, str]:
 # ==============================================================================
 # DATASET SEGMENTASI - Khusus Training
 # ==============================================================================
-def setup_segmentation_dataset(key: str | None) -> tuple[str, str]:
+def setup_segmentation_dataset(key: Optional[str]) -> Tuple[str, str]:
     """
     Siapkan dataset segmentasi (YOLOv11 polygon format).
     Download ke DATASETS_DIR jika belum ada.
@@ -215,7 +215,7 @@ def setup_segmentation_dataset(key: str | None) -> tuple[str, str]:
     # Cek apakah dataset segmentasi sudah ada
     for entry in datasets_dir.iterdir() if datasets_dir.exists() else []:
         if entry.is_dir() and (entry / "data.yaml").exists():
-            if "seg" in entry.name.lower() and "isempty" in entry.name.lower():
+            if entry.name == "training_seg":
                 print(f"\n📁 Dataset Segmentasi: ditemukan lokal → {entry}")
                 return str(entry), str(entry / "data.yaml")
 
@@ -231,7 +231,7 @@ def setup_segmentation_dataset(key: str | None) -> tuple[str, str]:
         project = rf.workspace(_SEG_WORKSPACE).project(_SEG_PROJECT)
         dataset = project.version(_SEG_VERSION).download(
             _SEG_FORMAT,
-            location=str(datasets_dir / f"{_SEG_PROJECT}-{_SEG_VERSION}"),
+            location=str(datasets_dir / "training_seg"),
             overwrite=False,
         )
         location = dataset.location
@@ -246,7 +246,7 @@ def setup_segmentation_dataset(key: str | None) -> tuple[str, str]:
 # ==============================================================================
 # DATASET COCO SEGMENTASI (UNU) - Golden Dataset
 # ==============================================================================
-def setup_coco_segmentation_dataset_unu(key_unu: str | None) -> str:
+def setup_coco_segmentation_dataset_unu(key_unu: Optional[str]) -> str:
     """
     Download dataset COCO segmentation dari workspace vnot.
     """
@@ -287,7 +287,7 @@ def setup_coco_segmentation_dataset_unu(key_unu: str | None) -> str:
 # ==============================================================================
 # DATASET COCO DETECTION (UNU) - Golden Dataset
 # ==============================================================================
-def setup_coco_detection_dataset_unu(key_unu: str | None) -> str:
+def setup_coco_detection_dataset_unu(key_unu: Optional[str]) -> str:
     """
     Download dataset COCO detection dari workspace vnot.
     Sesuai dengan snippet:
@@ -334,7 +334,7 @@ def setup_coco_detection_dataset_unu(key_unu: str | None) -> str:
 # ==============================================================================
 # DATASET COCO DETECTION (UNU) - Standard Datasets
 # ==============================================================================
-def setup_h61lr_detection_dataset(key_unu: str | None) -> str:
+def setup_h61lr_detection_dataset(key_unu: Optional[str]) -> str:
     """
     Download dataset me-bottle-isempty-ku3-h61lr.
     """
@@ -370,7 +370,7 @@ def setup_h61lr_detection_dataset(key_unu: str | None) -> str:
 # ==============================================================================
 # DATASET COCO SEGMENTASI (UNU) - Standard Datasets
 # ==============================================================================
-def setup_h61lr_segmentation_dataset(key_unu: str | None) -> str:
+def setup_h61lr_segmentation_dataset(key_unu: Optional[str]) -> str:
     """
     Download dataset me-bottle-isempty-ku3-h61lr-seg.
     """

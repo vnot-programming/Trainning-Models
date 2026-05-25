@@ -1,4 +1,4 @@
-#!/root/MyFineTunning/.venv/bin/python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 mask-r-cnn/train_multigpu.py

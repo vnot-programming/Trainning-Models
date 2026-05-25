@@ -9,7 +9,7 @@ Cara pakai:
     python3 custom_upload.py
 
     # Background (recommended):
-    tmux new-session -d -s upload "cd /root/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 custom_upload.py 2>&1 | tee Custom_UploadReport.log"
+    tmux new-session -d -s upload "cd /root/Trainning-Models/MyFineTunning-dev && source /data/programs/anaconda3/bin/activate && conda activate yolo_env && python3 custom_upload.py 2>&1 | tee Custom_UploadReport.log"
 
 Prerequisite:
     rclone harus sudah dikonfigurasi dengan remote Google Drive.

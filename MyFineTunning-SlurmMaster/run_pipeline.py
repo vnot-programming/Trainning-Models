@@ -12,7 +12,7 @@ Setiap model:
   3. Membersihkan GPU memory sebelum memulai model berikutnya
 
 Cara pakai:
-  source Trainning-Models/MyFineTunning-dev/.venv/bin/activate && python3 run_pipeline.py 2>&1 | tee PipelineReport.log
+  source /data/programs/anaconda3/bin/activate && conda activate yolo_env && python3 run_pipeline.py 2>&1 | tee PipelineReport.log
 
 Atau via tmux (recommended):
   tmux new-session -d -s run_pipeline "cd /root/Trainning-Models/MyFineTunning-RunPOD && python3 run_pipeline.py 2>&1 | tee run_pipeline.log"

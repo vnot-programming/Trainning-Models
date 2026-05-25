@@ -12,7 +12,7 @@ Cara pakai:
   python3 utils/golden_evaluation-new_method.py --dataset default --gpus 0,1
 
 # Default dari path manapun
-  tmux new-session -d -s golden_evaluation-new_method "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/golden_evaluation-new_method.py 2>&1 | tee utils/golden_evaluation-new_method.log"
+  tmux new-session -d -s golden_evaluation-new_method "cd /home/my/Trainning-Models/MyFineTunning-dev && source /data/programs/anaconda3/bin/activate && conda activate yolo_env && python3 -u utils/golden_evaluation-new_method.py 2>&1 | tee utils/golden_evaluation-new_method.log"
 
 """
 

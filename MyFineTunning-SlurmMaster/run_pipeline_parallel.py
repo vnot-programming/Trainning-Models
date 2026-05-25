@@ -29,9 +29,7 @@ sys.path.insert(0, _THIS_DIR)
 from config_shared import WORKSPACE_DIR, EARLY_STOPPING_PATIENCE, PARALLEL_TRAINING
 from telegram_utils import send_telegram_msg
 
-_VENV_PYTHON = os.path.join(_THIS_DIR, ".venv", "bin", "python")
-if not os.path.exists(_VENV_PYTHON):
-    _VENV_PYTHON = sys.executable  # Fallback to current interpreter
+_VENV_PYTHON = sys.executable  # Gunakan interpreter saat ini (misal conda yolo_env)
 
 # Folder Log terpusat di dalam Workspace agar workspace tetap bersih
 LOG_DIR = os.path.join(WORKSPACE_DIR, "logs")
@@ -211,7 +209,10 @@ class ParallelScheduler:
                 # 1. Periksa proses aktif
                 self._poll_active_processes()
                 
-                # 2. Periksa apakah semua tugas selesai
+                # 2. Perbarui status tugas jika dependensi gagal
+                self._update_failed_dependencies()
+                
+                # 3. Periksa apakah semua tugas selesai
                 if self._all_tasks_completed():
                     break
                     
@@ -254,6 +255,21 @@ class ParallelScheduler:
                         t["state"] = "FAILED"
                         print(_c(f"\n[Scheduler] ❌ Task {t['label']} gagal (exit code: {rc}) di GPU {gpu_id}", _RED, _BOLD))
                         send_telegram_msg(f"❌ <b>Task Failed</b>\nTask: <code>{t['label']}</code>\nGPU: <code>{gpu_id}</code>\nExit Code: <code>{rc}</code>")
+
+    def _update_failed_dependencies(self):
+        """Membatalkan (SKIPPED/FAILED) tugas yang memiliki dependensi gagal."""
+        changed = True
+        while changed:
+            changed = False
+            for tid, t in self.tasks.items():
+                if t["state"] == "PENDING":
+                    for dep_id in t["dependencies"]:
+                        dep_state = self.tasks[dep_id]["state"]
+                        if dep_state == "FAILED" or dep_state == "SKIPPED":
+                            t["state"] = "SKIPPED"
+                            print(_c(f"\n[Scheduler] ⏭  Task {t['label']} otomatis dilewati karena dependensi ({dep_id}) {dep_state}", _YELLOW))
+                            changed = True
+                            break
 
     def _dispatch_ready_tasks(self):
         """Temukan task yang siap dijalankan dan jalankan pada GPU bebas."""

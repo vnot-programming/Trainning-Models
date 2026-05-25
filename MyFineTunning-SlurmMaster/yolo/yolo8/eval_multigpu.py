@@ -17,7 +17,7 @@ Cara menjalankan:
     python -u eval_multigpu.py --gpus 0,1 2>&1 | tee eval_multigpu.log
 
     # tmux background:
-    tmux new-session -d -s yolo8eval "source ../../.venv/bin/activate && \\
+    tmux new-session -d -s yolo8eval "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && \\
       cd /home/my/Trainning-Models/MyFineTunning-dev/yolo/yolo8 && \\
       python -u eval_multigpu.py 2>&1 | tee eval_multigpu.log"
 

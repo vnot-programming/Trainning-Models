@@ -16,7 +16,7 @@
 #    bash setup.sh --reuse    ← Menggunakan ulang .venv dari MyFineTunning-dev
 #
 # Setelah setup sukses:
-#   source .venv/bin/activate
+#   source /data/programs/anaconda3/bin/activate && conda activate yolo_env
 #   python run_pipeline_parallel.py              ← Menjalankan Multi-GPU Parallel Pipeline Scheduler (Cerdas)
 # ==============================================================================
 

@@ -12,7 +12,7 @@ Cara pakai:
   python3 utils/standar_evaluation_visuals-new_method.py
 
 # Default dari path manapun
-  tmux new-session -d -s standar_evaluation_visuals_new "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/standar_evaluation_visuals-new_method.py --gpus all 2>&1 | tee utils/standar_evaluation_visuals-new_method.log"
+  tmux new-session -d -s standar_evaluation_visuals_new "cd /home/my/Trainning-Models/MyFineTunning-dev && source /data/programs/anaconda3/bin/activate && conda activate yolo_env && python3 -u utils/standar_evaluation_visuals-new_method.py --gpus all 2>&1 | tee utils/standar_evaluation_visuals-new_method.log"
 
 """
 import os

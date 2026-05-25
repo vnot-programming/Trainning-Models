@@ -16,7 +16,7 @@ Output:
 Cara menjalankan:
     cd hybrid && python3 -u main.py 2>&1 | tee hybrid_map_eval.log
     
-  tmux new-session -d -s hybrideval "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev/hybrid && python3 -u main.py 2>&1 | tee hybrideval.log"
+  tmux new-session -d -s hybrideval "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd /home/my/Trainning-Models/MyFineTunning-dev/hybrid && python3 -u main.py 2>&1 | tee hybrideval.log"
     python -u Trainning-Models/MyFineTunning-dev/main.py 2>&1 | tee hybrid_map_eval.log
 """
 

@@ -11,7 +11,7 @@ Cara menjalankan:
     cd /home/my/Trainning-Models/MyFineTunning-dev
     python3 utils/generate_comparison_grid.py --gpus 0
 
-    tmux new-session -d -s comparison_grid "source Trainning-Models/MyFineTunning-dev/.venv/bin/activate && \\
+    tmux new-session -d -s comparison_grid "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && \\
       cd /home/my/Trainning-Models/MyFineTunning-dev/utils && \\
       python3 -u generate_comparison_grid.py --gpus 0 2>&1 | tee comparison_grid.log"
 
@@ -48,7 +48,7 @@ def _get_training_dataset_valid_dir():
             valid_path = os.path.join(DATASETS_DIR, d, "valid")
             if os.path.isdir(valid_path):
                 return valid_path
-    return os.path.join(DATASETS_DIR, "segpoligon-me-bottle-isempty3-7", "valid")
+    return os.path.join(DATASETS_DIR, "training_seg", "valid")
 
 TRAIN_VALID_DIR  = _get_training_dataset_valid_dir()
 PIPELINE_VISUALS_DIR = os.path.join(REPORTS_DIR, "visuals")

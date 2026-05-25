@@ -89,7 +89,7 @@ def generate_sbatch_script(target_node=None, exclude_nodes=None):
     
     lines = [
         "#!/bin/bash",
-        "#SBATCH --job-name=VnoT",
+        "#SBATCH --job-name=VnoT-Train100",
         "#SBATCH --output=slurm_logs/smart_output_%j.log",
         "#SBATCH --error=slurm_logs/smart_error_%j.log",
         "#SBATCH --partition=gpu",

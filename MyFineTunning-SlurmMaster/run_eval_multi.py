@@ -41,7 +41,7 @@ import datetime
 
 # ── Konfigurasi utama ──────────────────────────────────────────────────────────
 _THIS_DIR  = os.path.abspath(os.path.dirname(__file__))
-_VENV_PYTHON = os.path.join(_THIS_DIR, ".venv", "bin", "python")
+_VENV_PYTHON = sys.executable
 
 # Daftar skrip dalam urutan eksekusi
 _PIPELINE = [

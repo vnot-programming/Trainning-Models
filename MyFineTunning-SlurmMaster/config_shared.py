@@ -61,11 +61,11 @@ IMAGE_SAMPLES_DIR = os.path.join(WORKSPACE_DIR, "image_samples")
 # ==============================================================================
 DET_DATASET_LOCATION = os.environ.get(
     "DET_DATASET",
-    os.path.join(DATASETS_DIR, "me-bottle-isempty-ku3-8")
+    os.path.join(DATASETS_DIR, "training_det")
 )
 SEG_DATASET_LOCATION = os.environ.get(
     "SEG_DATASET",
-    os.path.join(DATASETS_DIR, "segpoligon-me-bottle-isempty3-7")
+    os.path.join(DATASETS_DIR, "training_seg")
 )
 
 DET_YAML = os.path.join(DET_DATASET_LOCATION, "data.yaml")
@@ -92,7 +92,7 @@ GOLDEN_SEG_DATASET_LOCATION = os.environ.get(
 # ==============================================================================
 # PATHS — Pipeline (untuk run_pipeline.py)
 # ==============================================================================
-VENV_ACTIVATE_PATH = os.path.join(ROOT, ".venv", "bin", "activate")
+VENV_ACTIVATE_PATH = "/data/programs/anaconda3/bin/activate"
 
 PIPELINE_JOBS = [
     {

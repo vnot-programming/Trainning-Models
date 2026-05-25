@@ -20,7 +20,7 @@ Cara menjalankan:
     python eval_boundary_iou.py --gpus 0,1
 
 Atau via tmux (recommended):
-tmux new-session -d -s eval_boundary_iou "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && \\
+tmux new-session -d -s eval_boundary_iou "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && \\
       cd /home/my/Trainning-Models/MyFineTunning-dev && \\
       python -u eval_boundary_iou.py 2>&1 | tee eval_boundary_iou.log"
 
