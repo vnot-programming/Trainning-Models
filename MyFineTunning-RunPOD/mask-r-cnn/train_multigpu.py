@@ -782,6 +782,7 @@ if __name__ == "__main__":
     # ── Post-training: latency + report + visual (semua di GPU pertama) ──────
     eval_device = torch.device(f"cuda:{GPU_IDS[0]}")
 
+    csv_path = "N/A"
     if not args.skip_eval:
         size_mb         = round(os.path.getsize(best_pt) / 1e6, 2)
         lat_ms, fps_val = measure_latency(best_pt, eval_device)

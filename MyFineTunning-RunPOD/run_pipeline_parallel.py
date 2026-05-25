@@ -189,6 +189,9 @@ class ParallelScheduler:
                 # 1. Periksa proses aktif
                 self._poll_active_processes()
                 
+                # 1b. Propagasi kegagalan dependensi
+                self._propagate_failures()
+                
                 # 2. Periksa apakah semua tugas selesai
                 if self._all_tasks_completed():
                     break
@@ -232,6 +235,22 @@ class ParallelScheduler:
                         t["state"] = "FAILED"
                         print(_c(f"\n[Scheduler] ❌ Task {t['label']} gagal (exit code: {rc}) di GPU {gpu_id}", _RED, _BOLD))
                         send_telegram_msg(f"❌ <b>Task Failed</b>\nTask: <code>{t['label']}</code>\nGPU: <code>{gpu_id}</code>\nExit Code: <code>{rc}</code>")
+
+    def _propagate_failures(self):
+        """Propagasi kegagalan secara rekursif untuk tugas yang bergantung pada tugas yang gagal."""
+        changed = True
+        while changed:
+            changed = False
+            for tid, t in self.tasks.items():
+                if t["state"] == "PENDING":
+                    for dep_id in t["dependencies"]:
+                        dep_task = self.tasks[dep_id]
+                        if dep_task["state"] == "FAILED":
+                            t["state"] = "FAILED"
+                            print(_c(f"\n[Scheduler] ⏭️  Task '{t['label']}' otomatis FAILED karena dependensi '{dep_task['label']}' gagal.", _RED, _BOLD))
+                            send_telegram_msg(f"⏭️ <b>Dependency Failed</b>\nTask: <code>{t['label']}</code>\nFailed Dependency: <code>{dep_task['label']}</code>")
+                            changed = True
+                            break
 
     def _dispatch_ready_tasks(self):
         """Temukan task yang siap dijalankan dan jalankan pada GPU bebas."""
