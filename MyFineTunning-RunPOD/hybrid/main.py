@@ -36,6 +36,7 @@ from config_shared import (
 from coco_eval_utils import (
     build_coco_ground_truth, evaluate_coco_predictions, check_pycocotools
 )
+from telegram_utils import send_telegram_msg
 import torch
 import cv2
 import numpy as np
