@@ -17,7 +17,7 @@ Cara menjalankan:
     python run_pipeline_multi.py
 
     # Background via tmux:
-    tmux new-session -d -s run_pipeline_multi "cd /root/Trainning-Models/MyFineTunning-dev && python3 run_pipeline_multi.py 2>&1 | tee run_pipeline_multi.log"
+    tmux new-session -d -s run_pipeline_multi "cd /root/Trainning-Models/MyFineTunning-RunPOD && python3 run_pipeline_multi.py 2>&1 | tee run_pipeline_multi.log"
 
     # Lanjut hanya model tertentu (skip yang sudah selesai):
     python run_pipeline_multi.py --skip yolo8,yolo9

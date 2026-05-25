@@ -61,11 +61,11 @@ IMAGE_SAMPLES_DIR = os.path.join(WORKSPACE_DIR, "image_samples")
 # ==============================================================================
 DET_DATASET_LOCATION = os.environ.get(
     "DET_DATASET",
-    os.path.join(DATASETS_DIR, "me-bottle-isempty-ku3-8")
+    os.path.join(DATASETS_DIR, "train_det")
 )
 SEG_DATASET_LOCATION = os.environ.get(
     "SEG_DATASET",
-    os.path.join(DATASETS_DIR, "segpoligon-me-bottle-isempty3-7")
+    os.path.join(DATASETS_DIR, "train_seg")
 )
 
 DET_YAML = os.path.join(DET_DATASET_LOCATION, "data.yaml")
@@ -161,7 +161,7 @@ IMAGE_SIZE          = 640
 NUM_CLASSES         = 7
 YOLO_BATCH_SIZE     = 64   # DDP total (dibagi ke semua GPU oleh Ultralytics)
 MASKRCNN_BATCH_SIZE = 8    # 4
-NUM_WORKERS         = 14    # 16
+NUM_WORKERS         = 10    # 16
 
 # ==============================================================================
 # HYPERPARAMETER PARALEL & EARLY STOPPING (Standard 2026)

@@ -6,7 +6,7 @@
 # Cara pakai:
 #
 # 1. Background Execution via TMUX (Sangat Direkomendasikan untuk Cloud):
-#    tmux new-session -d -s setup_session "cd /home/my/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh 2>&1 | tee SetupReport.log"
+#    tmux new-session -d -s setup_session "cd /home/my/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh 2>&1 | tee setup_session.log"
 #
 # 2. Direct Execution:
 #    cd /home/my/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh
@@ -14,6 +14,7 @@
 # 3. Mode Options:
 #    bash setup.sh            ← Standar (Membuat/memperbarui .venv lokal terisolasi)
 #    bash setup.sh --reuse    ← Menggunakan ulang .venv dari MyFineTunning-dev
+#    tmux new-session -d -s setup_session "cd /home/my/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh --reuse 2>&1 | tee setup_session.log"
 #
 # Setelah setup sukses:
 #   source .venv/bin/activate

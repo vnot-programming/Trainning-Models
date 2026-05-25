@@ -9,15 +9,15 @@ Strategi Evaluasi Terdistribusi:
   - Setiap GPU memproses subset gambar yang berbeda (data parallelism)
   - Hasil prediksi dikumpulkan dan dievaluasi via COCOeval di proses utama
 
-python hybrid/eval_multigpu.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/me-bottle-isempty-ku3-h61lr-2-yolov11/data.yaml
+python hybrid/eval_multigpu.py --dataset /home/my/Trainning-Models/MyFineTunning-RunPOD/datasets/me-bottle-isempty-ku3-h61lr-2-yolov11/data.yaml
 
-tmux new-session -d -s standar_evaluation "cd /root/Trainning-Models/MyFineTunning-RunPOD && python3 -u utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/me-bottle-isempty-unu3-sem-seg-1-coco/valid/_annotations.coco.json 2>&1 | tee utils/standar_evaluation.log"
+tmux new-session -d -s standar_evaluation "cd /root/Trainning-Models/MyFineTunning-RunPOD && python3 -u utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-RunPOD/datasets/me-bottle-isempty-unu3-sem-seg-1-coco/valid/_annotations.coco.json 2>&1 | tee utils/standar_evaluation.log"
 
 # Evaluasi khusus Deteksi
-tmux new-session -d -s standard_datasets_det "cd Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/standard_datasets_det --coco 2>&1 | tee utils/standard_datasets_det.log"
+tmux new-session -d -s standard_datasets_det "cd Trainning-Models/MyFineTunning-RunPOD && source .venv/bin/activate && python3 utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-RunPOD/datasets/standard_datasets_det --coco 2>&1 | tee utils/standard_datasets_det.log"
 
 # Evaluasi khusus Segmentasi
-tmux new-session -d -s standard_datasets_seg "cd Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/standard_datasets_seg --coco 2>&1 | tee utils/standard_datasets_seg.log"
+tmux new-session -d -s standard_datasets_seg "cd Trainning-Models/MyFineTunning-RunPOD && source .venv/bin/activate && python3 utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-RunPOD/datasets/standard_datasets_seg --coco 2>&1 | tee utils/standard_datasets_seg.log"
 
 # Default dari path manapun
 tmux new-session -d -s standar_evaluation "cd /root/Trainning-Models/MyFineTunning-RunPOD && python3 -u utils/standar_evaluation.py 2>&1 | tee utils/standar_evaluation.log"

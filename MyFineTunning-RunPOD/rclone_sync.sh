@@ -8,7 +8,7 @@
 #   bash rclone_sync.sh status    → Tampilkan info & isi GDrive
 #
 #   Background Execution (TMUX):
-#   1. Upload = tmux new-session -d -s rclone_session "cd ~/Computer-Vision/MyFineTunning-dev && bash rclone_sync.sh upload 2>&1 | tee RCloneReport.log"
+#   1. Upload = tmux new-session -d -s rclone_session "cd ~/Computer-Vision/MyFineTunning-RunPOD && bash rclone_sync.sh upload 2>&1 | tee RCloneReport.log"
 #
 # Struktur folder di GDrive:
 #   gdrive-backup/
@@ -60,7 +60,7 @@ fi
 show_info() {
     echo -e "${CYAN}${BOLD}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  RClone Sync — MyFineTunning-dev"
+    echo "  RClone Sync — MyFineTunning-RunPOD"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo -e "${RESET}"
     echo "  Hostname  : $(hostname)"

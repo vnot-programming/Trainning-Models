@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-eval_boundary_iou.py  (ROOT — MyFineTunning-dev)
+eval_boundary_iou.py  (ROOT — MyFineTunning-RunPOD)
 =================================================
 Evaluasi Boundary Mask AP untuk semua model segmentasi menggunakan
 Boundary IoU (Cheng et al., CVPR 2021).
@@ -20,11 +20,11 @@ Cara menjalankan:
     python eval_boundary_iou.py --gpus 0,1
 
 Atau via tmux (recommended):
-tmux new-session -d -s eval_boundary_iou "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && \\
-      cd /home/my/Trainning-Models/MyFineTunning-dev && \\
+tmux new-session -d -s eval_boundary_iou "source /home/my/Trainning-Models/MyFineTunning-RunPOD/.venv/bin/activate && \\
+      cd /home/my/Trainning-Models/MyFineTunning-RunPOD && \\
       python -u eval_boundary_iou.py 2>&1 | tee eval_boundary_iou.log"
 
-tmux new-session -d -s eval_boundary_iou "cd /home/my/Trainning-Models/MyFineTunning-dev && python3 eval_boundary_iou.py 2>&1 | tee eval_boundary_iou.log"
+tmux new-session -d -s eval_boundary_iou "cd /home/my/Trainning-Models/MyFineTunning-RunPOD && python3 eval_boundary_iou.py 2>&1 | tee eval_boundary_iou.log"
 
 Output:
     REPORTS_DIR/report_boundary_iou_comparison.csv

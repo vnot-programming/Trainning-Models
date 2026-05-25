@@ -8,11 +8,11 @@ Setiap gambar menjalankan inferensi langsung per model.
 Hybrid pipeline: YOLO11l detect → boxes prompt → SAM2 segment.
 
 Cara menjalankan:
-    cd /home/my/Trainning-Models/MyFineTunning-dev
+    cd /home/my/Trainning-Models/MyFineTunning-RunPOD
     python3 utils/generate_comparison_grid.py --gpus 0
 
-    tmux new-session -d -s comparison_grid "source Trainning-Models/MyFineTunning-dev/.venv/bin/activate && \\
-      cd /home/my/Trainning-Models/MyFineTunning-dev/utils && \\
+    tmux new-session -d -s comparison_grid "source Trainning-Models/MyFineTunning-RunPOD/.venv/bin/activate && \\
+      cd /home/my/Trainning-Models/MyFineTunning-RunPOD/utils && \\
       python3 -u generate_comparison_grid.py --gpus 0 2>&1 | tee comparison_grid.log"
 
 Output:
@@ -48,7 +48,7 @@ def _get_training_dataset_valid_dir():
             valid_path = os.path.join(DATASETS_DIR, d, "valid")
             if os.path.isdir(valid_path):
                 return valid_path
-    return os.path.join(DATASETS_DIR, "segpoligon-me-bottle-isempty3-7", "valid")
+    return os.path.join(DATASETS_DIR, "train_seg", "valid")
 
 TRAIN_VALID_DIR  = _get_training_dataset_valid_dir()
 PIPELINE_VISUALS_DIR = os.path.join(REPORTS_DIR, "visuals")

@@ -15,7 +15,7 @@ Cara menjalankan:
 
     # tmux background:
     tmux new-session -d -s yolo9eval "source ../../.venv/bin/activate && \\
-      cd /home/my/Trainning-Models/MyFineTunning-dev/yolo/yolo9 && \\
+      cd /home/my/Trainning-Models/MyFineTunning-RunPOD/yolo/yolo9 && \\
       python -u eval_multigpu.py 2>&1 | tee eval_multigpu.log"
 
 Output:

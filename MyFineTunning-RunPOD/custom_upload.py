@@ -9,7 +9,7 @@ Cara pakai:
     python3 custom_upload.py
 
     # Background (recommended):
-    tmux new-session -d -s upload "cd /root/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 custom_upload.py 2>&1 | tee Custom_UploadReport.log"
+    tmux new-session -d -s upload "cd /root/Trainning-Models/MyFineTunning-RunPOD && source .venv/bin/activate && python3 custom_upload.py 2>&1 | tee Custom_UploadReport.log"
 
 Prerequisite:
     rclone harus sudah dikonfigurasi dengan remote Google Drive.
@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 RCLONE_REMOTE = "gdrive"  # Nama remote rclone (ubah sesuai konfigurasi)
 GDRIVE_BASE   = "gdrive-backup/runpod/20260502_134510"
 
-DATA_DIR = "/root/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260502_134510"
+DATA_DIR = "/root/Trainning-Models/MyFineTunning-RunPOD/data-files/MyFineTunning-20260502_134510"
 
 # File-file .tar.gz yang akan diupload
 TAR_FILES = [

@@ -5,14 +5,14 @@ utils/golden_evaluation-new_method.py
 Distributed Multi-GPU Evaluation untuk Seluruh Pipeline menggunakan metode hybrid baru (YOLO11l + SAM2).
 
 Menggunakan model YOLO11l hasil training terbaru:
-  - YOLO11l Deteksi:  /home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l/weights/best.pt
-  - YOLO11l Segmentasi: /home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l_seg/weights/best.pt
+  - YOLO11l Deteksi:  /home/my/Trainning-Models/MyFineTunning-RunPOD/data-files/MyFineTunning-20260505_034341/runs/yolo11l/weights/best.pt
+  - YOLO11l Segmentasi: /home/my/Trainning-Models/MyFineTunning-RunPOD/data-files/MyFineTunning-20260505_034341/runs/yolo11l_seg/weights/best.pt
 
 Cara pakai:
   python3 utils/golden_evaluation-new_method.py --dataset default --gpus 0,1
 
 # Default dari path manapun
-  tmux new-session -d -s golden_evaluation-new_method "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/golden_evaluation-new_method.py 2>&1 | tee utils/golden_evaluation-new_method.log"
+  tmux new-session -d -s golden_evaluation-new_method "cd /home/my/Trainning-Models/MyFineTunning-RunPOD && source .venv/bin/activate && python3 -u utils/golden_evaluation-new_method.py 2>&1 | tee utils/golden_evaluation-new_method.log"
 
 """
 
