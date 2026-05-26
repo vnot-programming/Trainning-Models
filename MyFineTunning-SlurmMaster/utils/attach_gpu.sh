@@ -18,7 +18,7 @@ PROJECT_DIR="/data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster"
 
 # Attach ke terminal bash di dalam alokasi job tersebut
 # Otomatis: load .bashrc, pindah ke project dir, dan aktifkan conda yolo_env
-srun --jobid=$JOBID --pty bash --rcfile <(cat <<EOF
+srun --overlap --jobid=$JOBID --pty bash --rcfile <(cat <<EOF
 if [ -f ~/.bashrc ]; then
     source ~/.bashrc
 fi
