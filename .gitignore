@@ -46,3 +46,6 @@ MyFineTunning-dev/.workspace_id1
 
 # === NFS Temporary Files ===
 .nfs*
+
+# === Temp Attach Config ===
+MyFineTunning-SlurmMaster/utils/.attach_rc
