@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 """
 mask-r-cnn/eval_multigpu.py
 ============================

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 """
 yolo/yolo11/eval_multigpu.py
 =============================
