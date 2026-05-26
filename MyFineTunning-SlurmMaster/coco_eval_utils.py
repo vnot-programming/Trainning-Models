@@ -271,7 +271,7 @@ def evaluate_coco_predictions(coco_gt_dict, image_ids, predictions, iou_type="bb
                 "score": conf,
             })
         elif iou_type == "segm":
-            if "pred_mask" not in pred:
+            if "pred_mask" not in pred or pred["pred_mask"] is None:
                 continue
             mask = pred["pred_mask"]
             if isinstance(mask, dict):

@@ -2,7 +2,7 @@
 
 """
 # Untuk menjalankan dan melihat antarmuka bio-digital-nya:
-python3 /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/bio_monitor.py
+python3 /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/cek_slurm.py
 
 """
 import subprocess
@@ -52,7 +52,11 @@ def parse_scontrol():
         if line.startswith("NodeName="):
             parts = line.split()
             current_node = parts[0].split('=')[1]
-            nodes[current_node] = {'name': current_node, 'gres': '0', 'alloc_gpu': 0, 'state': '', 'reason': ''}
+            nodes[current_node] = {'name': current_node, 'gres': '0', 'alloc_gpu': 0, 'state': '', 'reason': '', 'cpu': 'N/A', 'ram': 'N/A', 'os': 'N/A', 'arch': 'N/A'}
+            
+            match_arch = re.search(r'Arch=([^\s]+)', line)
+            if match_arch:
+                nodes[current_node]['arch'] = match_arch.group(1)
         
         if current_node:
             if "Gres=" in line:
@@ -76,13 +80,29 @@ def parse_scontrol():
                 if match:
                     nodes[current_node]['reason'] = match.group(1)
                     
+            if "CPUTot=" in line:
+                match = re.search(r'CPUTot=(\d+)', line)
+                if match:
+                    nodes[current_node]['cpu'] = match.group(1)
+                    
+            if "RealMemory=" in line:
+                match = re.search(r'RealMemory=(\d+)', line)
+                if match:
+                    mb = int(match.group(1))
+                    nodes[current_node]['ram'] = f"{mb / 1024:.0f} GB"
+                    
+            if "OS=" in line:
+                match = re.search(r'OS=(.*?)( #|$)', line)
+                if match:
+                    nodes[current_node]['os'] = match.group(1).strip()
+                    
     return nodes
 
 def main():
     # Clear screen & Reset Cursor
     print(f"\033[2J\033[H", end="") 
     
-    smooth_print(f"{C_PRIMARY}{C_BOLD}✧ BIO-DIGITAL SLURM MONITOR ✧{C_RESET}")
+    smooth_print(f"{C_PRIMARY}{C_BOLD}✧ SLURM MONITOR | VnoT ✧{C_RESET}")
     smooth_print(f"{C_DIM}Menyinkronkan metrik cluster dengan ritme sirkadian...{C_RESET}", 0.02)
     time.sleep(0.4)
     divider()
@@ -119,6 +139,20 @@ def main():
                 icon = "🔄"
                 
             print(f"\n  {C_BOLD}Node: {name}{C_RESET}")
+            
+            # --- Bio-Digital Hardware Specs ---
+            cpu = data['cpu']
+            ram = data['ram']
+            arch = data['arch']
+            os_info = data['os']
+            if len(os_info) > 20:
+                os_info = os_info[:17] + "..."
+                
+            # Identitas GPU dari Cluster AI_KU_V100
+            gpu_model = "NVIDIA V100"
+            
+            print(f"  {C_DIM}Spesifikasi: 🖥️ {cpu} Cores | 🧠 {ram} | 🎮 {total}x {gpu_model} | ⚙️ {arch} | 🐧 {os_info}{C_RESET}")
+            
             reason_text = f"({data['reason']})" if data['reason'] else ""
             print(f"  Status    : {state_color}{icon} {state}{C_RESET} {C_DIM}{reason_text}{C_RESET}")
             

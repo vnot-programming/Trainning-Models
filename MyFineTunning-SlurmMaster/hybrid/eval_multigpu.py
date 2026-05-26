@@ -119,6 +119,64 @@ def _get_model_size_mb(model_cfg: dict):
         print(f"  ⚠️ Gagal hitung ukuran: {e}")
         return "N/A"
 
+def _calc_prec_recall_coco(all_dt_bbox: list, coco_gt_dict: dict) -> tuple:
+    total_tp, total_fp, total_gt = 0, 0, 0
+    gt_per_class = {}
+    gt_boxes_cls = []
+    for ann in coco_gt_dict.get("annotations", []):
+        cid = ann["category_id"]
+        gt_per_class[cid] = gt_per_class.get(cid, 0) + 1
+        gt_boxes_cls.append((ann["image_id"], cid, ann["bbox"]))
+        
+    num_classes = max(gt_per_class.keys()) + 1 if gt_per_class else 1
+    
+    for cid in range(num_classes):
+        cls_preds = [p for p in all_dt_bbox if p["category_id"] == cid]
+        total_gt += gt_per_class.get(cid, 0)
+        if not cls_preds:
+            continue
+            
+        gt_matched = set()
+        cls_gts = [(img_id, b) for img_id, c, b in gt_boxes_cls if c == cid]
+        
+        for pred in sorted(cls_preds, key=lambda x: x.get("score", 0), reverse=True):
+            if pred.get("score", 0) < 0.5:
+                continue
+                
+            best_iou, best_idx = 0.0, -1
+            pb = pred["bbox"]
+            px1, py1, pw, ph = pb[0], pb[1], pb[2], pb[3]
+            px2, py2 = px1 + pw, py1 + ph
+            pa = pw * ph
+            
+            for idx, (img_id, gb) in enumerate(cls_gts):
+                if pred["image_id"] != img_id:
+                    continue
+                gx1, gy1, gw, gh = gb[0], gb[1], gb[2], gb[3]
+                gx2, gy2 = gx1 + gw, gy1 + gh
+                ga = gw * gh
+                
+                ix1, iy1 = max(px1, gx1), max(py1, gy1)
+                ix2, iy2 = min(px2, gx2), min(py2, gy2)
+                iw, ih = max(0, ix2 - ix1), max(0, iy2 - iy1)
+                ia = iw * ih
+                ua = pa + ga - ia
+                iou = ia / ua if ua > 0 else 0.0
+                
+                if iou > best_iou:
+                    best_iou = iou
+                    best_idx = idx
+                    
+            if best_iou >= 0.5 and best_idx not in gt_matched:
+                total_tp += 1
+                gt_matched.add(best_idx)
+            else:
+                total_fp += 1
+                
+    prec = round(total_tp / (total_tp + total_fp), 4) if (total_tp + total_fp) > 0 else 0.0
+    rec = round(total_tp / total_gt, 4) if total_gt > 0 else 0.0
+    return prec, rec
+
 # ==============================================================================
 # WORKER: INFERENCE PER GPU
 # ==============================================================================
@@ -187,11 +245,14 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
                         masks_np.append(m > 0.5)
                         
         elif mtype == "maskrcnn":
+            pre_st = time.perf_counter()
             pil = PILImage.open(img_path).convert("RGB")
             t_img = TF.to_tensor(pil).unsqueeze(0).to(device_str)
+            spd_pre = (time.perf_counter() - pre_st) * 1000
             inf_st = time.perf_counter()
             with torch.no_grad(): preds = model_obj(t_img)[0]
             spd_inf = (time.perf_counter() - inf_st) * 1000
+            post_st = time.perf_counter()
             scores = preds["scores"].cpu().numpy()
             keep = scores >= 0.001
             pred_boxes = preds["boxes"].cpu().numpy()[keep]
@@ -203,6 +264,7 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
                 for m in m_data:
                     if m.shape != (H, W): m = cv2.resize(m.astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST)
                     masks_np.append(m > 0.5)
+            spd_post = (time.perf_counter() - post_st) * 1000
                     
         elif mtype == "hybrid":
             res = model_obj.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
@@ -299,8 +361,10 @@ def eval_model_distributed(model_cfg: dict, gpu_ids: list, coco_gt_dict: dict, i
             eval_box.evaluate(); eval_box.accumulate(); eval_box.summarize()
             mAP50_box = round(float(eval_box.stats[1]), 4)
             mAP50_95_box = round(float(eval_box.stats[0]), 4)
+            prec_box, rec_box = _calc_prec_recall_coco(all_dt_bbox, coco_gt_dict)
         else:
             mAP50_box = mAP50_95_box = "N/A"
+            prec_box, rec_box = "N/A", "N/A"
             
         if all_dt_segm:
             coco_dt_seg = coco_gt.loadRes(all_dt_segm)
@@ -321,7 +385,7 @@ def eval_model_distributed(model_cfg: dict, gpu_ids: list, coco_gt_dict: dict, i
         "Model Size (MB)": mb_size,
         "mAP50-95": mAP50_95_box,
         "mAP50": mAP50_box,
-        "Precision": "N/A", "Recall": "N/A",
+        "Precision": prec_box, "Recall": rec_box,
         "Preprocess (ms)": avg_pre, "Inference (ms)": avg_inf, "Postprocess (ms)": avg_post,
         "Latency (ms)": lat, "FPS": fps, "GPUs": gpu_str, "Evaluator": "COCOeval (MultiGPU)"
     }
