@@ -101,6 +101,14 @@ TRAINING_JOBS = [
         "args": "",
     },
     {
+        "name": "yolo10",
+        "session": "yolo10training",
+        "workdir": f"{BASE_DIR}/yolo/yolov10",
+        "script": "main.py",
+        "logfile": "yolo10training.log",
+        "args": "",
+    },
+    {
         "name": "yolo11",
         "session": "yolo11training",
         "workdir": f"{BASE_DIR}/yolo/yolo11",

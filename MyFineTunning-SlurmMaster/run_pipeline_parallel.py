@@ -73,17 +73,19 @@ class ParallelScheduler:
     def _build_task_registry(self):
         # 1. Training Tasks
         train_specs = [
-            {"id": "train_yolo8", "name": "yolo8", "label": "YOLOv8m Train", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo8"), "script": "main.py", "args": ["--skip-eval"], "device_arg": "--device"},
-            {"id": "train_yolo9", "name": "yolo9", "label": "YOLOv9m Train", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo9"), "script": "main.py", "args": ["--skip-eval"], "device_arg": "--device"},
-            {"id": "train_yolo11", "name": "yolo11", "label": "YOLO11l Train", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo11"), "script": "main.py", "args": ["--skip-eval"], "device_arg": "--device"},
+            {"id": "train_yolo8", "name": "yolo8", "label": "YOLOv8m/x Train", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo8"), "script": "main.py", "args": ["--skip-eval"], "device_arg": "--device"},
+            {"id": "train_yolo9", "name": "yolo9", "label": "YOLOv9m/e Train", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo9"), "script": "main.py", "args": ["--skip-eval"], "device_arg": "--device"},
+            {"id": "train_yolo10", "name": "yolo10", "label": "YOLOv10m/x Train", "cwd": os.path.join(_THIS_DIR, "yolo", "yolov10"), "script": "main.py", "args": ["--skip-eval"], "device_arg": "--device"},
+            {"id": "train_yolo11", "name": "yolo11", "label": "YOLO11n/l/x Train", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo11"), "script": "main.py", "args": ["--skip-eval"], "device_arg": "--device"},
             {"id": "train_maskrcnn", "name": "maskrcnn", "label": "Mask R-CNN Train", "cwd": os.path.join(_THIS_DIR, "mask-r-cnn"), "script": "train_multigpu.py", "args": ["--skip-eval"], "device_arg": "--gpus"}
         ]
         
         # 2. Evaluation Tasks
         eval_specs = [
-            {"id": "eval_yolo8", "name": "yolo8", "label": "YOLOv8m Eval", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo8"), "script": "eval_multigpu.py", "args": [], "device_arg": "--gpus", "deps": ["train_yolo8"]},
-            {"id": "eval_yolo9", "name": "yolo9", "label": "YOLOv9m Eval", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo9"), "script": "eval_multigpu.py", "args": [], "device_arg": "--gpus", "deps": ["train_yolo9"]},
-            {"id": "eval_yolo11", "name": "yolo11", "label": "YOLO11l Eval", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo11"), "script": "eval_multigpu.py", "args": [], "device_arg": "--gpus", "deps": ["train_yolo11"]},
+            {"id": "eval_yolo8", "name": "yolo8", "label": "YOLOv8m/x Eval", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo8"), "script": "eval_multigpu.py", "args": [], "device_arg": "--gpus", "deps": ["train_yolo8"]},
+            {"id": "eval_yolo9", "name": "yolo9", "label": "YOLOv9m/e Eval", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo9"), "script": "eval_multigpu.py", "args": [], "device_arg": "--gpus", "deps": ["train_yolo9"]},
+            {"id": "eval_yolo10", "name": "yolo10", "label": "YOLOv10m/x Eval", "cwd": os.path.join(_THIS_DIR, "yolo", "yolov10"), "script": "eval_multigpu.py", "args": [], "device_arg": "--gpus", "deps": ["train_yolo10"]},
+            {"id": "eval_yolo11", "name": "yolo11", "label": "YOLO11n/l/x Eval", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo11"), "script": "eval_multigpu.py", "args": [], "device_arg": "--gpus", "deps": ["train_yolo11"]},
             {"id": "eval_maskrcnn", "name": "maskrcnn", "label": "Mask R-CNN Eval", "cwd": os.path.join(_THIS_DIR, "mask-r-cnn"), "script": "eval_multigpu.py", "args": [], "device_arg": "--gpus", "deps": ["train_maskrcnn"]},
             {"id": "eval_hybrid", "name": "hybrid", "label": "Hybrid Pipeline Eval", "cwd": os.path.join(_THIS_DIR, "hybrid"), "script": "main.py", "args": ["--skip-eval"], "device_arg": "--device", "deps": ["train_yolo11"]}
         ]
@@ -97,7 +99,7 @@ class ParallelScheduler:
             "script": "eval_multigpu.py",
             "args": [],
             "device_arg": "--gpus",
-            "deps": ["train_yolo8", "train_yolo9", "train_yolo11", "train_maskrcnn"]
+            "deps": ["train_yolo8", "train_yolo9", "train_yolo10", "train_yolo11", "train_maskrcnn"]
         }
         
         # 4. New Method Evaluations (Tambahan khusus Scopus Q1)
@@ -151,7 +153,7 @@ class ParallelScheduler:
             
         # Daftarkan Global Evaluation Task
         # Global eval hanya aktif jika ada model yang ditraining / dievaluasi
-        run_any = any(self.tasks[tid]["state"] == "PENDING" for tid in ["train_yolo8", "train_yolo9", "train_yolo11", "train_maskrcnn"])
+        run_any = any(self.tasks[tid]["state"] == "PENDING" for tid in ["train_yolo8", "train_yolo9", "train_yolo10", "train_yolo11", "train_maskrcnn"])
         self.tasks[global_eval["id"]] = {
             "id": global_eval["id"],
             "label": global_eval["label"],

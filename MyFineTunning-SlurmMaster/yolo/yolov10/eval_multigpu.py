@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-yolo/yolo9/eval_multigpu.py
-============================
-Distributed Multi-GPU Evaluation untuk YOLOv9m (Detection) + YOLOv9c-Seg (Segmentation).
+yolo/yolov10/eval_multigpu.py
+=============================
+Distributed Multi-GPU Evaluation untuk YOLOv10 (yolov10m + yolov10x).
 
 Strategi:
   - mp.spawn: setiap GPU memproses subset gambar secara paralel
@@ -13,14 +13,9 @@ Cara menjalankan:
     python -u eval_multigpu.py 2>&1 | tee eval_multigpu.log
     python -u eval_multigpu.py --gpus 0,1 2>&1 | tee eval_multigpu.log
 
-    # tmux background:
-    tmux new-session -d -s yolo9eval "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && \\
-      cd /home/my/Trainning-Models/MyFineTunning-dev/yolo/yolo9 && \\
-      python -u eval_multigpu.py 2>&1 | tee eval_multigpu.log"
-
 Output:
-    <REPORTS_DIR>/report_yolov9m_det_multigpu.csv
-    <REPORTS_DIR>/report_yolov9c_seg_multigpu.csv
+    <REPORTS_DIR>/report_yolov10m_det_multigpu.csv
+    <REPORTS_DIR>/report_yolov10x_det_multigpu.csv
 """
 
 import os, sys, gc, csv, time, argparse, pickle, tempfile, subprocess
@@ -36,16 +31,13 @@ import torch
 import torch.multiprocessing as mp
 
 from config_shared import (
-    WORKSPACE_DIR, DET_YAML, SEG_YAML, IMAGE_SIZE,
+    WORKSPACE_DIR, DET_YAML, IMAGE_SIZE,
     get_output_dir, REPORTS_DIR
 )
 from telegram_utils import send_telegram_msg
 from coco_eval_utils import (
     build_coco_ground_truth, evaluate_coco_predictions, check_pycocotools
 )
-
-MODEL_LABEL_DET = "YOLOv9m"
-MODEL_LABEL_SEG = "YOLOv9c-Seg"
 
 # ==============================================================================
 # HELPERS
@@ -134,55 +126,6 @@ def _infer_worker_det(rank: int, gpu_ids: list, pt_path: str,
     print(f"  [GPU:{gpu}] Rank {rank} selesai.", flush=True)
 
 
-def _infer_worker_seg(rank: int, gpu_ids: list, pt_path: str,
-                      img_dir: str, image_ids: dict, tmp_dir: str):
-    from ultralytics import YOLO
-
-    gpu = gpu_ids[rank]
-    torch.cuda.set_device(gpu)
-    print(f"  [GPU:{gpu}] Rank {rank} mulai inferens segmentasi...", flush=True)
-
-    model  = YOLO(pt_path)
-    subset = _partition_images(img_dir, rank, len(gpu_ids))
-    preds  = []
-    speed_pre = []; speed_inf = []; speed_post = []
-
-    t_start = time.perf_counter()
-    for img_path in subset:
-        if img_path not in image_ids:
-            continue
-        result = model.predict(img_path, conf=0.5, imgsz=IMAGE_SIZE,
-                               device=gpu, verbose=False)
-        if result:
-            spd = result[0].speed
-            speed_pre.append(spd.get("preprocess", 0.0))
-            speed_inf.append(spd.get("inference",  0.0))
-            speed_post.append(spd.get("postprocess", 0.0))
-            if result[0].masks is not None:
-                masks = result[0].masks.data.cpu().numpy()
-                boxes = result[0].boxes.xyxy.cpu().numpy()
-                confs = result[0].boxes.conf.cpu().numpy()
-                clss  = result[0].boxes.cls.cpu().numpy().astype(int)
-                for mask, box, conf, cls in zip(masks, boxes, confs, clss):
-                    preds.append({
-                        "image":     img_path,
-                        "pred_mask": mask,
-                        "pred_box":  box.tolist(),
-                        "pred_cls":  int(cls),
-                        "pred_conf": float(conf),
-                    })
-    elapsed = time.perf_counter() - t_start
-    print(f"  [GPU:{gpu}] {len(preds)} prediksi-mask dari {len(subset)} gambar dalam {elapsed:.1f}s", flush=True)
-
-    with open(os.path.join(tmp_dir, f"seg_rank{rank}.pkl"), "wb") as f:
-        pickle.dump({"preds": preds, "elapsed": elapsed, "n_imgs": len(subset),
-                     "speed_pre": speed_pre, "speed_inf": speed_inf,
-                     "speed_post": speed_post}, f)
-
-    del model; _flush_gpu(gpu, f"seg rank{rank}")
-    print(f"  [GPU:{gpu}] Rank {rank} selesai.", flush=True)
-
-
 # ==============================================================================
 # EVALUASI
 # ==============================================================================
@@ -257,7 +200,7 @@ def _calc_prec_recall(all_preds, coco_gt_dict, image_ids):
     return prec, rec
 
 
-def eval_detection_distributed(gpu_ids: list, tmp_dir: str, model_key: str = "yolov9m", model_label: str = "YOLOv9m") -> dict | None:
+def eval_detection_distributed(gpu_ids: list, tmp_dir: str, model_key: str = "yolov10m", model_label: str = "YOLOv10m") -> dict | None:
     print("\n" + "="*65)
     print(f"  Distributed Eval: {model_label} Detection")
     print("="*65)
@@ -322,77 +265,14 @@ def eval_detection_distributed(gpu_ids: list, tmp_dir: str, model_key: str = "yo
     return row
 
 
-def eval_segmentation_distributed(gpu_ids: list, tmp_dir: str, model_key: str = "yolov9c_seg", model_label: str = "YOLOv9c-Seg") -> dict | None:
-    print("\n" + "="*65)
-    print(f"  Distributed Eval: {model_label} Segmentation")
-    print("="*65)
-
-    pt_path = os.path.join(get_output_dir(model_key), "weights", "best.pt")
-    if not os.path.exists(pt_path):
-        print(f"  ❌ best.pt tidak ditemukan: {pt_path}")
-        send_telegram_msg(f"❌ <b>{model_label} MultiGPU Eval</b>\nSeg best.pt tidak ditemukan:\n<code>{pt_path}</code>")
-        return None
-
-    if not check_pycocotools():
-        print("  ❌ pycocotools tidak terinstall."); return None
-
-    print("  [GT] Membangun COCO ground truth segmentasi...")
-    coco_gt_dict, image_ids = build_coco_ground_truth(SEG_YAML, split="valid")
-    if coco_gt_dict is None:
-        print("  ❌ Gagal membangun COCO GT"); return None
-    print(f"  [GT] {len(image_ids)} gambar ditemukan.")
-
-    img_dir    = _resolve_img_dir(SEG_YAML)
-    world_size = len(gpu_ids)
-
-    print(f"  [Spawn] Menjalankan {world_size} GPU worker segmentasi secara paralel...")
-    t_wall_start = time.perf_counter()
-    mp.spawn(_infer_worker_seg,
-             args=(gpu_ids, pt_path, img_dir, image_ids, tmp_dir),
-             nprocs=world_size, join=True)
-    total_wall = time.perf_counter() - t_wall_start
-
-    all_preds, total_imgs, avg_pre, avg_inf, avg_post = _collect_results(tmp_dir, "seg", world_size)
-    print(f"  [Collect] {len(all_preds)} prediksi dari {total_imgs} gambar | Wall: {total_wall:.2f}s")
-    print(f"  [Speed] Pre={avg_pre}ms | Inf={avg_inf}ms | Post={avg_post}ms (avg/gambar)")
-
-    throughput_fps = round(total_imgs / total_wall, 2) if total_wall > 0 else "N/A"
-    lat_ms         = round(total_wall * 1000 / total_imgs, 2) if total_imgs > 0 else "N/A"
-
-    print("  [COCOeval] Menghitung mAP Mask & Box...")
-    mAP50_mask, mAP50_95_mask = evaluate_coco_predictions(coco_gt_dict, image_ids, all_preds, iou_type="segm")
-    _, mAP50_95_box           = evaluate_coco_predictions(coco_gt_dict, image_ids, all_preds, iou_type="bbox")
-    print(f"  ✅ mAP50-95(Box)={mAP50_95_box}  mAP50-95(Mask)={mAP50_95_mask}")
-
-    row = {
-        "Model":            model_label,
-        "Model Size (MB)":  round(os.path.getsize(pt_path)/1e6, 2),
-        "mAP50-95(Box)":    mAP50_95_box,
-        "mAP50-95(Mask)":   mAP50_95_mask,
-        "Preprocess (ms)":  avg_pre,
-        "Inference (ms)":   avg_inf,
-        "Postprocess (ms)": avg_post,
-        "Latency (ms)":     lat_ms,
-        "FPS":              throughput_fps,
-        "GPUs":             _gpu_report_str(gpu_ids),
-        "Evaluator":        "COCOeval (MultiGPU)",
-    }
-    print(f"\n  📊 Hasil {model_label} Segmentation MultiGPU:")
-    for k, v in row.items():
-        print(f"     {k}: {v}")
-    return row
-
-
 # ==============================================================================
 # ENTRYPOINT
 # ==============================================================================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="YOLOv9 Distributed Multi-GPU Evaluation")
+    parser = argparse.ArgumentParser(description="YOLOv10 Distributed Multi-GPU Evaluation")
     parser.add_argument("--gpus", type=str, default="all",
         help="GPU yang digunakan. Contoh: '0,1' atau 'all'. Default: semua GPU.")
-    parser.add_argument("--skip-det", action="store_true", help="Lewati evaluasi detection.")
-    parser.add_argument("--skip-seg", action="store_true", help="Lewati evaluasi segmentation.")
     args = parser.parse_args()
 
     GPU_IDS = list(range(torch.cuda.device_count())) if args.gpus.strip().lower() == "all" \
@@ -407,12 +287,11 @@ if __name__ == "__main__":
             print(f"❌ GPU {g} tidak tersedia (sistem punya {n_avail} GPU)."); sys.exit(1)
 
     print("=" * 65)
-    print("  YOLOv9 — Distributed Multi-GPU Evaluation (All Models)")
+    print("  YOLOv10 — Distributed Multi-GPU Evaluation (All Models)")
     print("=" * 65)
     print(f"  GPU yang digunakan : {GPU_IDS}")
     print(f"  World size         : {len(GPU_IDS)}")
     print(f"  DET_YAML           : {DET_YAML}")
-    print(f"  SEG_YAML           : {SEG_YAML}")
     print(f"  REPORTS_DIR        : {REPORTS_DIR}")
     print("=" * 65 + "\n")
 
@@ -421,7 +300,7 @@ if __name__ == "__main__":
     print(f"[MemClean] VRAM bebas GPU:{GPU_IDS[0]}: {free_gb:.2f} GB\n")
 
     send_telegram_msg(
-        f"🚀 <b>YOLOv9 Multi-Model MultiGPU Eval Dimulai</b>\n"
+        f"🚀 <b>YOLOv10 Multi-Model MultiGPU Eval Dimulai</b>\n"
         f"GPUs: <code>{GPU_IDS}</code>\n"
         f"World Size: {len(GPU_IDS)}"
     )
@@ -429,13 +308,11 @@ if __name__ == "__main__":
     os.makedirs(REPORTS_DIR, exist_ok=True)
 
     models_to_eval = [
-        {"type": "det", "model_key": "yolov9m", "model_label": "YOLOv9m", "yaml": DET_YAML},
-        {"type": "seg", "model_key": "yolov9c_seg", "model_label": "YOLOv9c-Seg", "yaml": SEG_YAML},
-        {"type": "det", "model_key": "yolov9e", "model_label": "YOLOv9e", "yaml": DET_YAML},
-        {"type": "seg", "model_key": "yolov9e_seg", "model_label": "YOLOv9e-Seg", "yaml": SEG_YAML},
+        {"type": "det", "model_key": "yolov10m", "model_label": "YOLOv10m", "yaml": DET_YAML},
+        {"type": "det", "model_key": "yolov10x", "model_label": "YOLOv10x", "yaml": DET_YAML},
     ]
 
-    with tempfile.TemporaryDirectory(prefix="yolo9eval_") as tmp_dir:
+    with tempfile.TemporaryDirectory(prefix="yolov10eval_") as tmp_dir:
         t_total_start = time.perf_counter()
 
         for m_spec in models_to_eval:
@@ -444,50 +321,28 @@ if __name__ == "__main__":
             m_label = m_spec["model_label"]
             m_yaml = m_spec["yaml"]
 
-            if m_type == "det" and not args.skip_det:
-                send_telegram_msg(f"🔍 <b>{m_label} Eval</b>\nMemulai distributed inference deteksi...", force=False)
-                det_row = eval_detection_distributed(GPU_IDS, tmp_dir, model_key=m_key, model_label=m_label)
-                if det_row:
-                    det_fields = [
-                        "Model", "Model Size (MB)", "mAP50-95", "mAP50",
-                        "Precision", "Recall", "Preprocess (ms)", "Inference (ms)",
-                        "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"
-                    ]
-                    det_csv = os.path.join(REPORTS_DIR, f"report_{m_key}_det_multigpu.csv")
-                    with open(det_csv, "w", newline="", encoding="utf-8") as f:
-                        w = csv.DictWriter(f, fieldnames=det_fields)
-                        w.writeheader(); w.writerow(det_row)
-                    print(f"\n✅ Det Report: {det_csv}")
-                    send_telegram_msg(
-                        f"✅ <b>{m_label} MultiGPU Selesai</b>\n"
-                        f"mAP50-95: <code>{det_row['mAP50-95']}</code>\n"
-                        f"mAP50: <code>{det_row['mAP50']}</code>\n"
-                        f"Precision: <code>{det_row['Precision']}</code>\n"
-                        f"Recall: <code>{det_row['Recall']}</code>\n"
-                        f"FPS (Throughput): <code>{det_row['FPS']}</code>\n"
-                        f"GPUs: <code>{det_row['GPUs']}</code>"
-                    )
-
-            elif m_type == "seg" and not args.skip_seg:
-                send_telegram_msg(f"🔍 <b>{m_label} Eval</b>\nMemulai distributed inference segmentasi...", force=False)
-                seg_row = eval_segmentation_distributed(GPU_IDS, tmp_dir, model_key=m_key, model_label=m_label)
-                if seg_row:
-                    seg_fields = [
-                        "Model", "Model Size (MB)", "mAP50-95(Box)",
-                        "mAP50-95(Mask)", "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"
-                    ]
-                    seg_csv = os.path.join(REPORTS_DIR, f"report_{m_key}_multigpu.csv")
-                    with open(seg_csv, "w", newline="", encoding="utf-8") as f:
-                        w = csv.DictWriter(f, fieldnames=seg_fields)
-                        w.writeheader(); w.writerow(seg_row)
-                    print(f"✅ Seg Report: {seg_csv}")
-                    send_telegram_msg(
-                        f"✅ <b>{m_label} MultiGPU Selesai</b>\n"
-                        f"mAP50-95(Box): <code>{seg_row['mAP50-95(Box)']}</code>\n"
-                        f"mAP50-95(Mask): <code>{seg_row['mAP50-95(Mask)']}</code>\n"
-                        f"FPS (Throughput): <code>{seg_row['FPS']}</code>\n"
-                        f"GPUs: <code>{seg_row['GPUs']}</code>"
-                    )
+            send_telegram_msg(f"🔍 <b>{m_label} Eval</b>\nMemulai distributed inference deteksi...", force=False)
+            det_row = eval_detection_distributed(GPU_IDS, tmp_dir, model_key=m_key, model_label=m_label)
+            if det_row:
+                det_fields = [
+                    "Model", "Model Size (MB)", "mAP50-95", "mAP50",
+                    "Precision", "Recall", "Preprocess (ms)", "Inference (ms)",
+                    "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"
+                ]
+                det_csv = os.path.join(REPORTS_DIR, f"report_{m_key}_det_multigpu.csv")
+                with open(det_csv, "w", newline="", encoding="utf-8") as f:
+                    w = csv.DictWriter(f, fieldnames=det_fields)
+                    w.writeheader(); w.writerow(det_row)
+                print(f"\n✅ Det Report: {det_csv}")
+                send_telegram_msg(
+                    f"✅ <b>{m_label} MultiGPU Selesai</b>\n"
+                    f"mAP50-95: <code>{det_row['mAP50-95']}</code>\n"
+                    f"mAP50: <code>{det_row['mAP50']}</code>\n"
+                    f"Precision: <code>{det_row['Precision']}</code>\n"
+                    f"Recall: <code>{det_row['Recall']}</code>\n"
+                    f"FPS (Throughput): <code>{det_row['FPS']}</code>\n"
+                    f"GPUs: <code>{det_row['GPUs']}</code>"
+                )
 
         # ------ Generate Comparison Grid ------
         print("\n" + "="*65 + "\n  Generating Comparison Grid\n" + "="*65)
@@ -497,9 +352,9 @@ if __name__ == "__main__":
             print(f"⚠️ Gagal memanggil generate_comparison_grid: {e}")
 
         total_elapsed = round(time.perf_counter() - t_total_start, 1)
-        print(f"\n✅ YOLOv9 MultiGPU Evaluation selesai dalam {total_elapsed}s")
+        print(f"\n✅ YOLOv10 MultiGPU Evaluation selesai dalam {total_elapsed}s")
         send_telegram_msg(
-            f"🏁 <b>YOLOv9 MultiGPU Eval Selesai</b>\n"
+            f"🏁 <b>YOLOv10 MultiGPU Eval Selesai</b>\n"
             f"Total waktu: <code>{total_elapsed}s</code>\n"
             f"Report: <code>{REPORTS_DIR}</code>"
         )

@@ -425,20 +425,33 @@ def _coco_eval_det(label, pt, yaml):
         return None  # Signal to use fallback
 
 
-print("\n" + "="*65 + "\n  YOLO11l Fine-tuning\n" + "="*65)
+print("\n" + "="*65 + "\n  YOLO11 Multi-Model Fine-tuning (Nano, Large, & Extra Large)\n" + "="*65)
 
-# Download & Pindahkan model dasar terlebih dahulu
-det_model_path = download_and_move_model("yolo11l.pt")
-seg_model_path = download_and_move_model("yolo11l-seg.pt")
+models_to_train = [
+    {"pt": "yolo11n.pt", "yaml": DET_YAML, "run_name": "yolo11n", "label": "YOLO11n Detection"},
+    {"pt": "yolo11n-seg.pt", "yaml": SEG_YAML, "run_name": "yolo11n_seg", "label": "YOLO11n-Seg Segmentation"},
+    {"pt": "yolo11l.pt", "yaml": DET_YAML, "run_name": "yolo11l", "label": "YOLO11l Detection (Primary)"},
+    {"pt": "yolo11l-seg.pt", "yaml": SEG_YAML, "run_name": "yolo11l_seg", "label": "YOLO11l-Seg Segmentation"},
+    {"pt": "yolo11x.pt", "yaml": DET_YAML, "run_name": "yolo11x", "label": "YOLO11x Detection"},
+    {"pt": "yolo11x-seg.pt", "yaml": SEG_YAML, "run_name": "yolo11x_seg", "label": "YOLO11x-Seg Segmentation"},
+]
 
-# Detection — best.pt ini yang akan digunakan oleh hybrid/main.py sebagai prompt
-best_det = _train(det_model_path,     DET_YAML, "yolo11l",    "YOLO11l Detection (Primary)")
-best_seg = _train(seg_model_path, SEG_YAML, "yolo11l_seg","YOLO11l-Seg Segmentation")
+for spec in models_to_train:
+    model_path = download_and_move_model(spec["pt"])
+    best_weights = _train(model_path, spec["yaml"], spec["run_name"], spec["label"])
+    
+    # Simpan visualisasi sampel
+    try:
+        save_yolo_visual_samples(best_weights, spec["run_name"], "", n=10, conf=0.5)
+    except Exception as e:
+        print(f"⚠️ Gagal menyimpan visualisasi sampel untuk {spec['run_name']}: {e}")
 
-# Simpan path best_det ke file agar hybrid/main.py bisa membacanya
+# Simpan path best_det ke file agar hybrid/main.py bisa membacanya (Hybrid menggunakan yolo11l)
+best_yolo11l_det = os.path.join(get_output_dir("yolo11l"), "weights", "best.pt")
 det_path_file = os.path.join(get_output_dir("yolo11l"), "weights", "best_path.txt")
+os.makedirs(os.path.dirname(det_path_file), exist_ok=True)
 with open(det_path_file, "w") as f:
-    f.write(best_det)
+    f.write(best_yolo11l_det)
 print(f"[Info] Path YOLO11l best.pt disimpan ke: {det_path_file}")
 
 report_dir = REPORTS_DIR
@@ -446,7 +459,7 @@ os.makedirs(report_dir, exist_ok=True)
 
 # Evaluasi Multi-GPU menggunakan eval_multigpu.py
 if not args.skip_eval:
-    print("\n" + "="*65 + "\n  Menjalankan Evaluasi Multi-GPU YOLO11l & YOLO11l-Seg\n" + "="*65)
+    print("\n" + "="*65 + "\n  Menjalankan Evaluasi Multi-GPU YOLO11 (n, n-seg, l, l-seg, x, x-seg)\n" + "="*65)
     import subprocess
     import sys
     eval_gpu = args.device if args.device is not None else "all"
@@ -458,12 +471,12 @@ else:
     print("\n[Skip] Evaluasi Multi-GPU dilewati karena argumen --skip-eval aktif.")
 
 # ------ Kompres folder hasil training ------
-try:
-    compress_run("yolo11l")
-    compress_run("yolo11l_seg")
-except Exception as e:
-    print(f"⚠️ Gagal kompres: {e}")
+for spec in models_to_train:
+    try:
+        compress_run(spec["run_name"])
+    except Exception as e:
+        print(f"⚠️ Gagal kompres {spec['run_name']}: {e}")
 
-print("\n✅ YOLO11l selesai.")
-send_telegram_msg(f"✅ <b>YOLO11l Pipeline Finished</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>")
+print("\n✅ Seluruh YOLO11 Pipeline selesai.")
+send_telegram_msg(f"✅ <b>YOLO11 Pipeline Finished (Nano, Large, & Extra Large)</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>")
 print(f"\n[Next] Lanjutkan ke: cd ../../mask-r-cnn && python -u train_multigpu.py")
