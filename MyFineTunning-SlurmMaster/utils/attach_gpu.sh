@@ -13,5 +13,16 @@ echo "✅ Menemukan Job Booking GPU yang sedang berjalan: $JOBID"
 echo "Menghubungkan (attach) ke Node..."
 echo "Ketik 'exit' jika sudah selesai (Job utama tetap akan menahan GPU)."
 
+# Menentukan direktori project
+PROJECT_DIR="/data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster"
+
 # Attach ke terminal bash di dalam alokasi job tersebut
-srun --jobid=$JOBID --pty bash
+# Otomatis: load .bashrc, pindah ke project dir, dan aktifkan conda yolo_env
+srun --jobid=$JOBID --pty bash --rcfile <(cat <<EOF
+if [ -f ~/.bashrc ]; then
+    source ~/.bashrc
+fi
+cd "$PROJECT_DIR"
+source /data/programs/anaconda3/bin/activate yolo_env
+EOF
+)
