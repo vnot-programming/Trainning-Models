@@ -101,10 +101,20 @@ print("\n[Setup] Membuat folder output workspace dan direktori global...")
 workspace_folders = [
     "runs/yolov8m",
     "runs/yolov8m_seg",
+    "runs/yolov8x",
+    "runs/yolov8x_seg",
     "runs/yolov9m",
     "runs/yolov9c_seg",
+    "runs/yolov9e",
+    "runs/yolov9e_seg",
+    "runs/yolov10m",
+    "runs/yolov10x",
+    "runs/yolo11n",
+    "runs/yolo11n_seg",
     "runs/yolo11l",
     "runs/yolo11l_seg",
+    "runs/yolo11x",
+    "runs/yolo11x_seg",
     "runs/maskrcnn/weights",
 ]
 for folder in workspace_folders:
