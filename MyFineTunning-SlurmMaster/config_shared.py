@@ -160,7 +160,7 @@ EPOCHS              = 2
 IMAGE_SIZE          = 640
 NUM_CLASSES         = 7
 YOLO_BATCH_SIZE     = 30   # Diturunkan dari 64 agar terhindar dari GPU Out-Of-Memory (OOM) pada 1 GPU V100
-MASKRCNN_BATCH_SIZE = 8    # Dioptimalkan ke 8 (Aman untuk V100 16GB, memori ~12GB)
+MASKRCNN_BATCH_SIZE = 18   # Dioptimalkan ke 18 (Aman untuk V100 32GB, memori ~25GB)
 NUM_WORKERS         = 6    # Disesuaikan persis dengan batas QOS Slurm (--cpus-per-task=8)
 
 # ==============================================================================
