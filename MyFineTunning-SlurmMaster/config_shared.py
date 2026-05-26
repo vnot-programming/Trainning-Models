@@ -156,12 +156,12 @@ GPU_COOLDOWN_SEC       = 15     # Jeda (detik) setelah training selesai
 # ==============================================================================
 # HYPERPARAMETER RunPOD - Opsi Lain
 # ==============================================================================
-EPOCHS              = 200
+EPOCHS              = 2
 IMAGE_SIZE          = 640
 NUM_CLASSES         = 7
 YOLO_BATCH_SIZE     = 64   # Diturunkan dari 64 agar terhindar dari GPU Out-Of-Memory (OOM) pada 1 GPU V100
-MASKRCNN_BATCH_SIZE = 8    # Diturunkan dari 8 (Sangat memakan memori GPU)
-NUM_WORKERS         = 7    # Disesuaikan persis dengan batas QOS Slurm (--cpus-per-task=8)
+MASKRCNN_BATCH_SIZE = 6    # Diturunkan dari 8 (Sangat memakan memori GPU)
+NUM_WORKERS         = 6    # Disesuaikan persis dengan batas QOS Slurm (--cpus-per-task=8)
 
 # ==============================================================================
 # HYPERPARAMETER PARALEL & EARLY STOPPING (Standard 2026)
@@ -575,6 +575,7 @@ ALL_BASE_MODELS = [
     "yolo11x-seg.pt",
     "mobile_sam.pt",
     "sam2.1_t.pt",
+    "yolo26n.pt",
 ]
 
 
@@ -585,6 +586,28 @@ def ensure_all_base_models():
     for model_name in ALL_BASE_MODELS:
         download_and_move_model(model_name)
     print("[Models] ✅ Semua model dasar tersedia.\n")
+    
+    # Salin yolo26n.pt ke folder sub-direktori training YOLO untuk menghindari auto-download AMP check
+    yolo26n_src = os.path.join(MODELS_DIR, "yolo26n.pt")
+    if os.path.exists(yolo26n_src):
+        import shutil
+        subdirs = [
+            "yolo/yolo8",
+            "yolo/yolo9",
+            "yolo/yolov10",
+            "yolo/yolo11",
+        ]
+        print("[Models] 🔗 Menyamakan yolo26n.pt ke folder training untuk offline AMP Check...")
+        base_dir = os.path.dirname(MODELS_DIR)  # parent dir dari models/
+        for subdir in subdirs:
+            dest_dir = os.path.join(base_dir, subdir)
+            if os.path.exists(dest_dir):
+                dest_file = os.path.join(dest_dir, "yolo26n.pt")
+                shutil.copy2(yolo26n_src, dest_file)
+                print(f"  ➡️ Disalin ke {subdir}/yolo26n.pt")
+            else:
+                print(f"  ⚠️ Folder tidak ditemukan: {dest_dir}")
+        print("")
 
 
 def generate_models_markdown_summary():

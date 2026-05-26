@@ -2,6 +2,11 @@
 
 Dokumen ini menjelaskan cara menggunakan fitur **Smart GPU Booking** untuk melakukan iterasi *development* & *debugging* tanpa harus mengantre Slurm berulang-ulang setiap kali menjalankan skrip.
 
+## Membuka Menu Interaktif:
+```bash
+/data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/myslurm.sh
+```
+
 ## Daftar Skrip
 - `book_gpu.py`: Submitter pintar yang mengalokasikan GPU, memfilter node yang error/DRAIN secara otomatis, dan memonitor status lewat Telegram.
 - `attach_gpu.sh`: Helper bash script yang akan meluncurkan `srun` agar Anda seketika (instant) berada di dalam node komputasi yang Anda pegang (hold).

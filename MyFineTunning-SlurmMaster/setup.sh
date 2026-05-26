@@ -9,7 +9,7 @@
 #    tmux new-session -d -s setup_session "cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && bash setup.sh 2>&1 | tee SetupReport.log"
 
 # 2. Untuk memastikan skrip setup.sh berjalan dalam lingkungan yang benar bahwa lingkungan Conda diaktifkan sebelum skrip dijalankan:
-#    tmux new-session -d -s setup_session "source /data/programs/anaconda3/bin/activate yolo_env && cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && bash setup.sh 2>&1 | tee SetupReport.log"  
+#    tmux new-session -d -s setup "source /data/programs/anaconda3/bin/activate yolo_env && cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && bash setup.sh 2>&1 | tee setup.log"  
 
 # tmux new-session -d -s run_pipeline_parallel "cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && source .venv/bin/activate && python3 run_pipeline_parallel.py 2>&1 | tee run_pipeline_parallel.log"
 
@@ -74,13 +74,14 @@ fi
 # Fungsi Cek Kompatibilitas Torch CUDA
 check_torch_cuda() {
     python3 -c "
-import torch
-import sys
-if not torch.cuda.is_available():
+try:
+    import torch
+    if torch.version.cuda is not None:
+        print(1)
+    else:
+        print(0)
+except Exception:
     print(0)
-    sys.exit(0)
-# Jika torch.cuda.is_available() True, berarti versi cu berapapun yang terinstal sudah berfungsi dengan baik.
-print(1)
 " 2>/dev/null || echo 0
 }
 
@@ -106,12 +107,14 @@ pip install --upgrade pip --quiet
 # Fungsi Cek Kompatibilitas Torch CUDA (dalam venv)
 check_torch_cuda() {
     python3 -c "
-import torch
-import sys
-if not torch.cuda.is_available():
+try:
+    import torch
+    if torch.version.cuda is not None:
+        print(1)
+    else:
+        print(0)
+except Exception:
     print(0)
-    sys.exit(0)
-print(1)
 " 2>/dev/null || echo 0
 }
 

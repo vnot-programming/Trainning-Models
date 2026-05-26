@@ -30,7 +30,7 @@ from config_shared import (
     WORKSPACE_DIR, DET_YAML, SEG_YAML, MODELS_DIR,
     EPOCHS, IMAGE_SIZE, YOLO_BATCH_SIZE, get_output_dir, compress_run,
     save_yolo_visual_samples, parse_device, download_and_move_model, REPORTS_DIR,
-    EARLY_STOPPING_PATIENCE
+    EARLY_STOPPING_PATIENCE, NUM_WORKERS
 )
 from telegram_utils import get_yolo_callbacks, send_telegram_msg
 import argparse
@@ -88,13 +88,17 @@ def _train(model_pt, yaml_path, run_name, label):
         print(f"\n[SKIP] {label}: training sudah selesai.\n  best.pt: {best_pt}")
         return best_pt
 
+    # Auto-scale workers per GPU to avoid multiprocessing BrokenPipe / EOFError
+    n_gpus = len(DEVICE) if isinstance(DEVICE, list) else 1
+    train_workers = max(1, NUM_WORKERS // n_gpus)
+
     if os.path.exists(last_pt):
         print(f"\n[RESUME] {label}: melanjutkan dari last.pt\n  {last_pt}")
         model = YOLO(last_pt)
         # Tambahkan Telegram Callbacks (meskipun resume)
         for k, v in get_yolo_callbacks(label).items():
             model.add_callback(k, v)
-        model.train(resume=True, patience=EARLY_STOPPING_PATIENCE)
+        model.train(resume=True, patience=EARLY_STOPPING_PATIENCE, workers=train_workers)
     else:
         print(f"\n{'='*60}\n  {label}\n{'='*60}")
         model = YOLO(model_pt)
@@ -104,7 +108,8 @@ def _train(model_pt, yaml_path, run_name, label):
 
         model.train(data=yaml_path, epochs=EPOCHS, imgsz=IMAGE_SIZE, batch=YOLO_BATCH_SIZE,
                     project=os.path.dirname(out_dir), name=os.path.basename(out_dir),
-                    exist_ok=True, device=DEVICE, patience=EARLY_STOPPING_PATIENCE)
+                    exist_ok=True, device=DEVICE, patience=EARLY_STOPPING_PATIENCE,
+                    workers=train_workers)
 
     # Tandai training selesai
     with open(done_flag, "w") as f:
