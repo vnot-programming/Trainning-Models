@@ -173,11 +173,12 @@ echo "  Jalankan setup: python main.py"
 echo "  Konfigurasi  : config_shared.py"
 echo ""
 echo "  Urutan training (Default menggunakan GPU 0 | Jika Multi maka Paralel Aktif):"
-echo "  1. YOLO8   : cd yolo/yolo8  && python -u main.py 2>&1 | tee yolo8training.log"
-echo "  2. YOLO9   : cd yolo/yolo9  && python -u main.py 2>&1 | tee yolo9training.log"
-echo "  3. YOLO11  : cd yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log"
-echo "  4. MaskRCNN: cd mask-r-cnn  && python -u train_multigpu.py 2>&1 | tee maskrcnntraining.log"
-echo "  5. Hybrid  : cd hybrid      && python -u main.py 2>&1 | tee hybridtraining.log"
+echo "  1. YOLO8   : cd yolo/yolo8   && python -u main.py 2>&1 | tee yolo8training.log"
+echo "  2. YOLO9   : cd yolo/yolo9   && python -u main.py 2>&1 | tee yolo9training.log"
+echo "  3. YOLO10  : cd yolo/yolov10 && python -u main.py 2>&1 | tee yolo10training.log"
+echo "  4. YOLO11  : cd yolo/yolo11  && python -u main.py 2>&1 | tee yolo11training.log"
+echo "  5. MaskRCNN: cd mask-r-cnn   && python -u train_multigpu.py 2>&1 | tee maskrcnntraining.log"
+echo "  6. Hybrid  : cd hybrid       && python -u main.py 2>&1 | tee hybridtraining.log"
 echo ""
 echo "  💡 Tips GPU: Tambahkan '--device 1,2' jika ingin menggunakan GPU nomor 1 dan 2 saja."
 echo ""
@@ -187,6 +188,9 @@ echo "    tmux new-session -d -s yolo8training \"source $VENV_DIR/bin/activate &
 echo ""
 echo "  - YOLO9 :"
 echo "    tmux new-session -d -s yolo9training \"source $VENV_DIR/bin/activate && cd $SCRIPT_DIR/yolo/yolo9 && python -u main.py 2>&1 | tee yolo9training.log\""
+echo ""
+echo "  - YOLO10:"
+echo "    tmux new-session -d -s yolo10training \"source $VENV_DIR/bin/activate && cd $SCRIPT_DIR/yolo/yolov10 && python -u main.py 2>&1 | tee yolo10training.log\""
 echo ""
 echo "  - YOLO11:"
 echo "    tmux new-session -d -s yolo11training \"source $VENV_DIR/bin/activate && cd $SCRIPT_DIR/yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log\""
@@ -198,7 +202,28 @@ echo "  - Hybrid:"
 echo "    tmux new-session -d -s hybridtraining \"source $VENV_DIR/bin/activate && cd $SCRIPT_DIR/hybrid && python -u main.py 2>&1 | tee hybridtraining.log\""
 echo ""
 if ! command -v tmux &> /dev/null; then
-    echo "  ⚠️  Peringatan: 'tmux' belum terinstall. Jalankan: sudo apt update && sudo apt install tmux -y"
+    echo "  ⚠️  Peringatan: 'tmux' belum terinstall. Mencoba menginstal secara otomatis..."
+    if command -v sudo &> /dev/null && sudo -n true &> /dev/null; then
+        echo "  [tmux] Hak akses sudo (passwordless) terdeteksi. Menginstal dengan sudo apt..."
+        sudo apt-get update -y && sudo apt-get install -y tmux
+    else
+        if [[ -f "/data/programs/anaconda3/bin/activate" ]]; then
+            echo "  [tmux] Mengaktifkan conda environment (yolo_env)..."
+            source /data/programs/anaconda3/bin/activate && conda activate yolo_env
+        fi
+        if command -v conda &> /dev/null; then
+            echo "  [tmux] Menginstall menggunakan conda..."
+            conda install -y -c conda-forge tmux
+        else
+            echo "  ❌ Gagal menginstall tmux secara otomatis. sudo/conda tidak tersedia atau tidak memiliki hak akses."
+        fi
+    fi
+fi
+
+if command -v tmux &> /dev/null; then
+    echo "  ✅ tmux terinstal: $(tmux -V)"
+else
+    echo "  ⚠️ tmux masih belum terinstal."
 fi
 echo "============================================================"
 

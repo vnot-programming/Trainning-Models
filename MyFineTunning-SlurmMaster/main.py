@@ -159,17 +159,19 @@ print(f"""
   WORKSPACE_DIR     : {WORKSPACE_DIR}
 
 [Setup] Urutan training (Default menggunakan GPU 0 | Jika Multi maka Paralel Aktif):
-  1. YOLO8   : cd yolo/yolo8  && python -u main.py 2>&1 | tee yolo8training.log
-  2. YOLO9   : cd yolo/yolo9  && python -u main.py 2>&1 | tee yolo9training.log
-  3. YOLO11  : cd yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log
-  4. MaskRCNN: cd mask-r-cnn  && python -u train_multigpu.py 2>&1 | tee maskrcnntraining.log
-  5. Hybrid  : cd hybrid      && python -u main.py 2>&1 | tee hybridtraining.log
+  1. YOLO8   : cd yolo/yolo8   && python -u main.py 2>&1 | tee yolo8training.log
+  2. YOLO9   : cd yolo/yolo9   && python -u main.py 2>&1 | tee yolo9training.log
+  3. YOLO10  : cd yolo/yolov10 && python -u main.py 2>&1 | tee yolo10training.log
+  4. YOLO11  : cd yolo/yolo11  && python -u main.py 2>&1 | tee yolo11training.log
+  5. MaskRCNN: cd mask-r-cnn   && python -u train_multigpu.py 2>&1 | tee maskrcnntraining.log
+  6. Hybrid  : cd hybrid       && python -u main.py 2>&1 | tee hybridtraining.log
 
   💡 Tips GPU: Tambahkan '--device 1,2' jika ingin menggunakan GPU nomor 1 dan 2 saja.
 
   🛠️ Background Execution (tmux):
   - YOLO8 : tmux new-session -d -s yolo8training "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd yolo/yolo8 && python -u main.py 2>&1 | tee yolo8training.log"
   - YOLO9 : tmux new-session -d -s yolo9training "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd yolo/yolo9 && python -u main.py 2>&1 | tee yolo9training.log"
+  - YOLO10: tmux new-session -d -s yolo10training "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd yolo/yolov10 && python -u main.py 2>&1 | tee yolo10training.log"
   - YOLO11: tmux new-session -d -s yolo11training "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log"
   - MaskRCNN: tmux new-session -d -s maskrcnntraining "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd . && python -u mask-r-cnn/train_multigpu.py 2>&1 | tee maskrcnntraining.log"
   - Hybrid: tmux new-session -d -s hybridtraining "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && cd hybrid && python -u main.py 2>&1 | tee hybridtraining.log"

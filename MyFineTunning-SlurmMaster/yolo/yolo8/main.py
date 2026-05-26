@@ -429,20 +429,25 @@ def _coco_eval_seg(label, pt, yaml):
         return None  # Signal to use fallback
 
 
-print("\n" + "="*65 + "\n  YOLOv8m Fine-tuning\n" + "="*65)
-# Download & Pindahkan model dasar terlebih dahulu
-det_model_path = download_and_move_model("yolov8m.pt")
-seg_model_path = download_and_move_model("yolov8m-seg.pt")
+print("\n" + "="*65 + "\n  YOLOv8 Multi-Model Fine-tuning (Medium & Extra Large)\n" + "="*65)
 
-best_det = _train(det_model_path,     DET_YAML, "yolov8m",    "YOLOv8m Detection")
-best_seg = _train(seg_model_path, SEG_YAML, "yolov8m_seg","YOLOv8m-Seg Segmentation")
+models_to_train = [
+    {"pt": "yolov8m.pt", "yaml": DET_YAML, "run_name": "yolov8m", "label": "YOLOv8m Detection"},
+    {"pt": "yolov8m-seg.pt", "yaml": SEG_YAML, "run_name": "yolov8m_seg", "label": "YOLOv8m-Seg Segmentation"},
+    {"pt": "yolov8x.pt", "yaml": DET_YAML, "run_name": "yolov8x", "label": "YOLOv8x Detection"},
+    {"pt": "yolov8x-seg.pt", "yaml": SEG_YAML, "run_name": "yolov8x_seg", "label": "YOLOv8x-Seg Segmentation"},
+]
+
+for spec in models_to_train:
+    model_path = download_and_move_model(spec["pt"])
+    _train(model_path, spec["yaml"], spec["run_name"], spec["label"])
 
 report_dir = REPORTS_DIR
 os.makedirs(report_dir, exist_ok=True)
 
 # Evaluasi Multi-GPU menggunakan eval_multigpu.py
 if not args.skip_eval:
-    print("\n" + "="*65 + "\n  Menjalankan Evaluasi Multi-GPU YOLOv8m & YOLOv8m-Seg\n" + "="*65)
+    print("\n" + "="*65 + "\n  Menjalankan Evaluasi Multi-GPU untuk YOLOv8 (m, m-seg, x, x-seg)\n" + "="*65)
     import subprocess
     import sys
     eval_gpu = args.device if args.device is not None else "all"
@@ -454,11 +459,12 @@ else:
     print("\n[Skip] Evaluasi Multi-GPU dilewati karena argumen --skip-eval aktif.")
 
 # ------ Kompres folder hasil training ------
-try:
-    compress_run("yolov8m")
-    compress_run("yolov8m_seg")
-except Exception as e:
-    print(f"⚠️ Gagal kompres: {e}")
+for spec in models_to_train:
+    try:
+        compress_run(spec["run_name"])
+    except Exception as e:
+        print(f"⚠️ Gagal kompres {spec['run_name']}: {e}")
 
-print("\n✅ YOLOv8m selesai.")
-send_telegram_msg(f"✅ <b>YOLOv8m Pipeline Finished</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>")
+print("\n✅ Seluruh YOLOv8 Pipeline selesai.")
+send_telegram_msg(f"✅ <b>YOLOv8 Pipeline Finished (Medium & Extra Large)</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>")
+
