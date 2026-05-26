@@ -156,12 +156,12 @@ GPU_COOLDOWN_SEC       = 15     # Jeda (detik) setelah training selesai
 # ==============================================================================
 # HYPERPARAMETER RunPOD - Opsi Lain
 # ==============================================================================
-EPOCHS              = 100
+EPOCHS              = 200
 IMAGE_SIZE          = 640
 NUM_CLASSES         = 7
-YOLO_BATCH_SIZE     = 32   # Diturunkan dari 64 agar terhindar dari GPU Out-Of-Memory (OOM) pada 1 GPU V100
-MASKRCNN_BATCH_SIZE = 4    # Diturunkan dari 8 (Sangat memakan memori GPU)
-NUM_WORKERS         = 8    # Disesuaikan persis dengan batas QOS Slurm (--cpus-per-task=8)
+YOLO_BATCH_SIZE     = 64   # Diturunkan dari 64 agar terhindar dari GPU Out-Of-Memory (OOM) pada 1 GPU V100
+MASKRCNN_BATCH_SIZE = 8    # Diturunkan dari 8 (Sangat memakan memori GPU)
+NUM_WORKERS         = 7    # Disesuaikan persis dengan batas QOS Slurm (--cpus-per-task=8)
 
 # ==============================================================================
 # HYPERPARAMETER PARALEL & EARLY STOPPING (Standard 2026)
@@ -559,12 +559,24 @@ def download_and_move_model(model_name: str) -> str:
 ALL_BASE_MODELS = [
     "yolov8m.pt",
     "yolov8m-seg.pt",
+    "yolov8x.pt",
+    "yolov8x-seg.pt",
     "yolov9m.pt",
     "yolov9c-seg.pt",
+    "yolov9e.pt",
+    "yolov9e-seg.pt",
+    "yolov10m.pt",
+    "yolov10x.pt",
+    "yolo11n.pt",
+    "yolo11n-seg.pt",
     "yolo11l.pt",
     "yolo11l-seg.pt",
+    "yolo11x.pt",
+    "yolo11x-seg.pt",
+    "mobile_sam.pt",
     "sam2.1_t.pt",
 ]
+
 
 def ensure_all_base_models():
     """Download semua model dasar ke MODELS_DIR jika belum ada."""
@@ -573,3 +585,61 @@ def ensure_all_base_models():
     for model_name in ALL_BASE_MODELS:
         download_and_move_model(model_name)
     print("[Models] ✅ Semua model dasar tersedia.\n")
+
+
+def generate_models_markdown_summary():
+    """Membuat rangkuman markdown dinamis tentang semua model .pt yang tersedia."""
+    md_path = os.path.join(MODELS_DIR, "README.md")
+    print(f"[Models] Mengompilasi rangkuman model ke: {md_path}")
+    
+    lines = [
+        "# 🤖 Rangkuman Model Dasar (.pt)",
+        "",
+        "Berikut adalah daftar seluruh model dasar (*base weights*) PyTorch yang tersedia secara lokal di server untuk proses training dan analisis evaluasi.",
+        "",
+        "| Nama Model | Kategori Tugas | Ukuran File (MB) | Status Lokal |",
+        "| :--- | :--- | :--- | :--- |"
+    ]
+    
+    for model_name in ALL_BASE_MODELS:
+        file_path = os.path.join(MODELS_DIR, model_name)
+        status = "❌ Belum Terunduh"
+        size_str = "-"
+        
+        if os.path.exists(file_path):
+            status = "✅ Tersedia"
+            size_mb = os.path.getsize(file_path) / (1024 * 1024)
+            size_str = f"{size_mb:.2f} MB"
+            
+        # Tentukan tugas berdasarkan nama model
+        if "-seg" in model_name or "seg" in model_name:
+            task = "Instance Segmentation"
+        elif "sam" in model_name:
+            task = "Segment Anything (SAM)"
+        else:
+            task = "Object Detection"
+            
+        lines.append(f"| `{model_name}` | {task} | {size_str} | {status} |")
+        
+    lines.extend([
+        "",
+        "---",
+        f"*Dibuat secara dinamis pada: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*"
+    ])
+    
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    with open(md_path, "w") as f:
+        f.write("\n".join(lines))
+    print("[Models] ✅ Rangkuman markdown berhasil dibuat!")
+
+
+if __name__ == "__main__":
+    print("============================================================")
+    print("  MyFineTunning — Unduh Model & Buat Rangkuman")
+    print("============================================================")
+    # Unduh semua model dasar jika belum ada
+    ensure_all_base_models()
+    # Buat rangkuman markdown dinamis
+    generate_models_markdown_summary()
+    print("============================================================")
+
