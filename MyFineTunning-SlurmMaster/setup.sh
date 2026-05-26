@@ -6,10 +6,13 @@
 # Cara pakai:
 #
 # 1. Background Execution via TMUX (Sangat Direkomendasikan untuk Cloud):
-#    tmux new-session -d -s setup_session "cd /home/my/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh 2>&1 | tee SetupReport.log"
+#    tmux new-session -d -s setup_session "cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && bash setup.sh 2>&1 | tee SetupReport.log"
+
+# 2. Untuk memastikan skrip setup.sh berjalan dalam lingkungan yang benar bahwa lingkungan Conda diaktifkan sebelum skrip dijalankan:
+#    tmux new-session -d -s setup_session "source /data/programs/anaconda3/bin/activate yolo_env && cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && bash setup.sh 2>&1 | tee SetupReport.log"   
 #
-# 2. Direct Execution:
-#    cd /home/my/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh
+# 3. Direct Execution:
+#    cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && bash setup.sh
 #
 # 3. Mode Options:
 #    bash setup.sh            ← Standar (Membuat/memperbarui .venv lokal terisolasi)
