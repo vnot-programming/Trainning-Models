@@ -9,7 +9,10 @@
 #    tmux new-session -d -s setup_session "cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && bash setup.sh 2>&1 | tee SetupReport.log"
 
 # 2. Untuk memastikan skrip setup.sh berjalan dalam lingkungan yang benar bahwa lingkungan Conda diaktifkan sebelum skrip dijalankan:
-#    tmux new-session -d -s setup_session "source /data/programs/anaconda3/bin/activate yolo_env && cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && bash setup.sh 2>&1 | tee SetupReport.log"   
+#    tmux new-session -d -s setup_session "source /data/programs/anaconda3/bin/activate yolo_env && cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && bash setup.sh 2>&1 | tee SetupReport.log"  
+
+# tmux new-session -d -s run_pipeline_parallel "cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && source .venv/bin/activate && python3 run_pipeline_parallel.py 2>&1 | tee run_pipeline_parallel.log"
+
 #
 # 3. Direct Execution:
 #    cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && bash setup.sh

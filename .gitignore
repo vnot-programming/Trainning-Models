@@ -43,3 +43,6 @@ MyFineTunning-dev/yolo/yolo11/__pycache__/
 # File besar di dalam MyFineTunning-RunPOD diatur oleh .gitignore di dalam folder tersebut
 MyFineTunning-RunPOD/.venv
 MyFineTunning-dev/.workspace_id1
+
+# === NFS Temporary Files ===
+.nfs*
