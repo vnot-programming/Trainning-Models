@@ -260,6 +260,11 @@ def run_local_archiver() -> bool:
         else:
             print(f"  ⚠️  [Lewat] Folder '{folder_name}' tidak ditemukan di workspace. Kompresi dilewati.")
 
+    print("\n[Langkah 6] Mengompresi seluruh direktori workspace utama...")
+    ws_archive = datas_dir / f"{ws_dir.name}.tar.gz"
+    if compress_directory(ws_dir, ws_archive):
+        compressed_count += 1
+
     elapsed_total = time.perf_counter() - t_start
     
     print("\n" + "=" * 70)

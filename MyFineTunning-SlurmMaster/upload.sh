@@ -99,7 +99,8 @@ do_upload() {
 
     echo -e "   ${BOLD}Target Upload:${RESET} ${REMOTE_PATH}"
     
-    if rclone copy ./datas "$REMOTE_PATH" -P; then
+    # Menambahkan --exclude agar file kompresi workspace utuh tidak terupload
+    if rclone copy ./datas "$REMOTE_PATH" -P --exclude "MyFineTunning-*.tar.gz"; then
         echo -e "\n${GREEN}${BOLD}🎉 SELESAI: Upload ke Google Drive berhasil!${RESET}"
     else
         echo -e "\n${RED}${BOLD}❌ ERROR: Terjadi kegagalan saat proses upload menggunakan rclone.${RESET}"

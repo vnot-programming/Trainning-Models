@@ -169,3 +169,21 @@
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - Fitur dapat dipanggil dengan menjalankan `bash upload.sh upload`.
   - Pastikan profil konfigurasi remote pada rclone bernama `gdrive` dan telah di-authenticate. Apabila di masa mendatang penamaan remote berubah, konfigurasi perlu disesuaikan pada variabel `REMOTE_PATH` dalam fungsi `do_upload()` di skrip `upload.sh`.
+
+---
+
+### [Entri 009] — Kompresi Total Workspace Lokal & Pengecualian Unggahan
+
+- **Tanggal/Waktu:** 2026-05-27 21:23 WIB
+- **Tugas yang diselesaikan:**
+  - Menambahkan langkah kompresi `data-files/MyFineTunning-{workspace_id}` (seluruh folder workspace aktif) di `upload_utils.py` ke dalam direktori `datas/`.
+  - File kompresi diberi nama dengan format `MyFineTunning-{workspace_id}.tar.gz`.
+  - Menambahkan argumen `--exclude "MyFineTunning-*.tar.gz"` ke dalam eksekusi `rclone copy` pada skrip `upload.sh` agar file archive berukuran masif tersebut tidak ikut terunggah ke Google Drive (menghemat bandwidth dan kuota cloud).
+- **File yang diubah/dibuat:**
+  - `utils/upload_utils.py` [DIMODIFIKASI]
+  - `upload.sh` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 009]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - File arsip workspace hanya disimpan secara lokal di `/datas/`. Rclone otomatis akan mengabaikan file ini saat push ke Google Drive.
+
