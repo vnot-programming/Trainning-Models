@@ -23,7 +23,8 @@ PANDUAN EKSEKUSI AGAR TIDAK TERPUTUS (WORKFLOW TMUX YANG BENAR):
    python3 run_pipeline_parallel.py 2>&1 | tee run_pipeline_parallel.log
 
 4. Detach dari TMUX untuk meninggalkan proses (Aman jika terminal ditutup):
-   Tekan Ctrl+b, lalu tekan d.
+   Tekan Ctrl+b, lalu tekan d. atau 
+   di mac Tekan tombol control (^)+b tekan tombol d (untuk detach).
    (Untuk kembali melihat proses nanti, jalankan: tmux attach -t training_pipeline)
 
 Catatan: Argumen --gpus bersifat opsional. Jika tidak diisi, sistem akan 
@@ -189,7 +190,7 @@ class ParallelScheduler:
             "logfile": os.path.join(LOG_DIR, f"{global_eval['id']}.log")
         }
 
-        # Daftarkan New Method Evaluations
+        # Daftarkan New Method Evaluations (Dipaksa SKIPPED atas instruksi user)
         for spec in new_eval_specs:
             self.tasks[spec["id"]] = {
                 "id": spec["id"],
@@ -200,7 +201,7 @@ class ParallelScheduler:
                 "args": spec["args"],
                 "device_arg": spec["device_arg"],
                 "dependencies": spec["deps"],
-                "state": "PENDING" if run_any else "SKIPPED",
+                "state": "SKIPPED",
                 "proc": None,
                 "gpu": None,
                 "start_time": None,
@@ -289,19 +290,13 @@ class ParallelScheduler:
             for tid, t in self.tasks.items():
                 if t["state"] == "PENDING":
                     # Cek dependensi
-                    deps_met = True
                     for dep in t["dependencies"]:
                         dep_state = self.tasks[dep]["state"]
-                        if dep_state == "SKIPPED" and not self.eval_only:
-                            # Jika dep di-skip (dan bukan eval_only), task ini juga di-skip
-                            print(_c(f"\n[Scheduler] ⏭  Task {t['label']} otomatis dilewati karena dependensi ({dep}) SKIPPED", _YELLOW))
+                        if dep_state in ["FAILED", "SKIPPED"]:
+                            # Jika dep gagal atau di-skip, task ini juga di-skip
+                            print(_c(f"\n[Scheduler] ⏭  Task {t['label']} otomatis dilewati karena dependensi ({dep}) {dep_state}", _YELLOW))
                             t["state"] = "SKIPPED"
-                            deps_met = False
                             changed = True
-                            break
-                        elif dep_state not in ["SUCCESS", "SKIPPED"]:
-                            # Jika dependensi belum selesai, task ini belum bisa jalan
-                            deps_met = False
                             break
 
     def _dispatch_ready_tasks(self):
