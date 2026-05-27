@@ -107,3 +107,65 @@
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - Aturan konsistensi key hybrid: Model **tanpa varian `_seg`** (YOLOv10m, YOLOv10x) → key tanpa `_seg` di semua blok hybrid.
   - Model **dengan varian `_seg`** (YOLOv8m/x, YOLOv9c/e, YOLO11n/l/x) → key tetap dengan `_seg_mobile`.
+
+---
+
+### [Entri 006] — Penambahan Skrip SOTA Hybrid ke Scheduler Pipeline
+
+- **Tanggal/Waktu:** 2026-05-28 02:29 WIB
+- **Tugas yang diselesaikan:**
+  - Memodifikasi `run_pipeline_parallel.py` untuk mengintegrasikan evaluasi akhir (New Method) secara berurutan.
+  - Empat skrip (`standar_eval`, `standar_eval_vis`, `golden_eval`, `golden_eval_vis`) **sudah** terdaftar sebelumnya di `new_eval_specs`.
+  - Menambahkan skrip kelima: `evaluation_hybrid_sota.py` dengan ID `eval_new_hybrid_sota` ke dalam antrean, yang bergantung (dependent) pada selesainya skrip `eval_new_gld_vis`.
+- **File yang diubah/dibuat:**
+  - `run_pipeline_parallel.py` [DIMODIFIKASI]
+- **Status saat ini:** Selesai. Pipeline scheduler kini mengeksekusi ke-5 skrip secara berurutan di tahap akhir (global eval).
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan seluruh proses di-run dalam TMUX (`training_pipeline`) menggunakan perintah `python3 run_pipeline_parallel.py 2>&1 | tee run_pipeline_parallel.log`.
+  - Sistem akan otomatis menunggu dependensi selesai sebelum menembakkan evaluasi Hybrid SOTA.
+
+---
+
+### [Entri 007] — Penyempurnaan Varian Hybrid SAM2.1_t & Dual Visualisasi
+
+- **Tanggal/Waktu:** 2026-05-28 02:45 WIB
+- **Tugas yang diselesaikan:**
+  - Memodifikasi label model hybrid di skrip evaluasi kuantitatif (`standar_evaluation-new_method.py`, `golden_evaluation-new_method.py`, `generate_report_single_model.py`, dan `evaluation_hybrid_sota.py`) untuk secara eksplisit menggunakan nama akademis `+SAM2.1_t` (menggantikan `+SAM2`).
+  - Merancang dan mengimplementasikan Dual-Grid Visualisasi pada `standar_evaluation_visuals-new_method.py` & `golden_evaluation_visuals-new_method.py`:
+    - **Versi YOLOv8**: Plot grid perbandingan yang secara taktis menampilkan `Hybrid-v8 (YOLOv8m+SAM2)` dengan file output `grid_det_v8_...` dan `grid_seg_v8_...`.
+    - **Versi YOLO11**: Plot grid perbandingan yang secara taktis menampilkan `Hybrid-v11 (YOLO11l+SAM2)` dengan file output `grid_det_v11_...` dan `grid_seg_v11_...`.
+  - Memperbaiki bug inisialisasi dataset (`NameError: SEG_DATASET_LOCATION`) pada `standar_evaluation_visuals-new_method.py` dengan merujuk ke variabel `STANDAR_` yang diimpor secara tepat.
+  - Mengintegrasikan pengiriman notifikasi Telegram secara stand-alone pada akhir eksekusi ketiga skrip evaluasi kuantitatif utama (`standar_evaluation-new_method.py`, `golden_evaluation-new_method.py`, dan `evaluation_hybrid_sota.py`) untuk mempermudah pemantauan langsung di luar scheduler.
+  - Memperbarui dokumentasi docstring pada skrip pengarsipan lokal (`utils/upload_utils.py`) untuk menyajikan informasi path, folder, dan berkas target kompresi secara akademis dan presisi sesuai permintaan pengguna.
+  - Memvalidasi seluruh sintaksis python (kompilasi sukses 100%) dan berhasil menguji fungsionalitas visualisasi di compute node GPU `@ai2` dengan 10 gambar sampel standard & golden tanpa kendala.
+- **File yang diubah/dibuat:**
+  - `utils/standar_evaluation-new_method.py` [DIMODIFIKASI]
+  - `utils/golden_evaluation-new_method.py` [DIMODIFIKASI]
+  - `utils/generate_report_single_model.py` [DIMODIFIKASI]
+  - `utils/evaluation_hybrid_sota.py` [DIMODIFIKASI]
+  - `utils/standar_evaluation_visuals-new_method.py` [DIMODIFIKASI]
+  - `utils/golden_evaluation_visuals-new_method.py` [DIMODIFIKASI]
+  - `utils/upload_utils.py` [DIMODIFIKASI]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Seluruh output visualisasi dual-grid tersimpan di folder `reports/paper1/visuals/new-method/standard/comparison/` dan `reports/paper1/visuals/new-method/golden/comparison/`.
+  - Gambar individu hybrid juga tersimpan dengan nama file `hybrid_v8_...` dan `hybrid_v11_...`.
+  - Skrip siap dieksekusi secara otomatis oleh pipeline scheduler paralel `run_pipeline_parallel.py`.
+
+---
+
+### [Entri 008] — Penambahan Fitur Upload ke Google Drive Menggunakan Rclone
+
+- **Tanggal/Waktu:** 2026-05-27 20:54 WIB
+- **Tugas yang diselesaikan:**
+  - Memodifikasi skrip `upload.sh` untuk menambahkan perintah `upload`.
+  - Mengimplementasikan sinkronisasi direktori lokal `datas/` ke Google Drive menggunakan alat `rclone`.
+  - Mengonfigurasi struktur direktori dinamis dengan nama remote `gdrive:gdrive-backup/{hostname}/MyFineTunning-{timestamp}/datas` sesuai instruksi.
+  - Memastikan alur berjalan secara sekuensial (dari proses packing lokal baru dilanjutkan dengan proses remote copy).
+- **File yang diubah/dibuat:**
+  - `upload.sh` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 008]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Fitur dapat dipanggil dengan menjalankan `bash upload.sh upload`.
+  - Pastikan profil konfigurasi remote pada rclone bernama `gdrive` dan telah di-authenticate. Apabila di masa mendatang penamaan remote berubah, konfigurasi perlu disesuaikan pada variabel `REMOTE_PATH` dalam fungsi `do_upload()` di skrip `upload.sh`.

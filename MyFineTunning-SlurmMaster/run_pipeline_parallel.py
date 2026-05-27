@@ -126,7 +126,8 @@ class ParallelScheduler:
             {"id": "eval_new_std", "name": "global_eval", "label": "New Method Std Eval", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "standar_evaluation-new_method.py", "args": [], "device_arg": "--gpus", "deps": ["eval_global_multigpu"]},
             {"id": "eval_new_std_vis", "name": "global_eval", "label": "New Method Std Visuals", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "standar_evaluation_visuals-new_method.py", "args": [], "device_arg": "--gpus", "deps": ["eval_new_std"]},
             {"id": "eval_new_gld", "name": "global_eval", "label": "New Method Golden Eval", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "golden_evaluation-new_method.py", "args": [], "device_arg": "--gpus", "deps": ["eval_new_std_vis"]},
-            {"id": "eval_new_gld_vis", "name": "global_eval", "label": "New Method Golden Visuals", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "golden_evaluation_visuals-new_method.py", "args": [], "device_arg": "--gpus", "deps": ["eval_new_gld"]}
+            {"id": "eval_new_gld_vis", "name": "global_eval", "label": "New Method Golden Visuals", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "golden_evaluation_visuals-new_method.py", "args": [], "device_arg": "--gpus", "deps": ["eval_new_gld"]},
+            {"id": "eval_new_hybrid_sota", "name": "global_eval", "label": "New Method Hybrid SOTA Eval", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "evaluation_hybrid_sota.py", "args": [], "device_arg": "--gpus", "deps": ["eval_new_gld_vis"]}
         ]
         
         # Daftarkan Training Tasks

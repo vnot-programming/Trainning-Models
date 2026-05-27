@@ -78,6 +78,35 @@ do_pack() {
     fi
 }
 
+# ── Eksekusi Upload ke Google Drive ─────────────────────────────────────────────
+do_upload() {
+    # Jalankan pemaketan lokal terlebih dahulu
+    do_pack
+
+    echo -e "\n${CYAN}${BOLD}⏳ Memulai proses upload ke Google Drive dengan rclone...${RESET}"
+    echo ""
+
+    cd "$SCRIPT_DIR"
+    if [[ ! -d "datas" ]]; then
+        echo -e "${RED}${BOLD}❌ ERROR: Direktori datas/ tidak ditemukan!${RESET}"
+        exit 1
+    fi
+
+    # Menentukan konfigurasi remote path
+    HOSTNAME_VAL=$(hostname)
+    TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
+    REMOTE_PATH="gdrive:gdrive-backup/${HOSTNAME_VAL}/MyFineTunning-${TIMESTAMP}/datas"
+
+    echo -e "   ${BOLD}Target Upload:${RESET} ${REMOTE_PATH}"
+    
+    if rclone copy ./datas "$REMOTE_PATH" -P; then
+        echo -e "\n${GREEN}${BOLD}🎉 SELESAI: Upload ke Google Drive berhasil!${RESET}"
+    else
+        echo -e "\n${RED}${BOLD}❌ ERROR: Terjadi kegagalan saat proses upload menggunakan rclone.${RESET}"
+        exit 1
+    fi
+}
+
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
@@ -87,12 +116,16 @@ case "$ACTION" in
     pack)
         do_pack
         ;;
+    upload)
+        do_upload
+        ;;
     *)
         show_header
         echo -e "${BOLD}Panduan Penggunaan:${RESET}"
-        echo -e "  bash upload.sh pack    → Menjalankan pemindahan model & kompresi folder"
+        echo -e "  bash upload.sh pack      → Menjalankan pemindahan model & kompresi folder"
+        echo -e "  bash upload.sh upload    → Menjalankan pemaketan & upload ke Google Drive"
         echo ""
-        echo -e "${YELLOW}ℹ️  Catatan: Proses upload cloud ditunda sementara sesuai instruksi.${RESET}"
         exit 0
         ;;
 esac
+

@@ -315,31 +315,52 @@ def main():
         img_mrcnn_det = draw_custom(img_path, bmrcnn, None, cmrcnn, clsmrcnn, color=(0, 255, 255))
         if img_mrcnn_det is not None: cv2.imwrite(os.path.join(DET_OUT_DIR, f"maskrcnn_{img_name}"), img_mrcnn_det)
 
-        # 5. Hybrid Detection (YOLO11l-Det + SAM2)
-        sam_m_det = None
+        # 5. Hybrid Detection V8 (YOLOv8m + SAM2)
+        sam_m_det_v8 = None
+        if len(b8) > 0:
+            try:
+                sam_res_det_v8 = sam2_model(res8_det.orig_img, bboxes=b8.tolist(), device=device_str, verbose=False)[0]
+                if sam_res_det_v8.masks is not None:
+                    sam_m_det_v8 = sam_res_det_v8.masks.data.cpu().numpy()
+                    h, w = sam_res_det_v8.orig_img.shape[:2]
+                    sam_m_det_v8 = np.array([cv2.resize(m.astype(np.float32), (w, h), interpolation=cv2.INTER_NEAREST) for m in sam_m_det_v8])
+            except Exception as e:
+                print(f"  [SAM2-Det-V8-Error] Gagal segmentasi hybrid det v8 untuk {img_name}: {e}")
+
+        img_hybrid_det_v8 = draw_custom(img_path, b8, sam_m_det_v8, c8, cls8, color=(255, 0, 255))
+        if img_hybrid_det_v8 is not None: cv2.imwrite(os.path.join(DET_OUT_DIR, f"hybrid_v8_{img_name}"), img_hybrid_det_v8)
+
+        # 5.1 Hybrid Detection V11 (YOLO11l + SAM2)
+        sam_m_det_v11 = None
         if len(b11) > 0:
             try:
-                # Menggunakan format pemanggilan callable seperti di contoh_hybrid.py
-                sam_res_det = sam2_model(res11_det.orig_img, bboxes=b11.tolist(), device=device_str, verbose=False)[0]
-                if sam_res_det.masks is not None:
-                    sam_m_det = sam_res_det.masks.data.cpu().numpy()
-                    h, w = sam_res_det.orig_img.shape[:2]
-                    sam_m_det = np.array([cv2.resize(m.astype(np.float32), (w, h), interpolation=cv2.INTER_NEAREST) for m in sam_m_det])
+                sam_res_det_v11 = sam2_model(res11_det.orig_img, bboxes=b11.tolist(), device=device_str, verbose=False)[0]
+                if sam_res_det_v11.masks is not None:
+                    sam_m_det_v11 = sam_res_det_v11.masks.data.cpu().numpy()
+                    h, w = sam_res_det_v11.orig_img.shape[:2]
+                    sam_m_det_v11 = np.array([cv2.resize(m.astype(np.float32), (w, h), interpolation=cv2.INTER_NEAREST) for m in sam_m_det_v11])
             except Exception as e:
-                print(f"  [SAM2-Det-Error] Gagal segmentasi hybrid det untuk {img_name}: {e}")
+                print(f"  [SAM2-Det-V11-Error] Gagal segmentasi hybrid det v11 untuk {img_name}: {e}")
 
-        img_hybrid_det = draw_custom(img_path, b11, sam_m_det, c11, cls11, color=(255, 0, 255))
-        if img_hybrid_det is not None: cv2.imwrite(os.path.join(DET_OUT_DIR, f"hybrid_{img_name}"), img_hybrid_det)
+        img_hybrid_det_v11 = draw_custom(img_path, b11, sam_m_det_v11, c11, cls11, color=(255, 0, 255))
+        if img_hybrid_det_v11 is not None: cv2.imwrite(os.path.join(DET_OUT_DIR, f"hybrid_v11_{img_name}"), img_hybrid_det_v11)
 
         # 6. GT Detection
         gt_b_det, _, gt_c_det = get_gt_data(coco_det, img_name)
         img_gt_det = draw_custom(img_path, gt_b_det, None, None, gt_c_det, color=(255, 255, 0))
 
-        # Plot Grid Detection
+        # Plot Grid Detection V8
         plot_grid(
-            [img8_det, img9_det, img11_det, img_mrcnn_det, img_hybrid_det, img_gt_det],
-            ["YOLOv8m", "YOLOv9m", "YOLO11l (New)", "Mask R-CNN", "Hybrid (Det)", "Ground Truth"],
-            os.path.join(COMP_DET_DIR, f"grid_det_{img_name}")
+            [img8_det, img9_det, img11_det, img_mrcnn_det, img_hybrid_det_v8, img_gt_det],
+            ["YOLOv8m", "YOLOv9m", "YOLO11l (New)", "Mask R-CNN", "Hybrid-v8 (YOLOv8m+SAM2)", "Ground Truth"],
+            os.path.join(COMP_DET_DIR, f"grid_det_v8_{img_name}")
+        )
+
+        # Plot Grid Detection V11
+        plot_grid(
+            [img8_det, img9_det, img11_det, img_mrcnn_det, img_hybrid_det_v11, img_gt_det],
+            ["YOLOv8m", "YOLOv9m", "YOLO11l (New)", "Mask R-CNN", "Hybrid-v11 (YOLO11l+SAM2)", "Ground Truth"],
+            os.path.join(COMP_DET_DIR, f"grid_det_v11_{img_name}")
         )
 
         # --- TAHAP 2: SEGMENTATION ---
@@ -390,31 +411,52 @@ def main():
         img_mrcnn_seg = draw_custom(img_path, bmrcnn, mmrcnn_resized, cmrcnn, clsmrcnn, color=(0, 255, 255))
         if img_mrcnn_seg is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"maskrcnn_{img_name}"), img_mrcnn_seg)
 
-        # 5. Hybrid Seg (YOLO11l-Seg + SAM2)
-        sam_m_seg = None
+        # 5. Hybrid Seg V8 (YOLOv8m-Seg + SAM2)
+        sam_m_seg_v8 = None
+        if len(b8s) > 0:
+            try:
+                sam_res_seg_v8 = sam2_model(res8_seg.orig_img, bboxes=b8s.tolist(), device=device_str, verbose=False)[0]
+                if sam_res_seg_v8.masks is not None:
+                    sam_m_seg_v8 = sam_res_seg_v8.masks.data.cpu().numpy()
+                    h, w = sam_res_seg_v8.orig_img.shape[:2]
+                    sam_m_seg_v8 = np.array([cv2.resize(m.astype(np.float32), (w, h), interpolation=cv2.INTER_NEAREST) for m in sam_m_seg_v8])
+            except Exception as e:
+                print(f"  [SAM2-Seg-V8-Error] Gagal segmentasi hybrid seg v8 untuk {img_name}: {e}")
+
+        img_hybrid_seg_v8 = draw_custom(img_path, b8s, sam_m_seg_v8, c8s, cls8s, color=(255, 0, 255))
+        if img_hybrid_seg_v8 is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"hybrid_v8_{img_name}"), img_hybrid_seg_v8)
+
+        # 5.1 Hybrid Seg V11 (YOLO11l-Seg + SAM2)
+        sam_m_seg_v11 = None
         if len(b11s) > 0:
             try:
-                # Menggunakan bbox dari YOLO11l-Seg sebagai prompt ke SAM2
-                sam_res_seg = sam2_model(res11_seg.orig_img, bboxes=b11s.tolist(), device=device_str, verbose=False)[0]
-                if sam_res_seg.masks is not None:
-                    sam_m_seg = sam_res_seg.masks.data.cpu().numpy()
-                    h, w = sam_res_seg.orig_img.shape[:2]
-                    sam_m_seg = np.array([cv2.resize(m.astype(np.float32), (w, h), interpolation=cv2.INTER_NEAREST) for m in sam_m_seg])
+                sam_res_seg_v11 = sam2_model(res11_seg.orig_img, bboxes=b11s.tolist(), device=device_str, verbose=False)[0]
+                if sam_res_seg_v11.masks is not None:
+                    sam_m_seg_v11 = sam_res_seg_v11.masks.data.cpu().numpy()
+                    h, w = sam_res_seg_v11.orig_img.shape[:2]
+                    sam_m_seg_v11 = np.array([cv2.resize(m.astype(np.float32), (w, h), interpolation=cv2.INTER_NEAREST) for m in sam_m_seg_v11])
             except Exception as e:
-                print(f"  [SAM2-Seg-Error] Gagal segmentasi hybrid seg untuk {img_name}: {e}")
+                print(f"  [SAM2-Seg-V11-Error] Gagal segmentasi hybrid seg v11 untuk {img_name}: {e}")
 
-        img_hybrid_seg = draw_custom(img_path, b11s, sam_m_seg, c11s, cls11s, color=(255, 0, 255))
-        if img_hybrid_seg is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"hybrid_{img_name}"), img_hybrid_seg)
+        img_hybrid_seg_v11 = draw_custom(img_path, b11s, sam_m_seg_v11, c11s, cls11s, color=(255, 0, 255))
+        if img_hybrid_seg_v11 is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"hybrid_v11_{img_name}"), img_hybrid_seg_v11)
 
         # 6. GT Seg
         gt_b_seg, gt_m_seg, gt_c_seg = get_gt_data(coco_seg, img_name)
         img_gt_seg = draw_custom(img_path, gt_b_seg, gt_m_seg, None, gt_c_seg, color=(255, 255, 0))
 
-        # Plot Grid Seg
+        # Plot Grid Seg V8
         plot_grid(
-            [img8_seg, img9_seg, img11_seg, img_mrcnn_seg, img_hybrid_seg, img_gt_seg],
-            ["YOLOv8m-Seg", "YOLOv9c-Seg", "YOLO11l-Seg", "Mask R-CNN", "Hybrid (Seg)", "Ground Truth"],
-            os.path.join(COMP_SEG_DIR, f"grid_seg_{img_name}")
+            [img8_seg, img9_seg, img11_seg, img_mrcnn_seg, img_hybrid_seg_v8, img_gt_seg],
+            ["YOLOv8m-Seg", "YOLOv9c-Seg", "YOLO11l-Seg", "Mask R-CNN", "Hybrid-v8 (YOLOv8m-Seg+SAM2)", "Ground Truth"],
+            os.path.join(COMP_SEG_DIR, f"grid_seg_v8_{img_name}")
+        )
+
+        # Plot Grid Seg V11
+        plot_grid(
+            [img8_seg, img9_seg, img11_seg, img_mrcnn_seg, img_hybrid_seg_v11, img_gt_seg],
+            ["YOLOv8m-Seg", "YOLOv9c-Seg", "YOLO11l-Seg", "Mask R-CNN", "Hybrid-v11 (YOLO11l-Seg+SAM2)", "Ground Truth"],
+            os.path.join(COMP_SEG_DIR, f"grid_seg_v11_{img_name}")
         )
 
         flush_gpu("Per Image")

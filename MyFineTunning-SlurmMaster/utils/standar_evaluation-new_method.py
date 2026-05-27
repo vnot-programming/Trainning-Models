@@ -22,6 +22,9 @@ PANDUAN EKSEKUSI AGAR TIDAK TERPUTUS (WORKFLOW TMUX + SLURM YANG BENAR):
    WS_ID=$(cat /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/.workspace_id)
    
    # Jalankan skrip evaluasi:
+    WS_ID=$(cat .workspace_id)
+    python3 -u utils/evaluation_hybrid_sota.py 2>&1 | tee data-files/MyFineTunning-${WS_ID}/logs/evaluation_hybrid_sota.log
+    
    python3 -u utils/standar_evaluation-new_method.py 2>&1 | tee /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/data-files/MyFineTunning-${WS_ID}/logs/standar_evaluation_new.log
 
 4. Detach dari TMUX untuk meninggalkan proses di background (Aman jika terminal/laptop Anda ditutup):
@@ -84,25 +87,25 @@ MODELS_CONFIG = [
     # ── Mask R-CNN (1 Model) ──────────────────────────────────────────────────
     {"label": "Mask R-CNN",   "key": "maskrcnn",     "type": "maskrcnn"},
 
-    # ── Hybrid Detection (7 Models - YOLO Det + SAM2) ──────────────────────────
-    {"label": "Hybrid (YOLOv8m+SAM2)",  "key": "hybrid_yolov8m",  "type": "hybrid_det"},
-    {"label": "Hybrid (YOLOv8x+SAM2)",  "key": "hybrid_yolov8x",  "type": "hybrid_det"},
-    {"label": "Hybrid (YOLOv9m+SAM2)",  "key": "hybrid_yolov9m",  "type": "hybrid_det"},
-    {"label": "Hybrid (YOLOv9e+SAM2)",  "key": "hybrid_yolov9e",  "type": "hybrid_det"},
-    {"label": "Hybrid (YOLO11n+SAM2)",  "key": "hybrid_yolo11n",  "type": "hybrid_det"},
-    {"label": "Hybrid (YOLO11l+SAM2)",  "key": "hybrid_yolo11l",  "type": "hybrid_det"},
-    {"label": "Hybrid (YOLO11x+SAM2)",  "key": "hybrid_yolo11x",  "type": "hybrid_det"},
+    # ── Hybrid Detection (7 Models - YOLO Det + SAM2.1_t) ──────────────────────
+    {"label": "Hybrid (YOLOv8m+SAM2.1_t)",  "key": "hybrid_yolov8m",  "type": "hybrid_det"},
+    {"label": "Hybrid (YOLOv8x+SAM2.1_t)",  "key": "hybrid_yolov8x",  "type": "hybrid_det"},
+    {"label": "Hybrid (YOLOv9m+SAM2.1_t)",  "key": "hybrid_yolov9m",  "type": "hybrid_det"},
+    {"label": "Hybrid (YOLOv9e+SAM2.1_t)",  "key": "hybrid_yolov9e",  "type": "hybrid_det"},
+    {"label": "Hybrid (YOLO11n+SAM2.1_t)",  "key": "hybrid_yolo11n",  "type": "hybrid_det"},
+    {"label": "Hybrid (YOLO11l+SAM2.1_t)",  "key": "hybrid_yolo11l",  "type": "hybrid_det"},
+    {"label": "Hybrid (YOLO11x+SAM2.1_t)",  "key": "hybrid_yolo11x",  "type": "hybrid_det"},
 
-    # ── Hybrid Segmentation (9 Models - YOLO Seg/Det + SAM2) ──────────────────
-    {"label": "Hybrid (YOLOv8m-Seg+SAM2)",  "key": "hybrid_yolov8m_seg",  "type": "hybrid_seg"},
-    {"label": "Hybrid (YOLOv8x-Seg+SAM2)",  "key": "hybrid_yolov8x_seg",  "type": "hybrid_seg"},
-    {"label": "Hybrid (YOLOv9c-Seg+SAM2)",  "key": "hybrid_yolov9c_seg",  "type": "hybrid_seg"},
-    {"label": "Hybrid (YOLOv9e-Seg+SAM2)",  "key": "hybrid_yolov9e_seg",  "type": "hybrid_seg"},
-    {"label": "Hybrid (YOLOv10m+SAM2)",     "key": "hybrid_yolov10m",     "type": "hybrid_seg"},
-    {"label": "Hybrid (YOLOv10x+SAM2)",     "key": "hybrid_yolov10x",     "type": "hybrid_seg"},
-    {"label": "Hybrid (YOLO11n-Seg+SAM2)",  "key": "hybrid_yolo11n_seg",  "type": "hybrid_seg"},
-    {"label": "Hybrid (YOLO11l-Seg+SAM2)",  "key": "hybrid_yolo11l_seg",  "type": "hybrid_seg"},
-    {"label": "Hybrid (YOLO11x-Seg+SAM2)",  "key": "hybrid_yolo11x_seg",  "type": "hybrid_seg"},
+    # ── Hybrid Segmentation (9 Models - YOLO Seg/Det + SAM2.1_t) ──────────────
+    {"label": "Hybrid (YOLOv8m-Seg+SAM2.1_t)",  "key": "hybrid_yolov8m_seg",  "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLOv8x-Seg+SAM2.1_t)",  "key": "hybrid_yolov8x_seg",  "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLOv9c-Seg+SAM2.1_t)",  "key": "hybrid_yolov9c_seg",  "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLOv9e-Seg+SAM2.1_t)",  "key": "hybrid_yolov9e_seg",  "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLOv10m+SAM2.1_t)",     "key": "hybrid_yolov10m",     "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLOv10x+SAM2.1_t)",     "key": "hybrid_yolov10x",     "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLO11n-Seg+SAM2.1_t)",  "key": "hybrid_yolo11n_seg",  "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLO11l-Seg+SAM2.1_t)",  "key": "hybrid_yolo11l_seg",  "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLO11x-Seg+SAM2.1_t)",  "key": "hybrid_yolo11x_seg",  "type": "hybrid_seg"},
 ]
 
 # ==============================================================================
@@ -634,5 +637,15 @@ if __name__ == "__main__":
             w = csv.DictWriter(f, fieldnames=list(all_seg_rows[0].keys()))
             w.writeheader(); w.writerows(all_seg_rows)
         print(f"✅ Seg Report [New Method]: {seg_csv}")
+
+    try:
+        msg = f"✅ <b>Standard Evaluation Finished</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>\n"
+        if all_det_rows:
+            msg += f"• Det Report: <code>{len(all_det_rows)} models</code>\n"
+        if all_seg_rows:
+            msg += f"• Seg Report: <code>{len(all_seg_rows)} models</code>\n"
+        send_telegram_msg(msg)
+    except Exception as e:
+        print(f"⚠️ Gagal mengirim notifikasi Telegram: {e}")
 
     print("\n  [Visual] Note: Untuk visualisasi new-method silakan jalankan utils/standar_evaluation_visuals-new_method.py")

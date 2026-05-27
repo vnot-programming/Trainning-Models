@@ -7,6 +7,23 @@ Utilitas Python untuk melakukan kompresi dan pemindahan file-file hasil
 training secara lokal tanpa proses upload remote (ditunda sementara).
 
 Mendukung deteksi dinamis terhadap workspace aktif dan kompresi tingkat tinggi.
+
+Struktur Path, Folder, dan Berkas Terkait:
+------------------------------------------
+1. Direktori Sumber (Workspace Aktif):
+   - Path Root Workspace : `/data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/data-files/MyFineTunning-<WS_ID>/`
+   - Folder File Weights  : `runs/` (Berisi weights per model dan arsip model tar.gz)
+   - Folder Logs/Jurnal   : `logs/` (Catatan log training & evaluasi)
+   - Folder Gambar Sampel : `image_samples/` (10 sampel gambar visualisasi)
+   - Folder Laporan Hasil : `reports/` (Laporan matriks kuantitatif CSV & visualisasi komparatif)
+
+2. Direktori Tujuan Pengarsipan Lokal:
+   - Path Root Pengarsipan: `/data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/datas/`
+   - Target Folder Model Archived: `datas/models_archived/` ⬅️ Berisi file model tar.gz hasil pemindahan dari `runs/`
+   - Target Folder Model Weights : `datas/models/`          ⬅️ Berisi bobot terbaik disalin sebagai `<model>-best.pt`
+   - Target Arsip Tar Logs       : `datas/logs.tar.gz`       ⬅️ Hasil kompresi folder `logs/`
+   - Target Arsip Tar Samples    : `datas/image_samples.tar.gz` ⬅️ Hasil kompresi folder `image_samples/`
+   - Target Arsip Tar Reports    : `datas/reports.tar.gz`    ⬅️ Hasil kompresi folder `reports/`
 """
 
 import os
