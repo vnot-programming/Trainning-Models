@@ -1,18 +1,32 @@
 # -*- coding: utf-8 -*-
 """
 utils/golden_evaluation-new_method.py
-========================
+======================================
 Distributed Multi-GPU Evaluation untuk Seluruh Pipeline menggunakan metode hybrid baru (YOLO11l + SAM2).
 
-Menggunakan model YOLO11l hasil training terbaru:
-  - YOLO11l Deteksi:  /home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l/weights/best.pt
-  - YOLO11l Segmentasi: /home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l_seg/weights/best.pt
+Menggunakan model YOLO11l hasil training terbaru yang dideteksi secara dinamis dari workspace aktif.
 
-Cara pakai:
-  python3 utils/golden_evaluation-new_method.py --dataset default --gpus 0,1
+PANDUAN EKSEKUSI AGAR TIDAK TERPUTUS (WORKFLOW TMUX + SLURM YANG BENAR):
 
-# Default dari path manapun
-  tmux new-session -d -s golden_evaluation-new_method "cd /home/my/Trainning-Models/MyFineTunning-dev && source /data/programs/anaconda3/bin/activate && conda activate yolo_env && python3 -u utils/golden_evaluation-new_method.py 2>&1 | tee utils/golden_evaluation-new_method.log"
+1. Buat Sesi TMUX di Login Node (JANGAN MASUK NODE AI DULU):
+   tmux new-session -s training_pipeline
+
+2. Di dalam TMUX, hubungkan (attach) ke Node GPU (Slurm):
+   cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils
+   ./attach_gpu.sh
+   *(Anda akan seketika berada di dalam shell bash node komputasi, misal @ai2/@ai3, dengan conda env yolo_env aktif secara otomatis)*
+
+3. Di dalam Node GPU, jalankan evaluasi secara langsung (Dinamis tanpa hardcode):
+   
+   # Deteksi ID workspace aktif secara dinamis:
+   WS_ID=$(cat /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/.workspace_id)
+   
+   # Jalankan skrip evaluasi:
+   python3 -u utils/golden_evaluation-new_method.py 2>&1 | tee /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/data-files/MyFineTunning-${WS_ID}/logs/golden_evaluation_new.log
+
+4. Detach dari TMUX untuk meninggalkan proses di background (Aman jika terminal/laptop Anda ditutup):
+   Tekan Ctrl+b, lalu tekan d (di Mac: tekan tombol control (^)+b lalu tekan d).
+   (Untuk masuk kembali memantau proses nanti dari login node, jalankan: tmux attach -t training_pipeline)
 
 """
 
@@ -47,15 +61,48 @@ YOLO11L_DET_PATH  = os.path.join(WORKSPACE_DIR, "runs", "yolo11l", "weights", "b
 YOLO11L_SEG_PATH  = os.path.join(WORKSPACE_DIR, "runs", "yolo11l_seg", "weights", "best.pt")
 
 MODELS_CONFIG = [
-    {"label": "YOLOv8m", "key": "yolov8m", "type": "yolo_det"},
-    {"label": "YOLOv9m", "key": "yolov9m", "type": "yolo_det"},
-    {"label": "YOLO11l", "key": "yolo11l", "type": "yolo_det"},
-    {"label": "YOLOv8m-Seg", "key": "yolov8m_seg", "type": "yolo_seg"},
-    {"label": "YOLOv9c-Seg", "key": "yolov9c_seg", "type": "yolo_seg"},
-    {"label": "YOLO11l-Seg", "key": "yolo11l_seg", "type": "yolo_seg"},
-    {"label": "Mask R-CNN", "key": "maskrcnn", "type": "maskrcnn"},
-    {"label": "Hybrid", "key": "hybrid", "type": "hybrid_det"},
-    {"label": "Hybrid", "key": "hybrid", "type": "hybrid_seg"}
+    # ── YOLO Detection (9 Models) ─────────────────────────────────────────────
+    {"label": "YOLOv8m",      "key": "yolov8m",      "type": "yolo_det"},
+    {"label": "YOLOv8x",      "key": "yolov8x",      "type": "yolo_det"},
+    {"label": "YOLOv9m",      "key": "yolov9m",      "type": "yolo_det"},
+    {"label": "YOLOv9e",      "key": "yolov9e",      "type": "yolo_det"},
+    {"label": "YOLOv10m",     "key": "yolov10m",     "type": "yolo_det"},
+    {"label": "YOLOv10x",     "key": "yolov10x",     "type": "yolo_det"},
+    {"label": "YOLO11n",      "key": "yolo11n",      "type": "yolo_det"},
+    {"label": "YOLO11l",      "key": "yolo11l",      "type": "yolo_det"},
+    {"label": "YOLO11x",      "key": "yolo11x",      "type": "yolo_det"},
+
+    # ── YOLO Segmentation (7 Models) ──────────────────────────────────────────
+    {"label": "YOLOv8m-Seg",  "key": "yolov8m_seg",  "type": "yolo_seg"},
+    {"label": "YOLOv8x-Seg",  "key": "yolov8x_seg",  "type": "yolo_seg"},
+    {"label": "YOLOv9c-Seg",  "key": "yolov9c_seg",  "type": "yolo_seg"},
+    {"label": "YOLOv9e-Seg",  "key": "yolov9e_seg",  "type": "yolo_seg"},
+    {"label": "YOLO11n-Seg",  "key": "yolo11n_seg",  "type": "yolo_seg"},
+    {"label": "YOLO11l-Seg",  "key": "yolo11l_seg",  "type": "yolo_seg"},
+    {"label": "YOLO11x-Seg",  "key": "yolo11x_seg",  "type": "yolo_seg"},
+
+    # ── Mask R-CNN (1 Model) ──────────────────────────────────────────────────
+    {"label": "Mask R-CNN",   "key": "maskrcnn",     "type": "maskrcnn"},
+
+    # ── Hybrid Detection (7 Models - YOLO Det + SAM2) ──────────────────────────
+    {"label": "Hybrid (YOLOv8m+SAM2)",  "key": "hybrid_yolov8m",  "type": "hybrid_det"},
+    {"label": "Hybrid (YOLOv8x+SAM2)",  "key": "hybrid_yolov8x",  "type": "hybrid_det"},
+    {"label": "Hybrid (YOLOv9m+SAM2)",  "key": "hybrid_yolov9m",  "type": "hybrid_det"},
+    {"label": "Hybrid (YOLOv9e+SAM2)",  "key": "hybrid_yolov9e",  "type": "hybrid_det"},
+    {"label": "Hybrid (YOLO11n+SAM2)",  "key": "hybrid_yolo11n",  "type": "hybrid_det"},
+    {"label": "Hybrid (YOLO11l+SAM2)",  "key": "hybrid_yolo11l",  "type": "hybrid_det"},
+    {"label": "Hybrid (YOLO11x+SAM2)",  "key": "hybrid_yolo11x",  "type": "hybrid_det"},
+
+    # ── Hybrid Segmentation (9 Models - YOLO Seg/Det + SAM2) ──────────────────
+    {"label": "Hybrid (YOLOv8m-Seg+SAM2)",  "key": "hybrid_yolov8m_seg",  "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLOv8x-Seg+SAM2)",  "key": "hybrid_yolov8x_seg",  "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLOv9c-Seg+SAM2)",  "key": "hybrid_yolov9c_seg",  "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLOv9e-Seg+SAM2)",  "key": "hybrid_yolov9e_seg",  "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLOv10m+SAM2)",     "key": "hybrid_yolov10m",     "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLOv10x+SAM2)",     "key": "hybrid_yolov10x",     "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLO11n-Seg+SAM2)",  "key": "hybrid_yolo11n_seg",  "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLO11l-Seg+SAM2)",  "key": "hybrid_yolo11l_seg",  "type": "hybrid_seg"},
+    {"label": "Hybrid (YOLO11x-Seg+SAM2)",  "key": "hybrid_yolo11x_seg",  "type": "hybrid_seg"},
 ]
 
 # ==============================================================================
@@ -123,13 +170,18 @@ def _get_model_metrics(model_cfg: dict, is_seg: bool = False) -> dict:
             del m; gc.collect()
             result["weights_size_mb"] = round(sz / 1024**2, 2)
             result["parameters_m"] = round(total_params / 1e6, 2)
-        elif mtype == "hybrid":
+        elif mtype in ["hybrid", "hybrid_det", "hybrid_seg"]:
             from ultralytics import YOLO, SAM
             # Pendekatan moderat untuk parameter/metrik hybrid
-            if is_seg:
-                y_m = YOLO(YOLO11L_SEG_PATH)
+            yolo_key = mkey.replace("hybrid_", "")
+            if yolo_key == "yolo11l":
+                pt = YOLO11L_DET_PATH
+            elif yolo_key == "yolo11l_seg":
+                pt = YOLO11L_SEG_PATH
             else:
-                y_m = YOLO(YOLO11L_DET_PATH)
+                pt = os.path.join(get_output_dir(yolo_key), "weights", "best.pt")
+                
+            y_m = YOLO(pt)
             s_m = SAM(SAM_MODEL_PATH)
             y_params = sum(p.nelement() for p in y_m.model.parameters())
             s_params = sum(p.nelement() for p in s_m.model.parameters())
@@ -177,14 +229,16 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
             model_obj.to(device_str).eval()
         elif mtype in ["hybrid_det", "hybrid_seg"]:
             from ultralytics import YOLO, SAM
-            # Dinamis memilih model dasar berdasarkan target dataset (deteksi vs segmentasi)
-            is_seg = mtype == "hybrid_seg"
-            if is_seg:
-                print(f"  [GPU:{gpu}] Hybrid menggunakan YOLO11l-Seg untuk generator prompt.")
-                model_obj = YOLO(YOLO11L_SEG_PATH)
+            yolo_key = mkey.replace("hybrid_", "")
+            if yolo_key == "yolo11l":
+                pt = YOLO11L_DET_PATH
+            elif yolo_key == "yolo11l_seg":
+                pt = YOLO11L_SEG_PATH
             else:
-                print(f"  [GPU:{gpu}] Hybrid menggunakan YOLO11l-Det untuk generator prompt.")
-                model_obj = YOLO(YOLO11L_DET_PATH)
+                pt = os.path.join(get_output_dir(yolo_key), "weights", "best.pt")
+                
+            print(f"  [GPU:{gpu}] Hybrid menggunakan {yolo_key} untuk generator prompt.")
+            model_obj = YOLO(pt)
             sam_model = SAM(SAM_MODEL_PATH)
     except Exception as e:
         print(f"  [GPU:{gpu}] ❌ Gagal load {label}: {e}", flush=True)

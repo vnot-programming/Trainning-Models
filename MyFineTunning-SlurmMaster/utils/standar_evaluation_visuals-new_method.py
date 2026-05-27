@@ -1,18 +1,32 @@
 # -*- coding: utf-8 -*-
 """
 utils/standar_evaluation_visuals-new_method.py
-====================================
+==============================================
 Visualisasi bukti konsep untuk evaluasi Standard Dataset menggunakan metode hybrid baru (YOLO11l + SAM2).
 
-Menggunakan model YOLO11l hasil training terbaru:
-  - YOLO11l Deteksi:  /home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l/weights/best.pt
-  - YOLO11l Segmentasi: /home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341/runs/yolo11l_seg/weights/best.pt
+Menggunakan model YOLO11l hasil training terbaru yang dideteksi secara dinamis dari workspace aktif.
 
-Cara pakai:
-  python3 utils/standar_evaluation_visuals-new_method.py
+PANDUAN EKSEKUSI AGAR TIDAK TERPUTUS (WORKFLOW TMUX + SLURM YANG BENAR):
 
-# Default dari path manapun
-  tmux new-session -d -s standar_evaluation_visuals_new "cd /home/my/Trainning-Models/MyFineTunning-dev && source /data/programs/anaconda3/bin/activate && conda activate yolo_env && python3 -u utils/standar_evaluation_visuals-new_method.py --gpus all 2>&1 | tee utils/standar_evaluation_visuals-new_method.log"
+1. Buat Sesi TMUX di Login Node (JANGAN MASUK NODE AI DULU):
+   tmux new-session -s training_pipeline
+
+2. Di dalam TMUX, hubungkan (attach) ke Node GPU (Slurm):
+   cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils
+   ./attach_gpu.sh
+   *(Anda akan seketika berada di dalam shell bash node komputasi, misal @ai2/@ai3, dengan conda env yolo_env aktif secara otomatis)*
+
+3. Di dalam Node GPU, jalankan visualisasi secara langsung (Dinamis tanpa hardcode):
+   
+   # Deteksi ID workspace aktif secara dinamis:
+   WS_ID=$(cat /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/.workspace_id)
+   
+   # Jalankan skrip visualisasi:
+   python3 -u utils/standar_evaluation_visuals-new_method.py --gpus 0,1 2>&1 | tee /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/data-files/MyFineTunning-${WS_ID}/logs/standar_evaluation_visuals_new.log
+
+4. Detach dari TMUX untuk meninggalkan proses di background (Aman jika terminal/laptop Anda ditutup):
+   Tekan Ctrl+b, lalu tekan d (di Mac: tekan tombol control (^)+b lalu tekan d).
+   (Untuk masuk kembali memantau proses nanti dari login node, jalankan: tmux attach -t training_pipeline)
 
 """
 import os
@@ -34,7 +48,7 @@ sys.path.insert(0, ROOT)
 from ultralytics import YOLO, SAM
 from config_shared import (
     get_output_dir, NUM_CLASSES, IMAGE_SIZE, WORKSPACE_DIR, IMAGE_SAMPLES_DIR,
-    DET_DATASET_LOCATION, SEG_DATASET_LOCATION, PAPER1_VIS_DIR,
+    STANDAR_SEG_DATASET_LOCATION, STANDAR_DET_DATASET_LOCATION, PAPER1_VIS_DIR,
     VISUAL_CONF, VISUAL_IOU
 )
 from eval_unu_helpers import flush_gpu
