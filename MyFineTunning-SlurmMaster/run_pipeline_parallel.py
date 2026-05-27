@@ -8,18 +8,23 @@ Sistem akan memetakan jumlah GPU secara otomatis, mendistribusikan beban
 kerja secara cerdas (1 GPU = 1 Model), dan menjalankan evaluasi otomatis 
 pada GPU yang sedang idle. Semua konfigurasi membaca dari `config_shared.py`.
 
-PANDUAN EKSEKUSI (WAJIB DI DALAM NODE GPU & CONDA yolo_env):
+PANDUAN EKSEKUSI AGAR TIDAK TERPUTUS (WORKFLOW TMUX YANG BENAR):
 
-1. Masuk ke GPU Node (Jangan di Login Node):
+1. Buat Sesi TMUX di Login Node (JANGAN MASUK NODE AI DULU):
+   tmux new-session -s training_pipeline
+
+2. Di dalam TMUX, sambungkan (attach) ke Node GPU:
    cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils
    ./attach_gpu.sh
 
-2. Eksekusi Background via TMUX (DIREKOMENDASIKAN AGAR TIDAK TERPUTUS):
-   tmux new-session -d -s run_pipeline_parallel "source /data/programs/anaconda3/bin/activate yolo_env && cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && python3 run_pipeline_parallel.py 2>&1 | tee run_pipeline_parallel.log"
-
-3. Eksekusi Interaktif (Untuk Debugging Cepat):
+3. Setelah masuk Node GPU, jalankan training:
    source /data/programs/anaconda3/bin/activate yolo_env
-   python3 run_pipeline_parallel.py
+   cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster
+   python3 run_pipeline_parallel.py 2>&1 | tee run_pipeline_parallel.log
+
+4. Detach dari TMUX untuk meninggalkan proses (Aman jika terminal ditutup):
+   Tekan Ctrl+b, lalu tekan d.
+   (Untuk kembali melihat proses nanti, jalankan: tmux attach -t training_pipeline)
 
 Catatan: Argumen --gpus bersifat opsional. Jika tidak diisi, sistem akan 
 menggunakan seluruh GPU yang tersedia secara otomatis.
