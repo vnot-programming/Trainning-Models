@@ -75,7 +75,8 @@ def get_gpu_report_str(device):
 
 def _flush(label):
     gc.collect(); torch.cuda.empty_cache(); torch.cuda.synchronize()
-    print(f"[MemFlush] {label} — VRAM bebas: {torch.cuda.mem_get_info(0)[0]/1e9:.2f} GB")
+    # print(f"[MemFlush] {label} — VRAM bebas: {torch.cuda.mem_get_info(0)[0]/1e9:.2f} GB")
+    print(f"[MemFlush] {label} ✅ ")
 
 
 def _train(model_pt, yaml_path, run_name, label):
@@ -446,18 +447,25 @@ for spec in models_to_train:
 report_dir = REPORTS_DIR
 os.makedirs(report_dir, exist_ok=True)
 
-# Evaluasi Multi-GPU menggunakan eval_multigpu.py
+# Evaluasi menggunakan generate_report_single_model.py (pengganti eval_multigpu.py)
+# Path skrip dibaca dinamis dari ROOT yang sudah diekspor oleh config_shared
 if not args.skip_eval:
-    print("\n" + "="*65 + "\n  Menjalankan Evaluasi Multi-GPU untuk YOLOv9 (m, c-seg, e, e-seg)\n" + "="*65)
+    print("\n" + "="*65 + "\n  Menjalankan Evaluasi YOLOv9 (m, c-seg, e, e-seg) via generate_report_single_model.py\n" + "="*65)
     import subprocess
-    import sys
     eval_gpu = args.device if args.device is not None else "all"
-    try:
-        subprocess.run([sys.executable, "-u", "eval_multigpu.py", "--gpus", str(eval_gpu)], check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"\n⚠️ Evaluasi Multi-GPU gagal: {e}")
+    eval_script = os.path.join(ROOT, "utils", "generate_report_single_model.py")
+    if not os.path.exists(eval_script):
+        print(f"⚠️ Skrip evaluasi tidak ditemukan: {eval_script}")
+    else:
+        try:
+            subprocess.run(
+                [sys.executable, "-u", eval_script, "--family", "yolo9", "--gpus", str(eval_gpu)],
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"\n⚠️ Evaluasi YOLOv9 gagal: {e}")
 else:
-    print("\n[Skip] Evaluasi Multi-GPU dilewati karena argumen --skip-eval aktif.")
+    print("\n[Skip] Evaluasi dilewati karena argumen --skip-eval aktif.")
 
 # ------ Kompres folder hasil training ------
 for spec in models_to_train:

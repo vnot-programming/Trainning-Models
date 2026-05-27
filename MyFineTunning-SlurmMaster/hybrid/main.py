@@ -69,7 +69,8 @@ def _flush(label: str):
     if torch.cuda.is_available():
         torch.cuda.synchronize()
         free_gb = torch.cuda.mem_get_info(0)[0] / 1e9
-        print(f"[MemFlush] {label} — VRAM bebas: {free_gb:.2f} GB")
+        # print(f"[MemFlush] {label} — VRAM bebas: {free_gb:.2f} GB")
+        print(f"[MemFlush] {label} ✅ ")
 
 
 def load_yaml(path):
@@ -756,7 +757,7 @@ def evaluate_hybrid_map():
             
     if det_rows_all:
         with open(combined_det_csv, "w", newline="", encoding="utf-8") as fout:
-            writer = csv.DictWriter(fout, fieldnames=det_fields)
+            writer = csv.DictWriter(fout, fieldnames=det_fields, extrasaction='ignore')
             writer.writeheader()
             writer.writerows(det_rows_all)
         print(f"  ✅ Combined Detection: {combined_det_csv}")
@@ -776,7 +777,7 @@ def evaluate_hybrid_map():
             
     if seg_rows_all:
         with open(combined_seg_csv, "w", newline="", encoding="utf-8") as fout:
-            writer = csv.DictWriter(fout, fieldnames=seg_fields)
+            writer = csv.DictWriter(fout, fieldnames=seg_fields, extrasaction='ignore')
             writer.writeheader()
             writer.writerows(seg_rows_all)
         print(f"  ✅ Combined Segmentation: {combined_seg_csv}")
@@ -847,15 +848,22 @@ Evaluator: COCOeval (standar industri)
 if __name__ == "__main__":
     evaluate_hybrid_map()
 
-    # --- 9. Distributed Multi-GPU Evaluation ---
+    # --- 9. Distributed Evaluation via generate_report_single_model.py ---
     if not args.skip_eval:
-        print("\n[9] Distributed Multi-GPU Evaluation...")
+        print("\n[9] Evaluasi via generate_report_single_model.py (family=hybrid)...")
         try:
             import subprocess
-            subprocess.run([sys.executable, "-u", "eval_multigpu.py", "--gpus", str(args.device)], check=True)
+            eval_script = os.path.join(ROOT, "utils", "generate_report_single_model.py")
+            if not os.path.exists(eval_script):
+                print(f"⚠️ Skrip evaluasi tidak ditemukan: {eval_script}")
+            else:
+                subprocess.run(
+                    [sys.executable, "-u", eval_script, "--family", "hybrid", "--gpus", str(args.device)],
+                    check=True,
+                )
         except subprocess.CalledProcessError as e:
-            print(f"⚠️ Evaluasi Multi-GPU gagal: {e}")
+            print(f"⚠️ Evaluasi Hybrid gagal: {e}")
     else:
-        print("\n[9] [Skip] Distributed Multi-GPU Evaluation dilewati karena argumen --skip-eval aktif.")
+        print("\n[9] [Skip] Evaluasi dilewati karena argumen --skip-eval aktif.")
 
     send_telegram_msg(f"✅ <b>Hybrid Pipeline Finished</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>")

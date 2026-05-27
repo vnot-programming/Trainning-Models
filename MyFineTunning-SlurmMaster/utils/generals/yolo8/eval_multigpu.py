@@ -33,7 +33,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 sys.path.insert(0, ROOT)
 
 import torch
@@ -60,7 +60,9 @@ def _flush_gpu(rank: int, label: str):
     torch.cuda.empty_cache()
     torch.cuda.synchronize(rank)
     free, total = torch.cuda.mem_get_info(rank)
-    print(f"  [GPU:{rank}][MemFlush] {label} — VRAM bebas: {free/1e9:.2f}/{total/1e9:.2f} GB", flush=True)
+    # print(f"  [GPU:{rank}][MemFlush] {label} — VRAM bebas: {free/1e9:.2f}/{total/1e9:.2f} GB", flush=True)
+    print(f"  [GPU:{rank}][MemFlush] {label} ✅ ", flush=True)
+    
 
 
 def _gpu_report_str(gpu_ids: list) -> str:
@@ -526,7 +528,8 @@ if __name__ == "__main__":
     gc.collect()
     torch.cuda.empty_cache()
     free_gb = torch.cuda.mem_get_info(GPU_IDS[0])[0] / 1e9
-    print(f"[MemClean] VRAM bebas GPU:{GPU_IDS[0]}: {free_gb:.2f} GB\n")
+    # print(f"[MemClean] VRAM bebas GPU:{GPU_IDS[0]}: {free_gb:.2f} GB\n")
+    print(f"[MemFlush] ✅ ")
 
     send_telegram_msg(
         f"🚀 <b>YOLOv8 Multi-Model MultiGPU Eval Dimulai</b>\n"
@@ -599,11 +602,11 @@ if __name__ == "__main__":
                     )
 
         # ------ Generate Comparison Grid ------
-        print("\n" + "="*65 + "\n  Generating Comparison Grid\n" + "="*65)
-        try:
-            subprocess.run([sys.executable, "-u", os.path.join(ROOT, "utils", "generate_comparison_grid.py")], check=False)
-        except Exception as e:
-            print(f"⚠️ Gagal memanggil generate_comparison_grid: {e}")
+        # print("\n" + "="*65 + "\n  Generating Comparison Grid\n" + "="*65)
+        # try:
+        #     subprocess.run([sys.executable, "-u", os.path.join(ROOT, "utils", "generate_comparison_grid.py")], check=False)
+        # except Exception as e:
+        #     print(f"⚠️ Gagal memanggil generate_comparison_grid: {e}")
 
         t_total_end = time.perf_counter()
         total_elapsed = round(t_total_end - t_total_start, 1)

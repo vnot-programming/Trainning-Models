@@ -25,7 +25,7 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 
 _HYBRID_DIR      = os.path.abspath(os.path.dirname(__file__))
-ROOT = os.path.abspath(os.path.join(_HYBRID_DIR, ".."))
+ROOT = os.path.abspath(os.path.join(_HYBRID_DIR, "..", "..", ".."))
 sys.path.insert(0, ROOT)
 
 import torch
@@ -63,7 +63,8 @@ def _flush_gpu(gpu_id: int, label: str):
     if torch.cuda.is_available():
         torch.cuda.synchronize(gpu_id)
         free, total = torch.cuda.mem_get_info(gpu_id)
-        print(f"  [GPU:{gpu_id}][MemFlush] {label} — VRAM bebas: {free/1e9:.2f}/{total/1e9:.2f} GB", flush=True)
+        # print(f"  [GPU:{gpu_id}][MemFlush] {label} — VRAM bebas: {free/1e9:.2f}/{total/1e9:.2f} GB", flush=True)
+        print(f"[GPU:{gpu_id}][MemFlush] {label} ✅ ", flush=True)
 
 def _gpu_report_str(gpu_ids: list) -> str:
     from collections import Counter
@@ -485,11 +486,11 @@ if __name__ == "__main__":
             w.writeheader(); w.writerows(all_seg_rows)
         print(f"✅ Seg Report: {seg_csv}")
 
-    # ------ Generate Comparison Grid (Training Dataset) ------
-    print("\n" + "="*65 + "\n  Generating Comparison Grid\n" + "="*65)
-    try:
-        import subprocess
-        subprocess.run([sys.executable, "-u", os.path.join(ROOT, "utils", "generate_comparison_grid.py")], check=False)
-    except Exception as e:
-        print(f"⚠️ Gagal memanggil generate_comparison_grid: {e}")
+    # # ------ Generate Comparison Grid (Training Dataset) ------
+    # print("\n" + "="*65 + "\n  Generating Comparison Grid\n" + "="*65)
+    # try:
+    #     import subprocess
+    #     subprocess.run([sys.executable, "-u", os.path.join(ROOT, "utils", "generate_comparison_grid.py")], check=False)
+    # except Exception as e:
+    #     print(f"⚠️ Gagal memanggil generate_comparison_grid: {e}")
 

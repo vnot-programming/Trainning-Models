@@ -25,7 +25,7 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 sys.path.insert(0, ROOT)
 
 import torch
@@ -49,7 +49,8 @@ def _flush_gpu(rank: int, label: str):
     torch.cuda.empty_cache()
     torch.cuda.synchronize(rank)
     free, total = torch.cuda.mem_get_info(rank)
-    print(f"  [GPU:{rank}][MemFlush] {label} — VRAM bebas: {free/1e9:.2f}/{total/1e9:.2f} GB", flush=True)
+    # print(f"  [GPU:{rank}][MemFlush] {label} — VRAM bebas: {free/1e9:.2f}/{total/1e9:.2f} GB", flush=True)
+    print(f"  [GPU:{rank}][MemFlush] {label} ✅ ", flush=True)
 
 
 def _gpu_report_str(gpu_ids: list) -> str:
@@ -298,7 +299,8 @@ if __name__ == "__main__":
 
     gc.collect(); torch.cuda.empty_cache()
     free_gb = torch.cuda.mem_get_info(GPU_IDS[0])[0] / 1e9
-    print(f"[MemClean] VRAM bebas GPU:{GPU_IDS[0]}: {free_gb:.2f} GB\n")
+    # print(f"[MemClean] VRAM bebas GPU:{GPU_IDS[0]}: {free_gb:.2f} GB\n")
+    print("[MemFlush] Start Eval ✅ ")
 
     send_telegram_msg(
         f"🚀 <b>YOLOv10 Multi-Model MultiGPU Eval Dimulai</b>\n"
@@ -345,12 +347,12 @@ if __name__ == "__main__":
                     f"GPUs: <code>{det_row['GPUs']}</code>"
                 )
 
-        # ------ Generate Comparison Grid ------
-        print("\n" + "="*65 + "\n  Generating Comparison Grid\n" + "="*65)
-        try:
-            subprocess.run([sys.executable, "-u", os.path.join(ROOT, "utils", "generate_comparison_grid.py")], check=False)
-        except Exception as e:
-            print(f"⚠️ Gagal memanggil generate_comparison_grid: {e}")
+        # # ------ Generate Comparison Grid ------
+        # print("\n" + "="*65 + "\n  Generating Comparison Grid\n" + "="*65)
+        # try:
+        #     subprocess.run([sys.executable, "-u", os.path.join(ROOT, "utils", "generate_comparison_grid.py")], check=False)
+        # except Exception as e:
+        #     print(f"⚠️ Gagal memanggil generate_comparison_grid: {e}")
 
         total_elapsed = round(time.perf_counter() - t_total_start, 1)
         print(f"\n✅ YOLOv10 MultiGPU Evaluation selesai dalam {total_elapsed}s")

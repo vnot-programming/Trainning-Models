@@ -769,7 +769,8 @@ if __name__ == "__main__":
             _gc.collect()
             free_gb  = _torch_clean.cuda.mem_get_info(0)[0] / 1e9
             total_gb = _torch_clean.cuda.mem_get_info(0)[1] / 1e9
-            print(f"[MemClean] VRAM bebas sebelum DDP spawn: {free_gb:.2f} GB / {total_gb:.2f} GB")
+            # print(f"[MemClean] VRAM bebas sebelum DDP spawn: {free_gb:.2f} GB / {total_gb:.2f} GB")
+            print("[MemClean] ✅ ")
 
         # ── Spawn satu proses per GPU ────────────────────────────────────────
         mp.spawn(
@@ -815,13 +816,20 @@ if __name__ == "__main__":
             })
         print(f"\n✅ Report: {csv_path}")
 
-        # ── Evaluasi Multi-GPU ───────────────────────────────────────────────────────
-        print("\n" + "="*65 + "\n  Menjalankan Evaluasi Multi-GPU Mask R-CNN\n" + "="*65)
+        # ── Evaluasi via generate_report_single_model.py ─────────────────────────────────────
+        print("\n" + "="*65 + "\n  Menjalankan Evaluasi Mask R-CNN via generate_report_single_model.py\n" + "="*65)
         try:
             import subprocess
-            subprocess.run([sys.executable, "-u", "eval_multigpu.py", "--gpus", args.gpus], check=True)
+            eval_script = os.path.join(ROOT, "utils", "generate_report_single_model.py")
+            if not os.path.exists(eval_script):
+                print(f"⚠️ Skrip evaluasi tidak ditemukan: {eval_script}")
+            else:
+                subprocess.run(
+                    [sys.executable, "-u", eval_script, "--family", "maskrcnn", "--gpus", args.gpus],
+                    check=True,
+                )
         except subprocess.CalledProcessError as e:
-            print(f"⚠️ Evaluasi Multi-GPU gagal: {e}")
+            print(f"⚠️ Evaluasi Mask R-CNN gagal: {e}")
     else:
         print("\n[Skip] Evaluasi Mask R-CNN dilewati karena argumen --skip-eval aktif.")
 

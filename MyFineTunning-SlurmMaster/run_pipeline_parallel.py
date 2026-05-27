@@ -3,17 +3,26 @@
 run_pipeline_parallel.py
 ========================
 Parallel Multi-GPU Training & Evaluation Scheduler (Scopus Q1/Q2 Compliance)
-Menerapkan skenario: 1 GPU = 1 Model (Concurrent Training + Queueing)
 
-Sistem akan memetakan jumlah GPU tersedia, mendistribusikan beban kerja secara cerdas,
-dan langsung menggunakan GPU yang menganggur (idle) untuk melakukan evaluasi model yang
-telah selesai tanpa mengganggu training model lain yang masih berjalan.
+Sistem akan memetakan jumlah GPU secara otomatis, mendistribusikan beban 
+kerja secara cerdas (1 GPU = 1 Model), dan menjalankan evaluasi otomatis 
+pada GPU yang sedang idle. Semua konfigurasi membaca dari `config_shared.py`.
 
-Cara menjalankan:
-    python run_pipeline_parallel.py --gpus 0,1
+PANDUAN EKSEKUSI (WAJIB DI DALAM NODE GPU & CONDA yolo_env):
 
-    tmux new-session -d -s run_pipeline_parallel "cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && source .venv/bin/activate && python3 run_pipeline_parallel.py --gpus 0 2>&1 | tee run_pipeline_parallel.log"
+1. Masuk ke GPU Node (Jangan di Login Node):
+   cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils
+   ./attach_gpu.sh
 
+2. Eksekusi Background via TMUX (DIREKOMENDASIKAN AGAR TIDAK TERPUTUS):
+   tmux new-session -d -s run_pipeline_parallel "source /data/programs/anaconda3/bin/activate yolo_env && cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && python3 run_pipeline_parallel.py 2>&1 | tee run_pipeline_parallel.log"
+
+3. Eksekusi Interaktif (Untuk Debugging Cepat):
+   source /data/programs/anaconda3/bin/activate yolo_env
+   python3 run_pipeline_parallel.py
+
+Catatan: Argumen --gpus bersifat opsional. Jika tidak diisi, sistem akan 
+menggunakan seluruh GPU yang tersedia secara otomatis.
 """
 
 import os
@@ -59,9 +68,10 @@ def _fmt_duration(seconds: float) -> str:
     return f"{s}s"
 
 class ParallelScheduler:
-    def __init__(self, gpu_list: list, skip_models: set):
+    def __init__(self, gpu_list: list, skip_models: set, eval_only: bool = False):
         self.gpu_list = gpu_list
         self.skip_models = skip_models
+        self.eval_only = eval_only
         self.gpu_status = {gpu: None for gpu in gpu_list}  # gpu_id -> task_id or None
         
         # Inisialisasi daftar tugas (Task Registry)
@@ -79,25 +89,30 @@ class ParallelScheduler:
         ]
         
         # 2. Evaluation Tasks
+        # generate_report_single_model.py adalah skrip evaluasi sentral (pengganti semua eval_multigpu.py)
+        # Dipanggil dengan --family <model> untuk menjalankan COCOeval + generate visual
+        _UTILS_DIR = os.path.join(_THIS_DIR, "utils")
         eval_specs = [
-            {"id": "eval_yolo8", "name": "yolo8", "label": "YOLOv8m/x Eval", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo8"), "script": "eval_multigpu.py", "args": [], "device_arg": "--gpus", "deps": ["train_yolo8"]},
-            {"id": "eval_yolo9", "name": "yolo9", "label": "YOLOv9m/e Eval", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo9"), "script": "eval_multigpu.py", "args": [], "device_arg": "--gpus", "deps": ["train_yolo9"]},
-            {"id": "eval_yolo10", "name": "yolo10", "label": "YOLOv10m/x Eval", "cwd": os.path.join(_THIS_DIR, "yolo", "yolov10"), "script": "eval_multigpu.py", "args": [], "device_arg": "--gpus", "deps": ["train_yolo10"]},
-            {"id": "eval_yolo11", "name": "yolo11", "label": "YOLO11n/l/x Eval", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo11"), "script": "eval_multigpu.py", "args": [], "device_arg": "--gpus", "deps": ["train_yolo11"]},
-            {"id": "eval_maskrcnn", "name": "maskrcnn", "label": "Mask R-CNN Eval", "cwd": os.path.join(_THIS_DIR, "mask-r-cnn"), "script": "eval_multigpu.py", "args": [], "device_arg": "--gpus", "deps": ["train_maskrcnn"]},
-            {"id": "eval_hybrid", "name": "hybrid", "label": "Hybrid Pipeline Eval", "cwd": os.path.join(_THIS_DIR, "hybrid"), "script": "main.py", "args": ["--skip-eval"], "device_arg": "--device", "deps": ["train_yolo11"]}
+            {"id": "eval_yolo8",    "name": "yolo8",    "label": "YOLOv8 Eval",        "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "yolo8"],    "device_arg": "--gpus", "deps": ["train_yolo8"]},
+            {"id": "eval_yolo9",    "name": "yolo9",    "label": "YOLOv9 Eval",        "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "yolo9"],    "device_arg": "--gpus", "deps": ["train_yolo9"]},
+            {"id": "eval_yolo10",   "name": "yolo10",   "label": "YOLOv10 Eval",       "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "yolov10"],  "device_arg": "--gpus", "deps": ["train_yolo10"]},
+            {"id": "eval_yolo11",   "name": "yolo11",   "label": "YOLO11 Eval",        "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "yolo11"],   "device_arg": "--gpus", "deps": ["train_yolo11"]},
+            {"id": "eval_maskrcnn", "name": "maskrcnn", "label": "Mask R-CNN Eval",    "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "maskrcnn"], "device_arg": "--gpus", "deps": ["train_maskrcnn"]},
+            {"id": "eval_hybrid",   "name": "hybrid",   "label": "Hybrid Pipeline Eval","cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "hybrid"],   "device_arg": "--gpus", "deps": ["train_yolo11"]},
         ]
         
-        # 3. Global Multi-GPU Evaluation (Langkah penutup setelah semua selesai)
+        # 3. Global Compilation (Langkah penutup setelah semua evaluasi selesai)
+        # kompilasi_ALL_*.csv sudah di-append oleh masing-masing generate_report_single_model.py
+        # Tidak perlu skrip tambahan — cukup tunggu semua eval selesai.
         global_eval = {
             "id": "eval_global_multigpu",
             "name": "global_eval",
-            "label": "Global Multi-GPU DDP Eval",
-            "cwd": os.path.join(_THIS_DIR, "hybrid"),
-            "script": "eval_multigpu.py",
-            "args": [],
+            "label": "Global Compilation (ALL CSV)",
+            "cwd": _UTILS_DIR,
+            "script": "generate_report_single_model.py",
+            "args": ["--family", "all"],
             "device_arg": "--gpus",
-            "deps": ["train_yolo8", "train_yolo9", "train_yolo10", "train_yolo11", "train_maskrcnn"]
+            "deps": ["eval_yolo8", "eval_yolo9", "eval_yolo10", "eval_yolo11", "eval_maskrcnn", "eval_hybrid"]
         }
         
         # 4. New Method Evaluations (Tambahan khusus Scopus Q1)
@@ -110,7 +125,7 @@ class ParallelScheduler:
         
         # Daftarkan Training Tasks
         for spec in train_specs:
-            is_skipped = spec["name"] in self.skip_models
+            is_skipped = self.eval_only or (spec["name"] in self.skip_models)
             self.tasks[spec["id"]] = {
                 "id": spec["id"],
                 "label": spec["label"],
@@ -130,8 +145,8 @@ class ParallelScheduler:
             
         # Daftarkan Evaluation Tasks
         for spec in eval_specs:
-            # Jika training di-skip, maka eval-nya otomatis di-skip juga
-            is_skipped = spec["name"] in self.skip_models
+            # Jika eval-only aktif, evaluasi tidak di-skip. Jika tidak, ikuti aturan skip model.
+            is_skipped = False if self.eval_only else (spec["name"] in self.skip_models)
             self.tasks[spec["id"]] = {
                 "id": spec["id"],
                 "label": spec["label"],
@@ -268,12 +283,20 @@ class ParallelScheduler:
             changed = False
             for tid, t in self.tasks.items():
                 if t["state"] == "PENDING":
-                    for dep_id in t["dependencies"]:
-                        dep_state = self.tasks[dep_id]["state"]
-                        if dep_state == "FAILED" or dep_state == "SKIPPED":
+                    # Cek dependensi
+                    deps_met = True
+                    for dep in t["dependencies"]:
+                        dep_state = self.tasks[dep]["state"]
+                        if dep_state == "SKIPPED" and not self.eval_only:
+                            # Jika dep di-skip (dan bukan eval_only), task ini juga di-skip
+                            print(_c(f"\n[Scheduler] ⏭  Task {t['label']} otomatis dilewati karena dependensi ({dep}) SKIPPED", _YELLOW))
                             t["state"] = "SKIPPED"
-                            print(_c(f"\n[Scheduler] ⏭  Task {t['label']} otomatis dilewati karena dependensi ({dep_id}) {dep_state}", _YELLOW))
+                            deps_met = False
                             changed = True
+                            break
+                        elif dep_state not in ["SUCCESS", "SKIPPED"]:
+                            # Jika dependensi belum selesai, task ini belum bisa jalan
+                            deps_met = False
                             break
 
     def _dispatch_ready_tasks(self):
@@ -474,6 +497,10 @@ def main():
         "--skip", type=str, default="",
         help="Daftar model yang di-skip trainingnya (misal 'yolo8,yolo9')."
     )
+    parser.add_argument(
+        "--eval-only", action="store_true",
+        help="Hanya jalankan proses evaluasi, lewati proses training."
+    )
     args = parser.parse_args()
     
     # Resolusi GPU list
@@ -511,8 +538,8 @@ def main():
     print(f"  Workspace Directory: {WORKSPACE_DIR}")
     print(f"  Python Interpreter: {_VENV_PYTHON}")
     print(_c(_hr(), _BOLD, _CYAN))
-    
-    scheduler = ParallelScheduler(gpu_list, skip_models)
+    # 2. Inisialisasi Scheduler
+    scheduler = ParallelScheduler(gpu_list=gpu_list, skip_models=skip_models, eval_only=args.eval_only)
     scheduler.print_plan()
     scheduler.run()
 
