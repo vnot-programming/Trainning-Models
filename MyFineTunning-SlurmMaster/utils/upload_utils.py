@@ -35,6 +35,9 @@ from pathlib import Path
 
 # Root project
 _PROJECTROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECTROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECTROOT))
+from telegram_utils import send_telegram_msg
 
 
 def get_active_workspace() -> Path:
@@ -266,6 +269,20 @@ def run_local_archiver() -> bool:
         compressed_count += 1
 
     elapsed_total = time.perf_counter() - t_start
+    
+    # Kirim notifikasi Telegram
+    msg = (
+        f"📦 <b>Local Archiving Finished!</b>\n"
+        f"Workspace: <code>{ws_dir.name}</code>\n"
+        f"Durasi: <code>{elapsed_total:.2f}s</code>\n"
+        f"Model Archived: <code>{len(moved_list)}</code>\n"
+        f"Weights Copied: <code>{len(copied_list)}</code>\n"
+        f"Folders Zipped: <code>{compressed_count}</code>"
+    )
+    try:
+        send_telegram_msg(msg)
+    except Exception as e:
+        print(f"  ⚠️ [Telegram Gagal] {e}")
     
     print("\n" + "=" * 70)
     print("🏁 PROSES PENGARSIPAN LOKAL SELESAI")

@@ -156,11 +156,11 @@ GPU_COOLDOWN_SEC       = 15     # Jeda (detik) setelah training selesai
 # ==============================================================================
 # HYPERPARAMETER RunPOD - Opsi Lain
 # ==============================================================================
-EPOCHS              = 2
+EPOCHS              = 200
 IMAGE_SIZE          = 640
 NUM_CLASSES         = 7
 YOLO_BATCH_SIZE     = 30   # Diturunkan dari 64 agar terhindar dari GPU Out-Of-Memory (OOM) pada 1 GPU V100
-MASKRCNN_BATCH_SIZE = 18   # Dioptimalkan ke 18 (Aman untuk V100 32GB, memori ~25GB)
+MASKRCNN_BATCH_SIZE = 16   # Dioptimalkan ke 18 (Aman untuk V100 32GB, memori ~25GB)
 NUM_WORKERS         = 6    # Disesuaikan persis dengan batas QOS Slurm (--cpus-per-task=8)
 Default_EVAL_CONF   = 0.001
 Default_EVAL_IOU    = 0.6

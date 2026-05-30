@@ -128,7 +128,9 @@ def get_job_state(job_id):
         if sacct_output:
             parts = sacct_output.split()
             if len(parts) >= 2:
-                return parts[0], parts[1]
+                return parts[0], " ".join(parts[1:])
+            elif len(parts) == 1:
+                return parts[0], ""
         return "UNKNOWN", ""
         
     parts = output.split()
@@ -172,54 +174,68 @@ def monitor_job(job_id, target_desc):
                 f"Gunakan <code>./attach_gpu.sh</code> (di dalam utils) untuk masuk ke shell."
             )
             
-        elif state in ["COMPLETED", "SUCCESS", "FAILED", "TIMEOUT", "CANCELLED", "UNKNOWN"]:
-            if state in ["COMPLETED", "SUCCESS"]:
+        elif state in ["CG", "COMPLETING"]:
+            pass  # Sedang proses transisi penutupan, tunggu saja
+        elif state != "R":
+            # Jika bukan PD, bukan R, dan bukan CG, berarti job sudah mati (TIMEOUT+, CANCELLED, FAILED, OUT_OF_ME, dll)
+            if "COMPLETED" in state or "SUCCESS" in state:
                 send_telegram_msg(
                     f"✅ <b>GPU Booking Finished!</b>\n"
                     f"Job ID: <code>{job_id}</code> selesai atau ditutup."
                 )
+                return False
             else:
                 send_telegram_msg(
                     f"❌ <b>GPU Booking Interrupted!</b>\n"
                     f"Job ID: <code>{job_id}</code> berakhir dengan status: <code>{state}</code>\n"
-                    f"Exit Code/Detail: <code>{detail}</code>"
+                    f"Exit Code/Detail: <code>{detail}</code>\n\n"
+                    f"🔄 <b>Sistem True-Daemon Auto-Resume akan merekonstruksi ulang booking GPU Anda segera!</b>"
                 )
-            break
+                return True
             
         time.sleep(15)
 
 def main():
     print("✧ SMART SLURM GPU BOOKING ✧")
-    print("Memindai topologi kluster secara real-time...")
     
-    healthy, draining = scan_slurm_nodes()
-    target_node = None
-    exclude_list = draining.copy()
-    
-    idle_nodes = [n for n in healthy if n['free_gpu'] > 0]
-    if idle_nodes:
-        best_node = max(idle_nodes, key=lambda x: x['free_gpu'])
-        target_node = best_node['name']
-        desc = f"Di-dispatch langsung ke Node <b>{target_node}</b> (Memiliki {best_node['free_gpu']} GPU Kosong)"
-    else:
-        desc = f"Antrean Global (Menggunakan Node Sehat, Mengecualikan Node DRAIN: {', '.join(exclude_list) if exclude_list else 'None'})"
+    while True:
+        print("Memindai topologi kluster secara real-time...")
+        
+        healthy, draining = scan_slurm_nodes()
+        target_node = None
+        exclude_list = draining.copy()
+        
+        idle_nodes = [n for n in healthy if n['free_gpu'] > 0]
+        if idle_nodes:
+            best_node = max(idle_nodes, key=lambda x: x['free_gpu'])
+            target_node = best_node['name']
+            desc = f"Di-dispatch langsung ke Node <b>{target_node}</b> (Memiliki {best_node['free_gpu']} GPU Kosong)"
+        else:
+            desc = f"Antrean Global (Menggunakan Node Sehat, Mengecualikan Node DRAIN: {', '.join(exclude_list) if exclude_list else 'None'})"
 
-    print(f"Rute Terpilih: {desc}")
-    
-    sbatch_script = generate_booking_sbatch(target_node=target_node, exclude_nodes=exclude_list)
-    print(f"Mengompilasi script Slurm: {sbatch_script}")
-    
-    submit_res = get_cmd_output(f"sbatch {sbatch_script}")
-    match = re.search(r'Submitted batch job (\d+)', submit_res)
-    
-    if match:
-        job_id = match.group(1)
-        print(f"Berhasil mensubmit Job ID: {job_id}")
-        print("Memulai pemantauan background daemon Telegram...")
-        monitor_job(job_id, desc)
-    else:
-        print("❌ Gagal mengirim job ke Slurm Master.")
-        send_telegram_msg("❌ <b>Smart Submit Gagal</b>\nSlurm Master menolak pengiriman GPU Booking.")
+        print(f"Rute Terpilih: {desc}")
+        
+        sbatch_script = generate_booking_sbatch(target_node=target_node, exclude_nodes=exclude_list)
+        print(f"Mengompilasi script Slurm: {sbatch_script}")
+        
+        submit_res = get_cmd_output(f"sbatch {sbatch_script}")
+        match = re.search(r'Submitted batch job (\d+)', submit_res)
+        
+        if match:
+            job_id = match.group(1)
+            print(f"Berhasil mensubmit Job ID: {job_id}")
+            print("Memulai pemantauan background daemon Telegram...")
+            should_resume = monitor_job(job_id, desc)
+            
+            if not should_resume:
+                break
+            
+            print("⏳ Menunggu 5 detik sebelum auto-resume...")
+            time.sleep(5)
+        else:
+            print("❌ Gagal mengirim job ke Slurm Master.")
+            send_telegram_msg("❌ <b>Smart Submit Gagal</b>\nSlurm Master menolak pengiriman GPU Booking.")
+            break
 
 if __name__ == "__main__":
     main()

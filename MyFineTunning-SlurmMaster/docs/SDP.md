@@ -187,3 +187,119 @@
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - File arsip workspace hanya disimpan secara lokal di `/datas/`. Rclone otomatis akan mengabaikan file ini saat push ke Google Drive.
 
+---
+
+### [Entri 010] — Peningkatan UI/UX Bio-Digital pada myslurm.sh
+
+- **Tanggal/Waktu:** 2026-05-29 11:00 WIB
+- **Tugas yang diselesaikan:**
+  - Mengubah fungsi `squeue` dari hanya menampilkan sesi user menjadi **Sesi Global** untuk melihat status cluster secara menyeluruh.
+  - Menambahkan **Daftar Antrean Anda (USER)** secara terpisah di bawah antrean global sehingga pengguna dapat membedakan job miliknya dan job orang lain secara paralel.
+  - Menerapkan desain *Bio-Digital Minimalism* menggunakan border box artistik untuk daftar `squeue` dan `tmux ls`.
+  - Mencegat raw output `tmux ls` dengan perintah `awk` untuk menghasilkan penomoran baris dan ikon indikator aktif (🟢) pada daftar sesi tmux.
+  - Menambahkan submenu interaktif dan pemrosesan validasi di *case 5* dan *case 4*, untuk menjamin kesalahan input (huruf atau angka di luar daftar) gagal secara elegan.
+  - Mengubah opsi keluar (Keluar Menu) menjadi angka `0` dengan warna peringatan (Merah) menggunakan ANSI escape codes, sehingga antarmuka menjadi lebih konsisten dengan standar utilitas CLI pada umumnya.
+  - **Penyempurnaan Menu 5 (Hapus Sesi tmux):** Mengimplementasikan siklus pengulangan dinamis (*continuous loop*). Setelah pengguna berhasil menghapus satu sesi tmux, layar akan melakukan render ulang secara instan memperlihatkan daftar sesi terbaru, memungkinkan pengguna menghapus beberapa sesi sekaligus tanpa harus bolak-balik ke menu utama. Cukup menekan `Enter` (kosong) untuk keluar dari sub-menu tersebut.
+  - **Revisi Skrip:** Mengekstraksi fungsi `squeue` ke dalam skrip Python terpisah (`utils/slurm/pretty_squeue.py`) untuk menggantikan `awk` murni demi fleksibilitas manipulasi string yang lebih tinggi. Skrip ini mengubah kolom partisi menjadi kolom waktu berjalan (`TIME`) dengan format cerdas (contoh: "1d 5h", "2h 30m", "45s") dan memberi warna dinamis pada STATE (`R`=Hijau, `PD`=Kuning, `CG`=Merah).
+  - **Sistem Auto-Resume Booking (True Background Daemon):** Mengelevasi arsitektur Auto-Resume dari sekadar fitur pasif di `myslurm.sh` menjadi sebuah pelindung (daemon) sejati 24/7 di dalam `utils/book_gpu.py`. Ketika `book_gpu.py` berjalan dalam `tmux` dan mendeteksi bahwa antrean mati karena `TIME LIMIT` atau *Error* lainnya, skrip python ini tidak akan menyerah; melainkan langsung merekonstruksi ulang pengiriman antrean ke Slurm secara independen dan melaporkannya ke Telegram tanpa henti. Ini memastikan GPU Booking kebal terhadap diskoneksi SSH!
+  - **Sub-Menu Manajemen Sesi TMUX (Menu 5):** Mengembangkan Menu 5 dari yang tadinya hanya "Hapus Sesi" menjadi "Manajemen Sesi TMUX". Kini, pengguna disajikan Sub-Menu dengan dua pilihan: **1) Masuk ke Sesi Tmux (Attach)** dan **2) Hapus Sesi Tmux (Kill)**. Keduanya menggunakan mekanisme *continuous loop* di mana pengguna akan selalu dikembalikan ke daftar sesi terbaru setelah melakukan *attach* (lalu *detach*) atau *kill*, tanpa harus terlempar ke menu utama, sampai pengguna menekan Enter (kosong) untuk keluar.
+- **File yang diubah/dibuat:**
+  - `utils/myslurm.sh` [DIMODIFIKASI MAYOR]
+  - `utils/slurm/pretty_squeue.py` [DIBUAT BARU / DIRESTRUKTURISASI]
+  - `utils/book_gpu.py` [DIMODIFIKASI MAYOR - DAEMON ARCHITECTURE]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Bash menu interaktif kini jauh lebih intuitif dan stabil.
+  - Eksekusi menggunakan `bash utils/myslurm.sh` secara langsung untuk navigasi cepat.
+
+---
+
+### [Entri 011] — Mengaktifkan Evaluasi Metode Baru (New Method Evaluations)
+
+- **Tanggal/Waktu:** 2026-05-30 21:05 WIB
+- **Tugas yang diselesaikan:**
+  - Memperbaiki potensi *KeyError* pada `run_pipeline_parallel.py` karena pengguna memberikan komen pada kunci `"state"`.
+  - Mengubah konfigurasi dari (awalnya `SKIPPED`) menjadi `"state": "PENDING",` agar tugas **Fase Evaluasi Metode Baru** dimasukkan ke dalam antrean eksekusi pipeline yang riil.
+- **File yang diubah/dibuat:**
+  - `run_pipeline_parallel.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 011]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):** Pipeline kini akan secara otomatis menjalankan seluruh alur eksekusi metode baru (standar, golden, sota, dan visualisasinya) setelah evaluasi global tuntas.
+
+---
+
+### [Entri 012] — Integrasi Auto-Archive (upload_utils.py) ke Pipeline Utama
+
+- **Tanggal/Waktu:** 2026-05-30 21:10 WIB
+- **Tugas yang diselesaikan:**
+  - Mengintegrasikan pemanggilan skrip `utils/upload_utils.py` langsung ke dalam *orchestrator* utama (`run_pipeline_parallel.py`).
+  - Pemanggilan diletakkan pada tahap paling akhir (`_print_final_summary`), tepat setelah pembuatan visualisasi *grid* komparasi selesai dan sebelum notifikasi Telegram `Pipeline Finished` dikirimkan.
+- **File yang diubah/dibuat:**
+  - `run_pipeline_parallel.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 012]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):** Mulai sekarang, setiap kali pipeline paralel (training + eval) tuntas, seluruh arsip hasil, bobot, dan log akan otomatis dikompresi ke format `.tar.gz` di dalam direktori `datas/`.
+
+---
+
+### [Entri 013] — Penambahan Notifikasi Telegram pada Pengarsipan Lokal
+
+- **Tanggal/Waktu:** 2026-05-30 21:12 WIB
+- **Tugas yang diselesaikan:**
+  - Menganalisis skrip `utils/upload_utils.py` dan memverifikasi ketiadaan fitur pelaporan Telegram.
+  - Mengimplementasikan pengiriman notifikasi instan Telegram dengan memanggil `send_telegram_msg` dari `telegram_utils.py` (menyuntikkan *path* *root* proyek ke `sys.path`).
+  - Laporan yang dikirim meliputi durasi kompresi, jumlah model, jumlah weights, dan jumlah folder terkompresi.
+- **File yang diubah/dibuat:**
+  - `utils/upload_utils.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 013]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):** Mulai sekarang, saat pengarsipan lokal dan kompresi `.tar.gz` selesai (baik dipanggil via `run_pipeline_parallel.py` maupun dipanggil manual), sistem akan mengirim rekap laporan sukses ke grup Telegram Anda.
+
+---
+
+### [Entri 014] — Bugfix Kritis: Daemon Gagal Auto-Resume pada Slurm TIMEOUT+
+
+- **Tanggal/Waktu:** 2026-05-30 21:30 WIB
+- **Tugas yang diselesaikan:**
+  - Menginvestigasi insiden kegagalan skrip `book_gpu.py` yang tidak mengirimkan notifikasi Telegram dan *stuck* dalam *infinite loop* saat antrean mencapai *MaxWall* (Timeout).
+  - Mengidentifikasi akar masalah: Output `sacct` dari Slurm untuk job yang mati paksa seringkali memiliki tambahan tanda plus (`TIMEOUT+`, `CANCELLED+`) atau string yang terpotong (`OUT_OF_ME`). Hal ini menyebabkan klausa `if state in [...]` yang sangat spesifik menjadi gagal (*False*).
+  - Merombak logika kondisional dalam `monitor_job()` dengan menerapkan pendekatan *Catch-All* untuk *State End* (`elif state != "R"`). Setiap state yang bukan `PD`, `R`, atau `CG` kini dianggap sebagai interupsi valid dan langsung dieksekusi.
+  - Memperbaiki parser `get_job_state()` agar tidak *crash* atau menghasilkan string kosong jika output `sacct` hanya menghasilkan satu kata (misal `"TIMEOUT"` tanpa *ExitCode*).
+- **File yang diubah/dibuat:**
+  - `utils/book_gpu.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 014]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):** Daemon `book_gpu.py` kini jauh lebih tangguh (resilient) dalam membaca variasi aneh dari string log Slurm. Jika terbunuh karena *QoS Limit* atau node mati, ia dijamin akan mengirim notifikasi Telegram dan merakit ulang *booking* baru.
+
+---
+
+### [Entri 015] — Bugfix Kritis: Task "New Method Eval" Stuck di PENDING
+
+- **Tanggal/Waktu:** 2026-05-31 01:59 WIB
+- **Tugas yang diselesaikan:**
+  - Mengidentifikasi penyebab tugas-tugas *New Method Evaluation* (`New Method Std Eval`, dll) terperangkap (stuck) pada status `PENDING` di HUD `run_pipeline_parallel.py`.
+  - **Akar Masalah (Root Cause):** Pada fungsi `_get_next_ready_task()`, mekanisme pengambilan (dispatch) task bertipe `global_eval` secara *hardcode* hanya mengecek *id* tugas bernama `"eval_global_multigpu"`. Tugas *New Method Eval* (meskipun memiliki properti `"type": "global_eval"`) diabaikan oleh kondisional ini dan tak pernah terpilih. Karena tugas tersebut tidak bisa dieksekusi, status `PENDING` bertahan tanpa ujung dan pipeline tidak pernah mencapai blok kode terminasi.
+  - **Tindakan Perbaikan:** Merombak *loop* seleksi tugas berjenis *global_eval* sehingga sistem mengulangi `self.tasks.items()` untuk mencari seluruh daftar tugas yang berlabel `t["type"] == "global_eval"`. Sekarang, baik `eval_global_multigpu` maupun kelima evaluasi turunan *New Method* akan dieksekusi secara berurutan asalkan dependensi spesifik mereka sudah `SUCCESS`.
+- **File yang diubah/dibuat:**
+  - `run_pipeline_parallel.py` [DIMODIFIKASI - Bugfix Logic Pipeline]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 015]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):** Masalah ini berhasil diselesaikan. Apabila pengguna masih menemukan HUD dalam kondisi `PENDING`, berikan instruksi kepada mereka untuk mengulang skrip `run_pipeline_parallel.py` agar perubahan logika orkestrasi pipeline mulai bekerja. 
+
+---
+
+### [Entri 016] — Integrasi Visual Post-Processing ke HUD Pipeline Paralel
+
+- **Tanggal/Waktu:** 2026-05-31 02:08 WIB
+- **Tugas yang diselesaikan:**
+  - Merespons permintaan pengguna untuk memunculkan eksekusi skrip `upload_utils.py` dan `generate_comparison_grid.py` ke dalam HUD tabel *dashboard* (status `PENDING` / `RUNNING` / `SUCCESS`).
+  - Menghapus pemanggilan eksklusif `subprocess.run()` untuk kedua *post-processing* tersebut dari fungsi `_print_final_summary()`.
+  - Memasukkan kedua skrip tersebut ke dalam *task registry* (`_build_task_registry`) sebagai entri tugas berjenis `"global_eval"`:
+    - **`post_grid`** (`Generate Final Grid`) — bergantung pada `eval_new_hybrid_sota`.
+    - **`post_upload`** (`Local Archive & Upload`) — bergantung pada `post_grid`.
+  - Memodifikasi fungsi `_dispatch_ready_tasks` untuk menangani parameter `device_arg` yang kosong (`""`), guna menghindari penyisipan argumen *GPU ID* palsu (yang bisa menimbulkan *crash*) bagi tugas-tugas *post-processing* (yang tidak memakai GPU).
+- **File yang diubah/dibuat:**
+  - `run_pipeline_parallel.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 016]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):** Kini daftar task di antrean *dashboard terminal* memuat dua item terakhir untuk pembuatan visual grid dan pengarsipan ZIP. Seluruh siklus hidup komputasi dan pengarsipan benar-benar terpusat di satu orchestrator log.

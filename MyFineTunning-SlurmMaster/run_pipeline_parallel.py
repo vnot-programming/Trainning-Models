@@ -14,14 +14,12 @@ PANDUAN EKSEKUSI AGAR TIDAK TERPUTUS (WORKFLOW TMUX YANG BENAR):
    tmux new-session -s training_pipeline
 
 2. Di dalam TMUX, sambungkan (attach) ke Node GPU:
-   cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils
-   ./attach_gpu.sh
+   cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils && ./attach_gpu.sh
 
 3. Setelah masuk Node GPU, jalankan training:
    source /data/programs/anaconda3/bin/activate yolo_env
-   cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster
-   python3 run_pipeline_parallel.py 2>&1 | tee run_pipeline_parallel.log
-
+   cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && LOG_DIR=$(python3 -c "import config_shared, os; print(os.path.join(config_shared.WORKSPACE_DIR, 'logs'))") && mkdir -p "$LOG_DIR" && python3 run_pipeline_parallel.py 2>&1 | tee "$LOG_DIR/run_pipeline_parallel.log"
+   
 4. Detach dari TMUX untuk meninggalkan proses (Aman jika terminal ditutup):
    Tekan Ctrl+b, lalu tekan d. atau 
    di mac Tekan tombol control (^)+b tekan tombol d (untuk detach).
@@ -129,6 +127,13 @@ class ParallelScheduler:
             {"id": "eval_new_gld_vis", "name": "global_eval", "label": "New Method Golden Visuals", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "golden_evaluation_visuals-new_method.py", "args": [], "device_arg": "--gpus", "deps": ["eval_new_gld"]},
             {"id": "eval_new_hybrid_sota", "name": "global_eval", "label": "New Method Hybrid SOTA Eval", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "evaluation_hybrid_sota.py", "args": [], "device_arg": "--gpus", "deps": ["eval_new_gld_vis"]}
         ]
+        # 5. Post Processing Tasks (Grid Generator & Upload/Archive)
+        post_specs = [
+            {"id": "post_grid", "name": "global_eval", "label": "Generate Final Grid", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "generate_comparison_grid.py", "args": [], "device_arg": "", "deps": ["eval_new_hybrid_sota"]},
+            {"id": "post_upload", "name": "global_eval", "label": "Local Archive & Upload", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "upload_utils.py", "args": [], "device_arg": "", "deps": ["post_grid"]}
+        ]
+        
+        new_eval_specs.extend(post_specs)
         
         # Daftarkan Training Tasks
         for spec in train_specs:
@@ -191,7 +196,7 @@ class ParallelScheduler:
             "logfile": os.path.join(LOG_DIR, f"{global_eval['id']}.log")
         }
 
-        # Daftarkan New Method Evaluations (Dipaksa SKIPPED atas instruksi user)
+        # Daftarkan New Method Evaluations
         for spec in new_eval_specs:
             self.tasks[spec["id"]] = {
                 "id": spec["id"],
@@ -202,7 +207,7 @@ class ParallelScheduler:
                 "args": spec["args"],
                 "device_arg": spec["device_arg"],
                 "dependencies": spec["deps"],
-                "state": "SKIPPED",
+                "state": "PENDING",  # Diubah dari SKIPPED menjadi PENDING agar ikut dieksekusi
                 "proc": None,
                 "gpu": None,
                 "start_time": None,
@@ -319,10 +324,10 @@ class ParallelScheduler:
                 
                 # Susun argumen perintah
                 # Format arguments dengan menyisipkan device/gpus
-                cmd = [
-                    _VENV_PYTHON, "-u", ready_task["script"],
-                    ready_task["device_arg"], str(gpu_id)
-                ]
+                cmd = [_VENV_PYTHON, "-u", ready_task["script"]]
+                if ready_task["device_arg"]:
+                    cmd.extend([ready_task["device_arg"], str(gpu_id)])
+
                 # Jika global eval, berikan daftar semua GPU aktif
                 if ready_task["id"] == "eval_global_multigpu":
                     gpus_str = ",".join(map(str, self.gpu_list))
@@ -369,14 +374,14 @@ class ParallelScheduler:
                 if self._dependencies_met(t):
                     return t
                     
-        # Cek Global Evaluation Task
-        t = self.tasks.get("eval_global_multigpu")
-        if t and t["state"] == "PENDING":
-            if self._dependencies_met(t):
-                # Pastikan tidak ada task training atau evaluasi lain yang sedang berjalan
-                any_other_running = any(ot["state"] == "RUNNING" for otid, ot in self.tasks.items() if otid != "eval_global_multigpu")
-                if not any_other_running:
-                    return t
+        # Cek Global Evaluation Tasks (Termasuk New Method Evaluations)
+        for tid, t in self.tasks.items():
+            if t["type"] == "global_eval" and t["state"] == "PENDING":
+                if self._dependencies_met(t):
+                    # Pastikan tidak ada task lain yang sedang berjalan (karena butuh all GPUs / eksklusif)
+                    any_other_running = any(ot["state"] == "RUNNING" for otid, ot in self.tasks.items() if otid != tid)
+                    if not any_other_running:
+                        return t
                     
         return None
 
@@ -474,13 +479,6 @@ class ParallelScheduler:
             print(_c(f"  ⏭  Dilewati : {skipped_cnt}", _YELLOW))
         print(_c(_hr("═"), _BOLD, _CYAN))
         
-        # Generate final comparison grid jika sukses semua
-        try:
-            print("\n[Scheduler] Menjalankan generator grid perbandingan akhir...")
-            subprocess.run([_VENV_PYTHON, "-u", os.path.join(_THIS_DIR, "utils", "generate_comparison_grid.py")], check=False)
-        except Exception as e:
-            print(f"⚠️ Gagal memanggil generate_comparison_grid: {e}")
-            
         send_telegram_msg(
             f"🏁 <b>Parallel Multi-GPU Pipeline Finished!</b>\n"
             f"Total Waktu: <code>{_fmt_duration(total_elapsed)}</code>\n"
