@@ -33,10 +33,10 @@ except ImportError:
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def get_cmd_output(cmd):
+def get_cmd_output(cmd, timeout=30):
     try:
-        return subprocess.check_output(cmd, shell=True, universal_newlines=True, stderr=subprocess.DEVNULL).strip()
-    except subprocess.CalledProcessError:
+        return subprocess.check_output(cmd, shell=True, universal_newlines=True, stderr=subprocess.DEVNULL, timeout=timeout).strip()
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return ""
 
 def scan_slurm_nodes():

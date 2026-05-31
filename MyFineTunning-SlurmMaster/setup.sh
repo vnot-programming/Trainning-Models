@@ -27,6 +27,9 @@ Opsi B. Eksekusi Langsung (Interaktif):
     cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster
     bash setup.sh
 
+Opsi C. Eksekusi Background didalam TMUX (DIREKOMENDASIKAN AGAR TIDAK TERPUTUS):
+    cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && bash setup.sh 2>&1 | tee setup.log
+
 LANGKAH 3: Jalankan Pipeline Orchestrator (Setelah Setup Selesai)
     python run_pipeline_parallel.py
 ==============================================================================

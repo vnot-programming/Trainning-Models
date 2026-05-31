@@ -85,11 +85,13 @@ class ParallelScheduler:
     def _build_task_registry(self):
         # 1. Training Tasks
         train_specs = [
-            {"id": "train_yolo8", "name": "yolo8", "label": "YOLOv8m/x Train", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo8"), "script": "main.py", "args": ["--skip-eval"], "device_arg": "--device"},
-            {"id": "train_yolo9", "name": "yolo9", "label": "YOLOv9m/e Train", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo9"), "script": "main.py", "args": ["--skip-eval"], "device_arg": "--device"},
-            {"id": "train_yolo10", "name": "yolo10", "label": "YOLOv10m/x Train", "cwd": os.path.join(_THIS_DIR, "yolo", "yolov10"), "script": "main.py", "args": ["--skip-eval"], "device_arg": "--device"},
-            {"id": "train_yolo11", "name": "yolo11", "label": "YOLO11n/l/x Train", "cwd": os.path.join(_THIS_DIR, "yolo", "yolo11"), "script": "main.py", "args": ["--skip-eval"], "device_arg": "--device"},
-            {"id": "train_maskrcnn", "name": "maskrcnn", "label": "Mask R-CNN Train", "cwd": os.path.join(_THIS_DIR, "mask-r-cnn"), "script": "train_multigpu.py", "args": ["--skip-eval"], "device_arg": "--gpus"}
+            {"id": "train_yolo8",    "name": "yolo8",    "label": "YOLOv8m/x Train",    "cwd": os.path.join(_THIS_DIR, "yolo", "yolo8"),     "script": "main.py",          "args": ["--skip-eval"], "device_arg": "--device"},
+            {"id": "train_yolo9",    "name": "yolo9",    "label": "YOLOv9m/e Train",    "cwd": os.path.join(_THIS_DIR, "yolo", "yolo9"),     "script": "main.py",          "args": ["--skip-eval"], "device_arg": "--device"},
+            {"id": "train_yolo10",   "name": "yolo10",   "label": "YOLOv10m/x Train",   "cwd": os.path.join(_THIS_DIR, "yolo", "yolov10"),   "script": "main.py",          "args": ["--skip-eval"], "device_arg": "--device"},
+            {"id": "train_yolo11",   "name": "yolo11",   "label": "YOLO11n/l/x Train",  "cwd": os.path.join(_THIS_DIR, "yolo", "yolo11"),   "script": "main.py",          "args": ["--skip-eval"], "device_arg": "--device"},
+            {"id": "train_maskrcnn", "name": "maskrcnn", "label": "Mask R-CNN Train",    "cwd": os.path.join(_THIS_DIR, "mask-r-cnn"),        "script": "train_multigpu.py","args": ["--skip-eval"], "device_arg": "--gpus"},
+            # Paper 3 — RT-DETR: Vision Transformer untuk benchmark Edge vs YOLO
+            {"id": "train_rtdetr",   "name": "rtdetr",   "label": "RT-DETR-L Train",    "cwd": os.path.join(_THIS_DIR, "rtdetr"),            "script": "train_rtdetr.py",  "args": ["--skip-eval"], "device_arg": "--device"},
         ]
         
         # 2. Evaluation Tasks
@@ -97,12 +99,14 @@ class ParallelScheduler:
         # Dipanggil dengan --family <model> untuk menjalankan COCOeval + generate visual
         _UTILS_DIR = os.path.join(_THIS_DIR, "utils")
         eval_specs = [
-            {"id": "eval_yolo8",    "name": "yolo8",    "label": "YOLOv8 Eval",        "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "yolo8"],    "device_arg": "--gpus", "deps": ["train_yolo8"]},
-            {"id": "eval_yolo9",    "name": "yolo9",    "label": "YOLOv9 Eval",        "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "yolo9"],    "device_arg": "--gpus", "deps": ["train_yolo9"]},
-            {"id": "eval_yolo10",   "name": "yolo10",   "label": "YOLOv10 Eval",       "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "yolov10"],  "device_arg": "--gpus", "deps": ["train_yolo10"]},
-            {"id": "eval_yolo11",   "name": "yolo11",   "label": "YOLO11 Eval",        "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "yolo11"],   "device_arg": "--gpus", "deps": ["train_yolo11"]},
-            {"id": "eval_maskrcnn", "name": "maskrcnn", "label": "Mask R-CNN Eval",    "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "maskrcnn"], "device_arg": "--gpus", "deps": ["train_maskrcnn"]},
+            {"id": "eval_yolo8",    "name": "yolo8",    "label": "YOLOv8 Eval",         "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "yolo8"],    "device_arg": "--gpus", "deps": ["train_yolo8"]},
+            {"id": "eval_yolo9",    "name": "yolo9",    "label": "YOLOv9 Eval",         "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "yolo9"],    "device_arg": "--gpus", "deps": ["train_yolo9"]},
+            {"id": "eval_yolo10",   "name": "yolo10",   "label": "YOLOv10 Eval",        "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "yolov10"],  "device_arg": "--gpus", "deps": ["train_yolo10"]},
+            {"id": "eval_yolo11",   "name": "yolo11",   "label": "YOLO11 Eval",         "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "yolo11"],   "device_arg": "--gpus", "deps": ["train_yolo11"]},
+            {"id": "eval_maskrcnn", "name": "maskrcnn", "label": "Mask R-CNN Eval",     "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "maskrcnn"], "device_arg": "--gpus", "deps": ["train_maskrcnn"]},
             {"id": "eval_hybrid",   "name": "hybrid",   "label": "Hybrid Pipeline Eval","cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "hybrid"],   "device_arg": "--gpus", "deps": ["train_yolo11"]},
+            # Paper 3 — RT-DETR evaluation (menggunakan family key yang sama dengan FAMILY_VARIANTS)
+            {"id": "eval_rtdetr",   "name": "rtdetr",   "label": "RT-DETR-L Eval",      "cwd": _UTILS_DIR, "script": "generate_report_single_model.py", "args": ["--family", "rtdetr"],   "device_arg": "--gpus", "deps": ["train_rtdetr"]},
         ]
         
         # 3. Global Compilation (Langkah penutup setelah semua evaluasi selesai)
@@ -116,7 +120,8 @@ class ParallelScheduler:
             "script": "generate_report_single_model.py",
             "args": ["--family", "all"],
             "device_arg": "--gpus",
-            "deps": ["eval_yolo8", "eval_yolo9", "eval_yolo10", "eval_yolo11", "eval_maskrcnn", "eval_hybrid"]
+            # RT-DETR dimasukkan ke dalam dependensi global agar CSV ALL mencakup metrik Paper 3
+            "deps": ["eval_yolo8", "eval_yolo9", "eval_yolo10", "eval_yolo11", "eval_maskrcnn", "eval_hybrid", "eval_rtdetr"]
         }
         
         # 4. New Method Evaluations (Tambahan khusus Scopus Q1)
@@ -178,7 +183,7 @@ class ParallelScheduler:
             
         # Daftarkan Global Evaluation Task
         # Global eval hanya aktif jika ada model yang ditraining / dievaluasi
-        run_any = any(self.tasks[tid]["state"] == "PENDING" for tid in ["train_yolo8", "train_yolo9", "train_yolo10", "train_yolo11", "train_maskrcnn"])
+        run_any = any(self.tasks[tid]["state"] == "PENDING" for tid in ["train_yolo8", "train_yolo9", "train_yolo10", "train_yolo11", "train_maskrcnn", "train_rtdetr"])
         self.tasks[global_eval["id"]] = {
             "id": global_eval["id"],
             "label": global_eval["label"],

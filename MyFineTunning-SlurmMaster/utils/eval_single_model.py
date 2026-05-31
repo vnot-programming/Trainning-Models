@@ -116,6 +116,11 @@ FAMILY_VARIANTS: dict[str, list[dict]] = {
     "hybrid": [
         {"key": "hybrid", "label": "Hybrid (YOLO11l+SAM2)", "type": "hybrid", "yaml": SEG_YAML},
     ],
+    # RT-DETR — Paper 3: Edge Transformer vs CNN Benchmark
+    # type="det" karena evaluasi melalui cabang YOLO yang sama (Ultralytics wraps RTDETR)
+    "rtdetr": [
+        {"key": "rtdetr_l", "label": "RT-DETR-L", "type": "det", "yaml": DET_YAML},
+    ],
 }
 
 # Warna per varian untuk visualisasi (BGR, cycling)

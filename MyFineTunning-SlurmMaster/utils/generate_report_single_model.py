@@ -162,6 +162,12 @@ FAMILY_VARIANTS: dict[str, list[dict]] = {
         {"key": "hybrid_yolo11x",     "label": "Hybrid (YOLO11x+SAM2.1_t)",     "task": "seg"},
         {"key": "hybrid_yolo11x_seg", "label": "Hybrid (YOLO11x-Seg+SAM2.1_t)", "task": "seg"},
     ],
+    # RT-DETR — Paper 3: Edge Transformer vs CNN Benchmark
+    # task="det" karena RT-DETR hanya melakukan deteksi (bukan segmentasi native).
+    # Evaluasi menggunakan branch yang sama dengan YOLO det (Ultralytics RTDETR API-compatible).
+    "rtdetr": [
+        {"key": "rtdetr_l", "label": "RT-DETR-L", "task": "det"},
+    ],
 }
 
 # ==============================================================================

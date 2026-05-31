@@ -1,5 +1,8 @@
 # Panduan Pintar Booking GPU (Slurm)
 
+> **⚠️ ATURAN WAJIB (MANDATORY RULE): DILARANG MENGEKSEKUSI SCRIPT PYTHON SECARA LANGSUNG DI LOGIN NODE!**
+> Semua eksekusi script `python` (sekalipun hanya untuk *setup* atau mengunduh model seperti `config_shared.py`) **WAJIB** dilakukan melalui Slurm. 
+> AI Agent maupun Manusia dilarang keras memicu `python <script>.py` secara langsung di terminal utama. Selalu mulai interaksi menggunakan menu `/data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/myslurm.sh` atau pastikan Anda sudah masuk ke node GPU via `attach_gpu.sh` sebelum menjalankan *script* apa pun.
 Dokumen ini menjelaskan cara menggunakan fitur **Smart GPU Booking** untuk melakukan iterasi *development* & *debugging* tanpa harus mengantre Slurm berulang-ulang setiap kali menjalankan skrip.
 
 ## Membuka Menu Interaktif:

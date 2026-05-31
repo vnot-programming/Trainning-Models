@@ -303,3 +303,167 @@
   - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 016]
 - **Status saat ini:** Selesai.
 - **Catatan untuk AI selanjutnya (Handoff Note):** Kini daftar task di antrean *dashboard terminal* memuat dua item terakhir untuk pembuatan visual grid dan pengarsipan ZIP. Seluruh siklus hidup komputasi dan pengarsipan benar-benar terpusat di satu orchestrator log.
+
+---
+
+### [Entri 017] — Pembaruan Persona Global & Pembuatan Laporan Scopus Q1
+
+- **Tanggal/Waktu:** 2026-05-31 10:30 WIB
+- **Tugas yang diselesaikan:**
+  - Menambahkan aturan persona global ke `.gemini/GEMINI.md` yang menetapkan peran agen sebagai **Asisten Peneliti Ilmiah tingkat Internasional Scopus Q1/Q2**. Agen kini diwajibkan untuk berdiskusi berbasis referensi *State of the Art* (SOTA) dan menanyakan bidang penelitian jika pengguna tidak menyebutkannya.
+  - Melakukan analisis mendalam terhadap 7 laporan CSV dari metode baru (`golden_det.csv`, `golden_seg.csv`, `hybrid_sota_det.csv`, `hybrid_sota_seg.csv`, `sota_comparison_report.csv`, `standart_det.csv`, `standart_seg.csv`).
+  - Menyusun laporan standar riset ilmiah tingkat Scopus Q1/Q2 di bidang Teknik Lingkungan (Environmental Engineering) mengenai klasifikasi botol pada *Reverse Vending Machine* (RVM) tanpa konveyor. Laporan berfokus pada analisis performa deteksi model YOLO yang dipadukan dengan SAM2 / MobileSAM.
+- **File yang diubah/dibuat:**
+  - `.gemini/GEMINI.md` [DIMODIFIKASI]
+  - `datas/scopus_q1_environmental_engineering_report.md` [DIBUAT BARU]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 017]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):** Laporan analisis penelitian telah tersimpan di `datas/`. Ke depannya, interaksi agen harus lebih akademis dan kritis mengenai State of the Art.
+
+---
+
+### [Entri 018] — Penambahan Tabel Data Model ke Laporan Ilmiah
+
+- **Tanggal/Waktu:** 2026-05-31 10:39 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan penyisipan *snippet* tabel Markdown langsung ke dalam `scopus_q1_environmental_engineering_report.md` untuk menyajikan metrik komparasi parameter spesifik secara gamblang.
+  - Tabel yang ditambahkan meliputi komparasi Standard vs Golden Dataset (YOLO11n+SAM2.1_t), Komparasi Segmentasi Zero-Shot (YOLOv10m vs YOLOv8m vs SAM2.1_t vs MobileSAM), serta Tabel Anomali SOTA (YOLO11l + SAM2/MobileSAM).
+- **File yang diubah/dibuat:**
+  - `datas/scopus_q1_environmental_engineering_report.md` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 018]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):** Laporan telah tervisualisasi lebih baik dengan kehadiran tabel komparasi. Siap untuk dijadikan draf atau diekspor oleh pengguna.
+
+---
+
+### [Entri 019] — Pembuatan Laporan Scopus Q1 (Paper 2: Pipeline Kompilasi)
+
+- **Tanggal/Waktu:** 2026-05-31 10:50 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan pembacaan komprehensif pada direktori data CSV pipeline (MultiGPU): `kompilasi_ALL_detection.csv` dan `kompilasi_ALL_segmentation.csv`.
+  - Mengonstruksi laporan analisis lanjutan (Paper 2) standar Scopus Q1 yang berfokus pada ranah teknik lingkungan dan *Edge Computing*.
+  - Melakukan telaah anomali *compression-to-precision ratio* pada arsitektur nano YOLO11n dan membedahnya secara kritis melawan skenario komputasi *zero-shot* Hybrid SAM2.1_t serta Mask R-CNN.
+- **File yang diubah/dibuat:**
+  - `datas/paper2-scopus_q1_pipeline_report.md` [DIBUAT BARU]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 019]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):** Laporan ke-2 berorientasi pada hasil akhir agregat pipeline terdistribusi, memantapkan konklusi akademis mengenai penggunaan YOLO11n untuk arsitektur IoT lingkungan yang berkelanjutan.
+
+---
+
+### [Entri 020] — Penyusunan Peta Jalan Publikasi (3 Papers) & Integrasi SOTA
+
+- **Tanggal/Waktu:** 2026-05-31 11:20 WIB
+- **Tugas yang diselesaikan:**
+  - Menyusun rancangan *roadmap* tiga level publikasi saintifik berstandar Scopus Q1/Q2 (Cloud-Hybrid, Autonomous Green-Edge, dan SOTA Hybrid-Edge).
+  - Menyusun kerangka teknis untuk instalasi dan *fine-tuning* model *Next-Gen* (MobileSAM dan RT-DETR) agar terintegrasi dengan ekosistem `ultralytics` secara langsung pada *pipeline* evaluasi yang ada.
+- **File yang diubah/dibuat:**
+  - `docs/PUBLICATION_ROADMAP.md` [DIBUAT BARU]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 020]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):** Roadmap publikasi telah disahkan. Langkah teknis berikutnya adalah menginisiasi penulisan direktori dan skrip untuk RT-DETR dan modifikasi SAM menjadi MobileSAM di folder `utils` atau folder khusus komputasi baru. Perhatikan untuk merujuk pada `PUBLICATION_ROADMAP.md` sebelum membangun infrastruktur RT-DETR.
+
+---
+
+### [Entri 021] — Revisi Roadmap Publikasi (Optimalisasi MobileSAM & Target Skrip RT-DETR)
+
+- **Tanggal/Waktu:** 2026-05-31 11:25 WIB
+- **Tugas yang diselesaikan:**
+  - Menghapus rencana pembuatan folder `hybrid_mobilesam` karena `utils/evaluation_hybrid_sota.py` telah dikonfirmasi memiliki arsitektur dinamis untuk memproses MobileSAM secara langsung.
+  - Memperbarui daftar skrip target evaluasi (Golden & Standar) untuk integrasi model RT-DETR.
+- **File yang diubah/dibuat:**
+  - `docs/PUBLICATION_ROADMAP.md` [DIMODIFIKASI - Penambahan list skrip dan efisiensi MobileSAM]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 021]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):** Skrip evaluator Anda ternyata sangat *scalable*. Jangan membuat *script* Hibrida baru untuk MobileSAM; langsung picu `evaluation_hybrid_sota.py` menggunakan parameter "mobile" pada *mtype*.
+
+---
+
+### [Entri 022] — Penguatan Aturan Global Persona (Proactive Deep Analysis)
+
+- **Tanggal/Waktu:** 2026-05-31 11:30 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan telaah menyeluruh terhadap file sentral `config_shared.py` yang mendikte arsitektur dan parameter workspace.
+  - Memperbarui sistem aturan global AI di `.gemini/GEMINI.md` dengan menambahkan perintah wajib **Deep Analysis & Proactive Tracing** berbasis `config_shared.py`, agar AI selanjutnya tidak pernah luput dalam memeriksa *source of truth* tanpa perlu ditegur pengguna.
+- **File yang diubah/dibuat:**
+  - `.gemini/GEMINI.md` [DIMODIFIKASI - Penambahan Aturan Anti-Halusinasi No. 3]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 022]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):** *Rule* telah terpasang permanen di identitas dasar. Jadikan `config_shared.py` sebagai langkah pertama saat hendak mencari nilai path atau parameter apa pun.
+
+---
+
+### [Entri 023] — Pengetatan Prosedur Eksekusi Slurm (Zero Tolerance for Login Node Execution)
+
+- **Tanggal/Waktu:** 2026-05-31 11:32 WIB
+- **Tugas yang diselesaikan:**
+  - Membatalkan paksa (*kill*) eksekusi `python config_shared.py` yang sebelumnya dijalankan keliru pada terminal Login Node.
+  - Memperbarui panduan Slurm untuk menegaskan larangan mutlak terhadap eksekusi script *Python* apa pun (termasuk *download/setup*) di luar sistem Slurm. Seluruh eksekusi diwajibkan menggunakan `utils/myslurm.sh`.
+- **File yang diubah/dibuat:**
+  - `SLURM_Guide.md` [DIMODIFIKASI - Penambahan Peringatan Kritis di Awal Dokumen]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 023]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):** JANGAN PERNAH menjalankan perintah `python <nama_file>` menggunakan `run_command` kecuali Anda yakin 100% Anda sedang berada di dalam *tmux session* dari Slurm atau telah tervalidasi menggunakan `myslurm.sh`. Biasakan masuk via `attach_gpu.sh` sebelum mulai bekerja.
+
+---
+
+### [Entri 024] — Implementasi RT-DETR Pipeline (Folder, Script, & Integrasi Evaluator)
+
+- **Tanggal/Waktu:** 2026-05-31 11:45 WIB
+- **Tugas yang diselesaikan:**
+  - Membuat direktori dan skrip `rtdetr/train_rtdetr.py` tanpa satu pun nilai *hardcode* — seluruh hyperparameter, path, dan nama model dibaca dinamis dari `config_shared.py`.
+  - Mendaftarkan keluarga model `"rtdetr"` ke dalam `FAMILY_VARIANTS` di `utils/eval_single_model.py` dan `utils/generate_report_single_model.py`.
+  - Menambahkan task `train_rtdetr` dan `eval_rtdetr` ke dalam `run_pipeline_parallel.py` (train_specs, eval_specs, global_eval deps, dan run_any check).
+  - Menambahkan bobot `"rtdetr-l.pt"` ke dalam `ALL_BASE_MODELS` di `config_shared.py`.
+- **File yang diubah/dibuat:**
+  - `rtdetr/train_rtdetr.py` [DIBUAT BARU]
+  - `utils/eval_single_model.py` [DIMODIFIKASI — Penambahan entry rtdetr di FAMILY_VARIANTS]
+  - `utils/generate_report_single_model.py` [DIMODIFIKASI — Penambahan entry rtdetr di FAMILY_VARIANTS]
+  - `run_pipeline_parallel.py` [DIMODIFIKASI — Registrasi task train_rtdetr & eval_rtdetr]
+  - `config_shared.py` [DIMODIFIKASI — Penambahan rtdetr-l.pt ke ALL_BASE_MODELS]
+  - `docs/SDP.md` [DIMODIFIKASI — Penambahan Log 024]
+- **Status saat ini:** Selesai. Siap untuk diuji oleh User di node GPU.
+- **Catatan untuk AI selanjutnya (Handoff Note):** Untuk menguji coba saja (tanpa training penuh), User bisa menjalankan `python train_rtdetr.py --skip-eval` dari dalam node GPU. Pastikan bobot `rtdetr-l.pt` sudah tersedia di folder `models/` (diunduh via `ensure_all_base_models()` di `config_shared.py`).
+
+---
+
+### [Entri 025] — Pemisahan Konfigurasi Batch RT-DETR (RTDETR_BATCH_SIZE)
+
+- **Tanggal/Waktu:** 2026-05-31 15:18 WIB
+- **Tugas yang diselesaikan:**
+  - Menganalisis root cause OOM (CUDA Out of Memory) pada training RT-DETR-L yang dipicu oleh penggunaan `YOLO_BATCH_SIZE=30` — nilai yang didesain untuk YOLO CNN, bukan Transformer.
+  - Memverifikasi data empiris dari log `data-files/MyFineTunning-20260526_123630/logs/train_rtdetr.log`:
+    - `batch=30` → ❌ OOM (baris 80)
+    - `batch=15` → ❌ OOM (baris 94)
+    - `batch=7`  → ✅ Stabil di ~16.4–16.9GB VRAM (baris 110+)
+  - Menambahkan konstanta `RTDETR_BATCH_SIZE = 8` ke `config_shared.py` (baris 164) dengan blok komentar teknis lengkap yang menjelaskan alasan arsitektural (108 GFLOPs, O(N²) attention memory).
+  - Nilai 8 dipilih sebagai satu langkah konservatif di atas batch=7 yang terbukti aman, memberikan throughput ~14% lebih tinggi dengan margin VRAM ~13GB tersisa.
+  - Memperbarui `rtdetr/train_rtdetr.py` untuk mengimpor dan menggunakan `RTDETR_BATCH_SIZE` menggantikan `YOLO_BATCH_SIZE` di tiga titik: blok import, `model.train()`, dan print header pipeline.
+- **File yang diubah/dibuat:**
+  - `config_shared.py` [DIMODIFIKASI — Penambahan `RTDETR_BATCH_SIZE = 8` beserta komentar justifikasi teknis, baris 164–188]
+  - `rtdetr/train_rtdetr.py` [DIMODIFIKASI — Ganti import & penggunaan `YOLO_BATCH_SIZE` → `RTDETR_BATCH_SIZE` di 3 lokasi]
+  - `docs/SDP.md` [DIMODIFIKASI — Penambahan Log 025]
+- **Status saat ini:** Selesai. Siap diuji ulang di node GPU tanpa OOM.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Jika setelah training ulang dengan `RTDETR_BATCH_SIZE=8` masih OOM, kembalikan ke `7` langsung di `config_shared.py` — tidak perlu menyentuh `train_rtdetr.py`.
+  - `YOLO_BATCH_SIZE` tetap dipertahankan untuk semua model YOLO lainnya — JANGAN ubah nilainya untuk keperluan RT-DETR.
+  - Untuk run ulang RT-DETR: masuk ke node GPU via TMUX → `cd rtdetr` → `python -u train_rtdetr.py 2>&1 | tee train_rtdetr.log`.
+  - Catatan Scopus: Batch size kecil (8–16) pada arsitektur Transformer adalah lazim dan tidak mengurangi kualitas konvergensi — training 200 epoch sudah mencukupi.
+
+---
+
+### [Entri 026] — Bugfix Kritis: Auto-Resume Daemon Stuck Akibat squeue Hang
+
+- **Tanggal/Waktu:** 2026-05-31 20:36 WIB
+- **Tugas yang diselesaikan:**
+  - Menginvestigasi masalah di mana fitur rebooking otomatis tidak berjalan setelah job Slurm dibatalkan karena `TIME LIMIT`.
+  - Mengidentifikasi akar masalah (Root Cause): Perintah `squeue -j <job_id>` pada kluster ini dapat *hang* (blocking) tanpa batas waktu (*indefinitely*) jika mencari Job ID yang sudah tidak ada (terhapus dari antrean). Hal ini menyebabkan skrip Python (`book_gpu.py`) yang menggunakan `subprocess.check_output` menjadi tersangkut (deadlock) dan tidak bisa melanjutkan evaluasi state maupun mengirim notifikasi Telegram.
+  - Menambahkan argumen `timeout=30` (detik) pada pemanggilan fungsi `subprocess.check_output` di dalam `get_cmd_output()`.
+  - Menambahkan baris pengecualian `except (subprocess.CalledProcessError, subprocess.TimeoutExpired):` untuk mengamankan fungsi agar mengembalikan string kosong apabila terjadi *timeout*, sehingga `state` terbaca sebagai `UNKNOWN` dan alur *auto-resume* dapat terpicu sebagaimana mestinya.
+  - Mematikan sesi tmux `gpu_booking` yang tersangkut agar pengguna bisa memulai versi perbaikan.
+- **File yang diubah/dibuat:**
+  - `utils/book_gpu.py` [DIMODIFIKASI — Penambahan timeout pada get_cmd_output]
+  - `docs/SDP.md` [DIMODIFIKASI — Penambahan Log 026]
+- **Status saat ini:** Selesai. Siap dijalankan ulang.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan setiap ada pemanggilan perintah eksternal (terutama perintah `slurm` seperti squeue atau sacct), selalu amankan dengan fungsi `timeout` agar skrip daemon *true-background* tidak pernah mengalami `stuck/deadlock`.
