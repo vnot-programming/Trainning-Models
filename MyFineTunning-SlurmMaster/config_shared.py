@@ -89,6 +89,11 @@ GOLDEN_SEG_DATASET_LOCATION = os.environ.get(
     os.path.join(DATASETS_DIR, "golden_dataset_seg")
 )
 
+EVAL_DATASET_LOCATION = os.environ.get(
+    "EVAL_DATASET",
+    os.path.join(DATASETS_DIR, "eval_dataset_coco")
+)
+
 # ==============================================================================
 # PATHS — Pipeline (untuk run_pipeline.py)
 # ==============================================================================

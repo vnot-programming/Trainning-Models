@@ -22,7 +22,8 @@ PANDUAN EKSEKUSI AGAR TIDAK TERPUTUS (WORKFLOW TMUX + SLURM YANG BENAR):
    WS_ID=$(cat /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/.workspace_id)
 
    # Jalankan skrip evaluasi:
-   python3 -u utils/evaluation_hybrid_sota.py 2>&1 | tee /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/data-files/MyFineTunning-${WS_ID}/logs/evaluation_hybrid_sota.log
+     cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && LOG_DIR=$(python3 -c "import config_shared, os; print(os.path.join(config_shared.WORKSPACE_DIR, 'logs'))") && mkdir -p "$LOG_DIR" && python3 -u utils/evaluation_hybrid_sota.py 2>&1 | tee "$LOG_DIR/4_evaluation_hybrid_sota.log"
+
 
 4. Detach dari TMUX untuk meninggalkan proses di background (Aman jika terminal/laptop Anda ditutup):
    Tekan Ctrl+b, lalu tekan d (di Mac: tekan tombol control (^)+b lalu tekan d).

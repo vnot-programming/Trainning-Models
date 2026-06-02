@@ -30,9 +30,9 @@ select_node() {
     echo "2) ai3"
     read -p "Nomor [1-2]: " node_choice
     case $node_choice in
-        1) echo "ai2" ;;
-        2) echo "ai3" ;;
-        *) echo "ai2" ;; # default fallback
+        1) SELECTED_NODE="ai2" ;;
+        2) SELECTED_NODE="ai3" ;;
+        *) SELECTED_NODE="ai2" ;; # default fallback
     esac
 }
 
@@ -53,10 +53,17 @@ move_job_node() {
         echo "JobID kosong, operasi dibatalkan."
         return
     fi
-    target_node=$(select_node)
+    select_node
+    target_node=$SELECTED_NODE
     echo "Memindahkan Job $jid ke node $target_node..."
-    scontrol update JobId=$jid NodeList=$target_node && scontrol requeue $jid
-    echo "Permintaan pindah node dikirim (status tergantung scheduler)."
+    
+    # Alur pemindahan node Slurm yang aman & teratur:
+    scontrol hold $jid >/dev/null 2>&1
+    scontrol requeue $jid >/dev/null 2>&1
+    scontrol update JobId=$jid ReqNodeList=$target_node
+    scontrol release $jid >/dev/null 2>&1
+    
+    echo "Permintaan requeue dan pindah node dikirim ke scheduler."
 }
 
 # Function to generate a unique tmux session name for GPU booking

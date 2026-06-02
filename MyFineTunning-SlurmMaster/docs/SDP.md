@@ -802,6 +802,38 @@
 
 ---
 
+### [Entri 054] — Penyesuaian Alokasi RAM pada Skrip Booking GPU
+
+- **Tanggal/Waktu:** 2026-06-02 16:20 WIB
+- **Tugas yang diselesaikan:**
+  - Mengubah konfigurasi alokasi *memory* di dalam file [utils/book_gpu.py](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/book_gpu.py) dari `--mem=32G` menjadi `--mem=64G`. Hal ini disesuaikan dengan batas limit maksimal QoS `normal` (Max RAM 64GB) di *Slurm workload manager* yang tertera pada *AI_KU_V100 User Documents*. Limit CPU `--cpus-per-task=8` dibiarkan karena 8 core adalah batas maksimal di QoS tersebut.
+- **File yang diubah/dibuat:**
+  - `utils/book_gpu.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Jangan melebihi limit `--cpus-per-task=8` atau `--mem=64G` untuk partisi `gpu` (QoS `normal`) agar job tidak berstatus *QOSMaxCpuPerUserLimit*.
+
+---
+
+### [Entri 053] — Penyesuaian Evaluasi untuk Format Native COCO & Perbaikan Bug pycocotools
+
+- **Tanggal/Waktu:** 2026-06-02 14:55 WIB
+- **Tugas yang diselesaikan:**
+  - Integrasi mode fallback dinamis pada skrip evaluasi `utils/generate_report_single_model.py` dan `utils/generate_standar_report-new_method.py` untuk memprioritaskan format native `_annotations.coco.json` dari `eval_dataset_coco/valid/` tanpa perlu konfigurasi YAML YOLO.
+  - Implementasi konversi struktur data dictionary `image_ids` agar key dipetakan menggunakan *absolute path* sesuai kaidah worker paralel.
+  - Penambahan lapisan filter di dalam `evaluate_coco_predictions` (`utils/coco_eval_utils.py`) untuk membuang empty segmentation arrays (`[]`) secara otomatis pada mode `iou_type="segm"`. Perbaikan ini menanggulangi masalah fatal IndexError (`list index out of range`) saat `pycocotools` dihadapkan dengan dataset yang mayoritas berupa deteksi kotak pembatas (Bounding Boxes) namun dipaksa dievaluasi dengan parameter segmentasi.
+- **File yang diubah/dibuat:**
+  - `utils/generate_report_single_model.py` [DIMODIFIKASI]
+  - `utils/generate_standar_report-new_method.py` [DIMODIFIKASI]
+  - `utils/coco_eval_utils.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan pipeline evaluasi diuji secara komprehensif, mengingat error empty segmentation dari `pycocotools` kini akan memunculkan nilai bypass atau mAP 0.0 alih-alih `crash`.
+
+---
+
 ### [Entri 046] — Sentralisasi IMAGE_SAMPLES_DIR pada generate_standar_report-new_method.py
 
 - **Tanggal/Waktu:** 2026-06-02 11:48 WIB
@@ -949,6 +981,232 @@
 - **Status saat ini:** Selesai.
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - Pastikan semua pemanggilan kelas-kelas model Ultralytics (YOLO/SAM) di dalam skrip orkestrasi tidak didefinisikan secara lokal di dalam worker saja, melainkan dideklarasikan secara global untuk kebersihan dan keandalan runtime.
+
+---
+
+### [Entri 056] — Konsolidasi & Standarisasi Golden Dataset: generate_golden_report-new_method.py
+
+- **Tanggal/Waktu:** 2026-06-02 14:15 WIB
+- **Tugas yang diselesaikan:**
+  - **Revert File Lama**: Mengembalikan seluruh perubahan format `.tolist()` pada berkas lama (`generate_report_single_model.py`, `generate_standar_report-new_method.py`, `golden_evaluation-new_method.py`, dan `golden_evaluation_visuals-new_method.py`) agar tetap orisinal sesuai instruksi pengguna.
+  - **Penciptaan Skrip Terpadu Golden**: Membuat berkas baru `utils/generate_golden_report-new_method.py` yang menggabungkan fungsionalitas `golden_evaluation-new_method.py` (kuantitatif) dan `golden_evaluation_visuals-new_method.py` (kualitatif).
+  - **Standarisasi Tensor GPU Mentah**: Menerapkan parsing koordinat bounding box model Hybrid (YOLO + SAM2) menggunakan Tensor GPU Mentah (`res.boxes.xyxy` atau `resX_det.boxes.xyxy` secara langsung) di dalam berkas terpadu Golden yang baru.
+  - **Restrukturisasi Scheduler Pipeline**: Memperbarui registry tugas `new_eval_specs` di `run_pipeline_parallel.py` untuk mengarahkan alur evaluasi baru ke `generate_standar_report-new_method.py` dan `generate_golden_report-new_method.py` secara teratur, serta menghapus tugas visualisasi terpisah yang kini telah menyatu.
+  - **Verifikasi Sukses**: Menguji jalannya visualisasi kualitatif Golden pada compute node GPU (`ai3`) secara non-interaktif dan berhasil merender 10 sampel dual-grid tanpa kendala CUDA/device mismatch.
+- **File yang diubah/dibuat:**
+  - `utils/generate_golden_report-new_method.py` [DIBUAT BARU]
+  - `run_pipeline_parallel.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Tugas-tugas visualisasi terpisah (`eval_new_std_vis` dan `eval_new_gld_vis`) telah dihapus secara resmi dari orkestrator scheduler karena fungsinya telah termigrasi penuh secara internal ke dalam masing-masing skrip report baru.
+
+---
+
+### [Entri 057] — Integrasi Evaluasi Dinamis Dataset Terpadu COCO (Valid Only)
+
+- **Tanggal/Waktu:** 2026-06-02 14:40 WIB
+- **Tugas yang diselesaikan:**
+  - Mengintegrasikan pemrosesan dataset COCO secara dinamis tanpa berkas YAML YOLO pada skrip `utils/generate_report_single_model.py` (pada fungsi `evaluate_detection`, `evaluate_segmentation`, `evaluate_maskrcnn_segmentation`, dan `evaluate_hybrid_segmentation`).
+  - Menyelaraskan skrip terpadu `utils/generate_standar_report-new_method.py` agar mendeteksi dan menggunakan `EVAL_DATASET_LOCATION` secara global dari `config_shared.py`.
+  - Menerapkan standarisasi keys pada dictionary `image_ids` menjadi path absolut agar 100% kompatibel dengan data subset gambar yang dipartisi oleh multi-GPU worker, mencegah kesalahan mAP bernilai 0.0 akibat ketidakcocokan nama berkas.
+- **File yang diubah/dibuat:**
+  - `utils/generate_report_single_model.py` [DIMODIFIKASI]
+  - `utils/generate_standar_report-new_method.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Dataset terpadu `eval_dataset_coco` yang hanya memiliki subfolder `valid/` kini sepenuhnya didukung dan dapat dievaluasi secara langsung baik per-model family maupun secara standar gabungan.
+  - Untuk memicu evaluasi secara mandiri:
+    - Model Tunggal: `python3 utils/generate_report_single_model.py --family yolo11 --gpus 0`
+    - Standar Gabungan: `python3 utils/generate_standar_report-new_method.py --gpus 0`
+
+---
+
+### [Entri 058] — Analisis Komprehensif Ekosistem Model Qwen (Mei 2026)
+
+- **Tanggal/Waktu:** 2026-06-02 18:40 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan analisis mendalam dan komprehensif terhadap ekosistem model Qwen yang dirilis oleh Alibaba Cloud/DAMO Academy hingga Mei 2026.
+  - Memetakan silsilah model dari Qwen generasi pertama, Qwen1.5, Qwen2, Qwen2.5, model penalaran khusus QwQ, dan model vision-language Qwen2.5-VL.
+  - Menyusun matriks kebutuhan VRAM untuk format FP16 mentah vs format kuantisasi (INT4/GGUF/AWQ/GPTQ) untuk pemahaman kebutuhan komputasi inferensi.
+  - Memberikan evaluasi kelayakan teknis untuk deploy model di server GPU tunggal Tesla V100 32GB pada klaster Slurm AI_KU_V100 (merekomendasikan model 7B/14B dan model 32B terkuantisasi INT4/GGUF).
+  - Menyertakan panduan integrasi skrip `run_llm_api.sh` menggunakan Singularity container (karena tidak ada root access) dan Cloudflared Tunnel untuk akses eksternal yang aman.
+- **File yang diubah/dibuat:**
+  - `docs/LLM Models/qwen.md` [DIBUAT BARU]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Analisis ini dapat dijadikan referensi teoretis dan operasional untuk mengintegrasikan asisten LLM penalar (seperti QwQ-32B atau Qwen2.5-Coder-32B) ke dalam pipeline analisis riset YOLO/SAM guna memproses laporan secara otomatis.
+
+---
+
+### [Entri 059] — Analisis Model Proprietary & Spekulatif Qwen & DeepSeek Baru (Mei 2026)
+
+- **Tanggal/Waktu:** 2026-06-02 18:55 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan analisis mendalam terhadap model-model yang ditanyakan pengguna: `Qwen3.7-Plus`, `qwen3-vl-plus`, `qwen3-vl-flash`, `qwen3.5-omni-flash`, `deepseek-v4-pro`, `deepseek-v4-flash`, dan `deepseek-v3.2`.
+  - Mengidentifikasi bahwa model-model dengan nama spesifik tersebut belum dirilis secara open-source publik (open-weights) maupun didokumentasikan secara resmi oleh Alibaba Cloud atau DeepSeek hingga Mei 2026.
+  - Menganalisis skema penamaan komersial API (DashScope komersial seperti Qwen-VL-Plus/Max vs akhiran "-Flash" dan "-Omni-Flash") serta komitmen open-weights DeepSeek (R1 & V3).
+  - Memberikan rekomendasi deployment alternatif yang riil dan berkinerja tinggi pada GPU V100 32GB (seri Qwen2.5-32B, QwQ-32B, dan model distilasi DeepSeek-R1-Distill-Qwen-32B).
+- **File yang diubah/dibuat:**
+  - `docs/LLM Models/qwen.md` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Jika ada pembaruan dari Alibaba Cloud atau DeepSeek mengenai rilis versi-versi baru tersebut selama pelaksanaan riset ini, segera perbarui dokumen model pendukung ini dan uji kelayakan inferensinya pada cluster GPU.
+
+---
+
+### [Entri 060] — Pembaruan Data Komprehensif Seri Qwen3 & DeepSeek V4 (Mei 2026)
+
+- **Tanggal/Waktu:** 2026-06-02 19:00 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan revisi total terhadap dokumen `docs/LLM Models/qwen.md` (menggantikan analisis spekulasi sebelumnya) menggunakan data rilis resmi Alibaba Cloud Model Studio dan DeepSeek terbaru per Mei 2026.
+  - Memetakan fungsionalitas model baru: `Qwen3.7-Plus` (multimodal interactive agent), `qwen3-vl-plus`/`qwen3-vl-flash` (vision-language agent), `Qwen3-VL-30B-A3B-Thinking` (sparse MoE reasoning visual), `Qwen3.5-Omni-Flash` (low-latency real-time voice-visual), serta seri `Qwen3.6-27B` (thinking preservation).
+  - Memetakan arsitektur dan spesifikasi `DeepSeek-V3.2` (DSA 128k context) dan `DeepSeek-V4-Pro`/`DeepSeek-V4-Flash` (MoE 1.6T/284B dengan context window 1 juta token, rilis April 2026).
+  - Menyertakan analisis kelayakan lokal (GPU V100 32GB) untuk model MoE baru `Qwen3-VL-30B-A3B-Thinking` terkuantisasi INT4 yang sangat efisien dijalankan secara lokal karena hanya memiliki 3B active parameter.
+- **File yang diubah/dibuat:**
+  - `docs/LLM Models/qwen.md` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+  - Untuk tugas pengenalan spasial dan visual grounding lanjut, model `Qwen3-VL-30B-A3B-Thinking` sangat layak dipasang di Ollama lokal pada klaster Slurm untuk pengujian kualitatif segmentasi/deteksi YOLO/SAM2 secara terdistribusi.
+
+---
+
+### [Entri 061] — Bugfix: IndexError (list index out of range) mAP Mask pada COCOeval
+
+- **Tanggal/Waktu:** 2026-06-02 19:10 WIB
+- **Tugas yang diselesaikan:**
+  - Mengidentifikasi penyebab error fatal `IndexError: list index out of range` pada FASE 1 evaluasi segmentasi model-model YOLO-Seg (`YOLOv8m-Seg`, `YOLOv8x-Seg`, `YOLOv9c-Seg`, `YOLOv9e-Seg`, `YOLO11n-Seg`, `YOLO11l-Seg`, `YOLO11x-Seg`) dan `Mask R-CNN`.
+  - Masalah terjadi karena dataset terpadu `eval_dataset_coco` memiliki beberapa anotasi kotak pembatas murni tanpa segmentasi (segmentasi kosong `[]` atau tidak ada). Saat COCOeval dijalankan dengan `iouType="segm"`, `pycocotools` mengalami kegagalan internal saat menghitung stats sehingga array `stats` tidak terisi, yang memicu *IndexError* saat program mencoba mengakses `stats[0]` secara langsung.
+  - Memperbaiki masalah ini dengan mengimplementasikan penyaringan anotasi secara dinamis (menggunakan `copy.deepcopy` dan validasi data segmentasi pada list `annotations`) sesaat sebelum inisialisasi objek `COCO` dan pemanggilan `COCOeval` untuk masker.
+- **File yang diubah/dibuat:**
+  - `utils/generate_standar_report-new_method.py` [DIMODIFIKASI]
+  - `utils/generate_golden_report-new_method.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+  - Penyaringan ini sepenuhnya kompatibel dengan pipeline multi-GPU terdistribusi dan memastikan `mAP50(Mask)` dan `mAP50-95(Mask)` berhasil dihitung dengan aman tanpa risiko kegagalan runtime.
+
+---
+
+### [Entri 062] — Bugfix: Opsi select_node Tidak Muncul pada Terminal di myslurm.sh
+
+- **Tanggal/Waktu:** 2026-06-02 21:05 WIB
+- **Tugas yang diselesaikan:**
+  - Memperbaiki bug di `utils/myslurm.sh` di mana prompt pilihan GPU node `select_node` ("Pilih node GPU yang tersedia...") beserta input `read -p` tidak muncul di terminal pengguna saat memilih menu requeue (pindah node).
+  - Masalah teridentifikasi dari penggunaan command substitution `target_node=$(select_node)` yang menangkap seluruh keluaran standar (stdout) dari fungsi tersebut ke dalam variabel, menghambat pencetakan prompt ke layar.
+  - Solusi diimplementasikan dengan mengubah fungsi `select_node` untuk langsung menetapkan nilai pilihan ke variabel global `SELECTED_NODE`, kemudian memanggil fungsi secara langsung di `move_job_node` tanpa *subshell command substitution*.
+- **File yang diubah/dibuat:**
+  - `utils/myslurm.sh` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+  - Pastikan setiap script menu interaktif bash yang berinteraksi langsung dengan input pengguna menghindari penggunaan subshell capture `$(...)` untuk fungsi-fungsi yang berisi `echo` petunjuk menu atau `read` interaktif demi menjamin fungsionalitas UI terminal.
+
+---
+
+### [Entri 063] — Bugfix: Kesalahan "Invalid node name" Saat Pemindahan Node di myslurm.sh
+
+- **Tanggal/Waktu:** 2026-06-02 21:10 WIB
+- **Tugas yang diselesaikan:**
+  - Memperbaiki kesalahan `"Invalid node name specified for job"` saat pengguna memicu aksi pemindahan node GPU untuk tugas yang sedang berjalan (*Running*).
+  - Masalah teridentifikasi karena scheduler Slurm tidak memperbolehkan perubahan alokasi node (`NodeList`) secara langsung ketika status tugas masih aktif berjalan (*Running*). Selain itu, mencoba melakukan pembaruan di subshell langsung seringkali kalah cepat dengan eksekusi penjadwalan ulang instan dari scheduler.
+  - Solusi diimplementasikan dengan membangun alur kerja pemindahan node Slurm yang aman:
+    1. Melakukan penahanan tugas (`scontrol hold`) secara temporer untuk mengubah statusnya.
+    2. Menghapus tugas dari node lama dan mengembalikan ke status pending (`scontrol requeue`).
+    3. Memperbarui parameter target node yang diminta (`scontrol update JobId=... ReqNodeList=<node_target>`).
+    4. Melepaskan penahanan (`scontrol release`) agar tugas siap dijalankan kembali di node baru yang diminta.
+- **File yang diubah/dibuat:**
+  - `utils/myslurm.sh` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+  - Alur hold/requeue/update ReqNodeList/release terbukti andal untuk memindahkan job Slurm di partisi GPU secara dinamis tanpa intervensi manual administrator.
+
+---
+
+### [Entri 064] — Penyusunan Rencana Deployment LLM & Evaluasi Berdampingan (Plan.md)
+
+- **Tanggal/Waktu:** 2026-06-02 21:22 WIB
+- **Tugas yang diselesaikan:**
+  - Menyusun dokumen rencana implementasi dan deployment terintegrasi (*Co-existence Plan*) antara layanan LLM (Ollama) dan proses evaluasi model YOLO/SAM2 pada berkas `docs/LLM Models/Plan.md`.
+  - Melakukan analisis pembagian sumber daya VRAM pada 1 unit GPU Tesla V100 32GB (Ollama Qwen32B: ~21GB, Evaluasi YOLO: ~4GB) dengan sisa toleransi memori yang aman.
+  - Memetakan alur kerja penanganan batasan waktu (*Time Limit*) Slurm menggunakan mekanisme penangkapan sinyal (`--signal=B:USR1@120` dan penanganan `SIGUSR1`) untuk meluncurkan kembali tugas baru (`sbatch`) secara otonom sebelum dihentikan paksa.
+  - Merancang integrasi dynamic porting dan Cloudflared Tunnel untuk pemetaan endpoint API yang statis secara konsisten.
+- **File yang diubah/dibuat:**
+  - `docs/LLM Models/Plan.md` [DIBUAT BARU]
+  - `docs/SDP.md` [DIMODIFIKASI]
+  - Gunakan dokumen `Plan.md` sebagai cetak biru teknis saat tiba waktunya untuk mengeksekusi integrasi server asisten LLM di compute node klaster Slurm.
+
+---
+
+### [Entri 065] — Perbaikan Sintaksis Diagram Mermaid di Plan.md
+
+- **Tanggal/Waktu:** 2026-06-02 21:30 WIB
+- **Tugas yang diselesaikan:**
+  - Mengidentifikasi dan memperbaiki error parsing pada visualisasi diagram Mermaid di berkas `docs/LLM Models/Plan.md`.
+  - Kesalahan disebabkan oleh karakter tanda kurung pada label nama `subgraph Compute Node (ai2/ai3)` yang dibaca sebagai pemisah sintaksis ilegal oleh parser Mermaid.
+  - Memperbaiki dengan membungkus nama label dalam tanda kutip ganda menjadi `subgraph "Compute Node (ai2/ai3)"` sesuai pedoman formatting resmi.
+- **File yang diubah/dibuat:**
+  - `docs/LLM Models/Plan.md` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan setiap visualisasi arsitektur sistem menggunakan Mermaid diagram membungkus teks label yang mengandung karakter khusus (spasi, tanda kurung, garis miring) dengan tanda kutip ganda untuk menjamin kompatibilitas parser.
+
+---
+
+### [Entri 066] — Penambahan Ekspor CSV Hasil Evaluasi Standar & Golden
+
+- **Tanggal/Waktu:** 2026-06-02 23:45 WIB
+- **Tugas yang diselesaikan:**
+  - Memodifikasi `utils/generate_standar_report-new_method.py` untuk mengumpulkan metrik precision/recall/latency/fps di Fase 1 (Kuantitatif), memisahkan data evaluasi ke `rows_det` dan `rows_seg`, serta menambahkan ekspor berkas `standar_det.csv` dan `standar_seg.csv` ke folder `reports/paper1/csv/new-method/`. Berkas `kompilasi_new_method_standar.csv` tetap dihasilkan di `reports/paper1/csv/`.
+  - Memodifikasi `utils/generate_golden_report-new_method.py` untuk menambahkan inisialisasi list `rows` gabungan, merekap seluruh model (deteksi dan segmentasi) dengan format kolom yang setara dengan versi standar, dan mengekspornya ke `reports/paper1/csv/kompilasi_new_method_golden.csv`.
+- **File yang diubah/dibuat:**
+  - `utils/generate_standar_report-new_method.py` [DIMODIFIKASI]
+  - `utils/generate_golden_report-new_method.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Perubahan ini memungkinkan proses evaluasi metode baru (standard & golden) menghasilkan berkas kompilasi gabungan dan berkas terpisah (det/seg) yang konsisten secara akademis untuk draf paper.
+  - Untuk menjalankan ulang evaluasi standard: `python3 utils/generate_standar_report-new_method.py --gpus 0`
+  - Untuk menjalankan ulang evaluasi golden: `python3 utils/generate_golden_report-new_method.py --gpus 0`
+
+---
+
+### [Entri 067] — Implementasi Filter Model dan Jenis Tugas pada Scheduler Pipeline
+
+- **Tanggal/Waktu:** 2026-06-02 23:56 WIB
+- **Tugas yang diselesaikan:**
+  - Menambahkan argumen CLI baru `--models` (default: `all`) dan `--tasks` (pilihan: `all`, `train`, `eval`, `new-method`) ke dalam `run_pipeline_parallel.py`.
+  - Mengonfigurasi scheduler `ParallelScheduler` untuk secara dinamis men-skip model dan tugas di luar filter yang dipilih.
+  - Menerapkan penghapusan dependensi `eval_new_std` terhadap `eval_global_multigpu` secara dinamis jika evaluasi model tunggal di-skip (`run_eval = False`). Hal ini menjamin rantai evaluasi metode baru (Std, Golden, Hybrid SOTA, Final Grid, Local Archive & Upload) tetap berjalan dengan lancar tanpa terimbas pembatalan cascade.
+- **File yang diubah/dibuat:**
+  - `run_pipeline_parallel.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Untuk hanya menjalankan evaluasi metode baru dan mengarsip/unggah hasil tanpa harus training/evaluasi model tunggal, pengguna dapat menjalankan: `python3 run_pipeline_parallel.py --tasks new-method`.
+  - Untuk membatasi model tertentu saja, misalnya YOLO11: `python3 run_pipeline_parallel.py --models yolo11`.
+
+---
+
+### [Entri 068] — Implementasi Mode Tugas eval_ku dan Opsi dry-run pada Scheduler
+
+- **Tanggal/Waktu:** 2026-06-03 00:15 WIB
+- **Tugas yang diselesaikan:**
+  - Menambahkan opsi filter tugas khusus `--tasks eval_ku` pada skrip orkestrator scheduler `run_pipeline_parallel.py`.
+  - Mengatur seluruh model training dan evaluasi model tunggal ke status `SKIPPED` secara dinamis saat mode `eval_ku` aktif.
+  - Mengonfigurasi agar evaluasi kompilasi global (`eval_global_multigpu`) berjalan secara instan dengan dependensi kosong (`dependencies = []`).
+  - Menyambungkan rantai dependensi evaluasi metode baru dan pasca-proses secara sekuensial (`eval_new_std` -> `eval_new_gld` -> `eval_new_hybrid_sota` -> `post_grid` -> `post_upload`) agar berjalan berurutan setelah kompilasi global selesai.
+  - Menambahkan argumen CLI `--dry-run` untuk mempermudah pemeriksaan bagan rencana tugas tanpa perlu CUDA atau memicu notifikasi Telegram dan subproses komputasi nyata.
+  - Memodifikasi dan memperluas docstring utama di awal berkas `run_pipeline_parallel.py` untuk menyajikan dokumentasi lengkap argumen CLI yang tersedia beserta contoh (samples) pemanggilan riil yang praktis.
+  - Memperbaiki bug `AttributeError` karena penulisan properti CLI yang keliru (`args.dry-run` yang dibaca Python sebagai ekspresi matematika `args.dry - run` → memicu kegagalan) menjadi variabel parser argparse yang benar (`args.dry_run`).
+- **File yang diubah/dibuat:**
+  - `run_pipeline_parallel.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pengguna dapat memverifikasi visualisasi rencana tugas evaluasi saja menggunakan: `python3 run_pipeline_parallel.py --tasks eval_ku --dry-run`
+  - Untuk memulai eksekusi sesungguhnya di compute node GPU, jalankan: `python3 run_pipeline_parallel.py --tasks eval_ku` di dalam sesi TMUX.
+
+
+
 
 
 

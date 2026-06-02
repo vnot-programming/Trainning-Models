@@ -4,31 +4,72 @@ run_pipeline_parallel.py
 ========================
 Parallel Multi-GPU Training & Evaluation Scheduler (Scopus Q1/Q2 Compliance)
 
-Sistem akan memetakan jumlah GPU secara otomatis, mendistribusikan beban 
-kerja secara cerdas (1 GPU = 1 Model), dan menjalankan evaluasi otomatis 
-pada GPU yang sedang idle. Semua konfigurasi membaca dari `config_shared.py`.
+Sistem scheduler paralel yang secara otomatis mendeteksi ketersediaan GPU, mendistribusikan beban kerja secara seimbang (1 GPU = 1 Model), dan menjalankan evaluasi otomatis pada GPU yang sedang menganggur (idle). Seluruh konfigurasi sistem merujuk pada `config_shared.py` sebagai Single Source of Truth.
 
-PANDUAN EKSEKUSI AGAR TIDAK TERPUTUS (WORKFLOW TMUX YANG BENAR):
+PANDUAN ALUR TMUX UNTUK EKSEKUSI AMAN (BEBAS ANTREAN BERULANG):
+--------------------------------------------------------------
+1. Buat sesi TMUX baru di Login Node (JANGAN masuk ke node AI terlebih dahulu):
+   $ tmux new-session -s training_pipeline
 
-1. Buat Sesi TMUX di Login Node (JANGAN MASUK NODE AI DULU):
-   tmux new-session -s training_pipeline
+2. Di dalam sesi TMUX, sambungkan (attach) ke compute node GPU Slurm:
+   $ cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils && ./attach_gpu.sh
 
-2. Di dalam TMUX, sambungkan (attach) ke Node GPU:
-   cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils && ./attach_gpu.sh
+3. Setelah berhasil masuk ke Compute Node (ditandai dengan prompt @ai2 atau @ai3), aktifkan environment conda dan jalankan scheduler:
+   source /data/programs/anaconda3/bin/activate yolo_env && cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && LOG_DIR=$(python3 -c "import config_shared, os; print(os.path.join(config_shared.WORKSPACE_DIR, 'logs'))") && mkdir -p "$LOG_DIR" && python3 run_pipeline_parallel.py 2>&1 | tee "$LOG_DIR/run_pipeline_parallel.log"
 
-3. Setelah masuk Node GPU, jalankan training:
-   source /data/programs/anaconda3/bin/activate yolo_env
-   cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && LOG_DIR=$(python3 -c "import config_shared, os; print(os.path.join(config_shared.WORKSPACE_DIR, 'logs'))") && mkdir -p "$LOG_DIR" && python3 run_pipeline_parallel.py 2>&1 | tee "$LOG_DIR/run_pipeline_parallel.log"
+4. Detach dari sesi TMUX agar proses tetap berjalan di background secara aman:
+   Tekan kombinasi tombol `Ctrl+b` diikuti dengan tombol `d`.
+   (Untuk kembali memantau progres, jalankan perintah: `tmux attach -t training_pipeline`)
+
+PENJELASAN ARGUMEN CLI YANG TERSEDIA:
+-------------------------------------
+* --gpus (str)      : Daftar indeks GPU yang ditargetkan (misal: '0,1'). Nilai default 'default'
+                      akan membaca alokasi GPU dari parameter `PARALLEL_GPUS` di `config_shared.py`.
+* --skip (str)      : Daftar model dasar yang ingin dilewati proses pelatihannya (misal: 'yolo8,maskrcnn').
+                      Gunakan pemisah koma tanpa spasi.
+* --eval-only       : Flag untuk menjalankan proses evaluasi saja pada seluruh model dasar, melewati
+                      seluruh proses training model dasar.
+* --models (str)    : Filter nama model tertentu untuk dieksekusi (misal: 'yolo11' atau 'yolo8,yolo11').
+                      Gunakan nilai default 'all' untuk memproses seluruh keluarga model.
+* --tasks (str)     : Membatasi fase/jenis tugas yang akan dimasukkan ke antrean penjadwalan.
+                      Pilihan yang tersedia:
+                      - 'all'        : Jalankan seluruh pipeline (training, eval dasar, new-method, post-processing).
+                      - 'train'      : Hanya jalankan pelacakan training model-model dasar.
+                      - 'eval'       : Hanya jalankan evaluasi model-model dasar.
+                      - 'new-method' : Hanya jalankan evaluasi metode baru (Std, Golden, Hybrid SOTA, Grid, Upload).
+                      - 'eval_ku'    : Mode evaluasi terpusat. Menjalankan kompilasi global terpadu
+                                       (`generate_report_single_model.py --family all`), dilanjutkan
+                                       dengan seluruh rangkaian evaluasi metode baru dan pasca-proses
+                                       (Grid, Upload) secara sekuensial tanpa mengeksekusi training atau
+                                       evaluasi model tunggal dasar.
+* --dry-run         : Flag untuk menampilkan rancangan Parallel Schedule Plan berbentuk tabel HUD di terminal
+                      secara statis tanpa memicu eksekusi proses fisik, pengiriman Telegram, atau pengecekan CUDA.
+                      Sangat berguna untuk memvalidasi rantai dependensi dari login node.
+
+SAMPEL / CONTOH PEMANGGILAN CLI:
+--------------------------------
+1. Menjalankan seluruh pipeline terdistribusi secara default (Training + Evaluasi + Post-Processing):
+   $ python3 run_pipeline_parallel.py
+
+2. Hanya menjalankan evaluasi model dasar (tanpa melatih ulang model):
+   $ python3 run_pipeline_parallel.py --eval-only
+
+3. Hanya mengevaluasi model tertentu saja (misalnya YOLO11):
+   $ python3 run_pipeline_parallel.py --models yolo11
+
+4. Hanya mengevaluasi metode baru dan post-processing (Std, Golden, Hybrid SOTA, Grid, Upload):
+   $ python3 run_pipeline_parallel.py --tasks new-method
+
+5. Mode Evaluasi Terpusat (Kompilasi Global + Evaluasi Metode Baru + Pasca-proses + Upload Otomatis):
+    source /data/programs/anaconda3/bin/activate yolo_env && cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && LOG_DIR=$(python3 -c "import config_shared, os; print(os.path.join(config_shared.WORKSPACE_DIR, 'logs'))") && mkdir -p "$LOG_DIR" && python3 run_pipeline_parallel.py --tasks eval_ku 2>&1 | tee "$LOG_DIR/run_pipeline_parallel_eval_ku.log"
+
    
-4. Detach dari TMUX untuk meninggalkan proses (Aman jika terminal ditutup):
-   Tekan Ctrl+b, lalu tekan d. atau 
-   di mac Tekan tombol control (^)+b tekan tombol d (untuk detach).
-   (Untuk kembali melihat proses nanti, jalankan: tmux attach -t training_pipeline)
-5. Melakukan Evaluasi Only
-    cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && LOG_DIR=$(python3 -c "import config_shared, os; print(os.path.join(config_shared.WORKSPACE_DIR, 'logs'))") && mkdir -p "$LOG_DIR" && python3 run_pipeline_parallel.py --eval-only 2>&1 | tee "$LOG_DIR/run_pipeline_parallel-eval-only.log"
 
-Catatan: Argumen --gpus bersifat opsional. Jika tidak diisi, sistem akan 
-menggunakan seluruh GPU yang tersedia secara otomatis.
+6. Melakukan dry-run statis untuk memvalidasi alur dependensi tugas eval_ku tanpa memiliki akses GPU aktif:
+   $ python3 run_pipeline_parallel.py --tasks eval_ku --dry_run
+
+7. Menjalankan scheduler pada GPU 1 & 2 dengan melewati pelatihan untuk model YOLOv8 dan YOLOv9:
+   $ python3 run_pipeline_parallel.py --gpus 1,2 --skip yolo8,yolo9
 """
 
 import os
@@ -74,10 +115,12 @@ def _fmt_duration(seconds: float) -> str:
     return f"{s}s"
 
 class ParallelScheduler:
-    def __init__(self, gpu_list: list, skip_models: set, eval_only: bool = False):
+    def __init__(self, gpu_list: list, skip_models: set, eval_only: bool = False, selected_models: set = None, tasks_filter: str = "all"):
         self.gpu_list = gpu_list
         self.skip_models = skip_models
         self.eval_only = eval_only
+        self.selected_models = selected_models
+        self.tasks_filter = tasks_filter
         self.gpu_status = {gpu: None for gpu in gpu_list}  # gpu_id -> task_id or None
         
         # Inisialisasi daftar tugas (Task Registry)
@@ -122,17 +165,14 @@ class ParallelScheduler:
             "script": "generate_report_single_model.py",
             "args": ["--family", "all"],
             "device_arg": "--gpus",
-            # RT-DETR dimasukkan ke dalam dependensi global agar CSV ALL mencakup metrik Paper 3
             "deps": ["eval_yolo8", "eval_yolo9", "eval_yolo10", "eval_yolo11", "eval_maskrcnn", "eval_hybrid", "eval_rtdetr"]
         }
         
         # 4. New Method Evaluations (Tambahan khusus Scopus Q1)
         new_eval_specs = [
-            {"id": "eval_new_std", "name": "global_eval", "label": "New Method Std Eval", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "standar_evaluation-new_method.py", "args": [], "device_arg": "--gpus", "deps": ["eval_global_multigpu"]},
-            {"id": "eval_new_std_vis", "name": "global_eval", "label": "New Method Std Visuals", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "standar_evaluation_visuals-new_method.py", "args": [], "device_arg": "--gpus", "deps": ["eval_new_std"]},
-            {"id": "eval_new_gld", "name": "global_eval", "label": "New Method Golden Eval", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "golden_evaluation-new_method.py", "args": [], "device_arg": "--gpus", "deps": ["eval_new_std_vis"]},
-            {"id": "eval_new_gld_vis", "name": "global_eval", "label": "New Method Golden Visuals", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "golden_evaluation_visuals-new_method.py", "args": [], "device_arg": "--gpus", "deps": ["eval_new_gld"]},
-            {"id": "eval_new_hybrid_sota", "name": "global_eval", "label": "New Method Hybrid SOTA Eval", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "evaluation_hybrid_sota.py", "args": [], "device_arg": "--gpus", "deps": ["eval_new_gld_vis"]}
+            {"id": "eval_new_std", "name": "global_eval", "label": "New Method Std Report", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "generate_standar_report-new_method.py", "args": [], "device_arg": "--gpus", "deps": ["eval_global_multigpu"]},
+            {"id": "eval_new_gld", "name": "global_eval", "label": "New Method Golden Report", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "generate_golden_report-new_method.py", "args": [], "device_arg": "--gpus", "deps": ["eval_new_std"]},
+            {"id": "eval_new_hybrid_sota", "name": "global_eval", "label": "New Method Hybrid SOTA Eval", "cwd": os.path.join(_THIS_DIR, "utils"), "script": "evaluation_hybrid_sota.py", "args": [], "device_arg": "--gpus", "deps": ["eval_new_gld"]}
         ]
         # 5. Post Processing Tasks (Grid Generator & Upload/Archive)
         post_specs = [
@@ -142,9 +182,17 @@ class ParallelScheduler:
         
         new_eval_specs.extend(post_specs)
         
+        # Filter berdasarkan --tasks
+        run_train = self.tasks_filter in ["all", "train"]
+        run_eval = self.tasks_filter in ["all", "eval"]
+        run_new_method = self.tasks_filter in ["all", "new-method"]
+        run_eval_ku = self.tasks_filter == "eval_ku"
+
         # Daftarkan Training Tasks
         for spec in train_specs:
-            is_skipped = self.eval_only or (spec["name"] in self.skip_models)
+            is_skipped = self.eval_only or not run_train or (spec["name"] in self.skip_models)
+            if self.selected_models and spec["name"] not in self.selected_models:
+                is_skipped = True
             self.tasks[spec["id"]] = {
                 "id": spec["id"],
                 "label": spec["label"],
@@ -165,11 +213,14 @@ class ParallelScheduler:
         # Daftarkan Evaluation Tasks
         for spec in eval_specs:
             # Jika eval-only aktif, evaluasi tidak di-skip. Jika tidak, ikuti aturan skip model.
-            is_skipped = False if self.eval_only else (spec["name"] in self.skip_models)
-            # Saat eval_only: hapus dependency ke training tasks (yang sudah SKIPPED).
+            is_skipped = not run_eval or (not self.eval_only and spec["name"] in self.skip_models)
+            if self.selected_models and spec["name"] not in self.selected_models:
+                is_skipped = True
+                
+            # Saat eval_only atau jika tidak training: hapus dependency ke training tasks (yang sudah SKIPPED).
             # Jika dep training dibiarkan, _update_failed_dependencies() akan
             # otomatis men-cascade-skip eval tasks karena dep = SKIPPED.
-            if self.eval_only:
+            if self.eval_only or not run_train:
                 resolved_deps = []  # Eval tasks berdiri sendiri — tidak ada dep training
             else:
                 resolved_deps = spec["deps"]
@@ -192,19 +243,22 @@ class ParallelScheduler:
             
         # Daftarkan Global Evaluation Task
         # Global eval aktif jika:
-        #   (a) ada training task yang PENDING (skenario normal), ATAU
-        #   (b) --eval-only aktif → eval tasks sudah PENDING (deps training sudah dikosongkan)
+        #   (a) run_eval atau run_eval_ku aktif, dan
+        #   (b) ada training task yang PENDING (skenario normal), ATAU
+        #   (c) --eval-only aktif atau training dilewati → eval tasks sudah PENDING (deps training sudah dikosongkan), ATAU
+        #   (d) mode eval_ku aktif secara eksplisit
         _eval_task_ids = ["eval_yolo8", "eval_yolo9", "eval_yolo10", "eval_yolo11",
                           "eval_maskrcnn", "eval_hybrid", "eval_rtdetr"]
-        run_any = (
+        run_any = (run_eval or run_eval_ku) and (
             any(self.tasks[tid]["state"] == "PENDING"
                 for tid in ["train_yolo8", "train_yolo9", "train_yolo10",
                             "train_yolo11", "train_maskrcnn", "train_rtdetr"])
             or
             any(self.tasks[tid]["state"] == "PENDING" for tid in _eval_task_ids)
+            or run_eval_ku
         )
-        # Saat eval_only: global_eval hanya bergantung pada eval tasks (bukan train tasks)
-        global_deps = [
+        # Jika eval_ku aktif, global_eval tidak memiliki dependensi agar bisa langsung berjalan
+        global_deps = [] if run_eval_ku else [
             dep for dep in global_eval["deps"]
             if self.tasks[dep]["state"] != "SKIPPED"
         ]
@@ -225,8 +279,21 @@ class ParallelScheduler:
             "logfile": os.path.join(LOG_DIR, f"{global_eval['id']}.log")
         }
 
-        # Daftarkan New Method Evaluations
+        # Dinamis hapus dependensi New Method Std jika run_eval dinonaktifkan
+        if not run_eval:
+            for spec in new_eval_specs:
+                if spec["id"] == "eval_new_std":
+                    spec["deps"] = ["eval_global_multigpu"] if run_eval_ku else []
+
+        # Daftarkan New Method Evaluations & Post Processing Specs
         for spec in new_eval_specs:
+            is_active = False
+            if run_new_method:
+                is_active = True
+            elif run_eval_ku:
+                # Untuk mode eval_ku, semua tugas di list (Std, Golden, SOTA, Grid, Upload) diaktifkan
+                is_active = True
+
             self.tasks[spec["id"]] = {
                 "id": spec["id"],
                 "label": spec["label"],
@@ -236,7 +303,7 @@ class ParallelScheduler:
                 "args": spec["args"],
                 "device_arg": spec["device_arg"],
                 "dependencies": spec["deps"],
-                "state": "PENDING",  # Diubah dari SKIPPED menjadi PENDING agar ikut dieksekusi
+                "state": "PENDING" if is_active else "SKIPPED",
                 "proc": None,
                 "gpu": None,
                 "start_time": None,
@@ -529,6 +596,19 @@ def main():
         "--eval-only", action="store_true",
         help="Hanya jalankan proses evaluasi, lewati proses training."
     )
+    parser.add_argument(
+        "--models", type=str, default="all",
+        help="Hanya jalankan model tertentu (misal 'yolo11' atau 'yolo8,yolo11'). Default 'all'."
+    )
+    parser.add_argument(
+        "--tasks", type=str, default="all",
+        choices=["all", "train", "eval", "new-method", "eval_ku"],
+        help="Hanya jalankan jenis tugas tertentu. Default 'all'."
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Hanya tampilkan rencana penjadwalan (plan) tanpa mengeksekusi tugas."
+    )
     args = parser.parse_args()
     
     # Resolusi GPU list
@@ -544,32 +624,45 @@ def main():
         
     gpu_list = [int(g.strip()) for g in gpu_str.split(",") if g.strip()]
     skip_models = {s.strip().lower() for s in args.skip.split(",") if s.strip()}
+    selected_models = {m.strip().lower() for m in args.models.split(",") if m.strip()} if args.models != "all" else None
     
     # Validasi CUDA
-    if not torch.cuda.is_available() or not gpu_list:
+    if not args.dry_run and (not torch.cuda.is_available() or not gpu_list):
         print(_c("❌ CUDA tidak tersedia atau GPU list kosong. Scheduler membutuhkan GPU aktif.", _RED, _BOLD))
         sys.exit(1)
         
-    n_avail = torch.cuda.device_count()
-    for g in gpu_list:
-        if g >= n_avail:
-            print(_c(f"❌ GPU {g} tidak tersedia (sistem hanya memiliki {n_avail} GPU).", _RED, _BOLD))
-            sys.exit(1)
+    n_avail = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    if not args.dry_run:
+        for g in gpu_list:
+            if g >= n_avail:
+                print(_c(f"❌ GPU {g} tidak tersedia (sistem hanya memiliki {n_avail} GPU).", _RED, _BOLD))
+                sys.exit(1)
             
     print(_c(_hr(), _BOLD, _CYAN))
     print(_c("  Parallel Multi-GPU Training & Evaluation Pipeline Scheduler", _BOLD, _CYAN))
     print(_c("  Skenario 1 GPU = 1 Model (Standard 2026)", _DIM))
     print(_c(_hr(), _BOLD, _CYAN))
-    print(f"  GPUs Available    : {n_avail}")
+    print(f"  GPUs Available    : {n_avail if torch.cuda.is_available() else '0 (CUDA not active/detected)'}")
     print(f"  GPUs Targeted     : {gpu_list}")
+    print(f"  Models Selected   : {args.models}")
+    print(f"  Tasks Selected    : {args.tasks}")
     print(f"  Models to Skip    : {list(skip_models) if skip_models else 'None'}")
     print(f"  Workspace Directory: {WORKSPACE_DIR}")
     print(f"  Python Interpreter: {_VENV_PYTHON}")
     print(_c(_hr(), _BOLD, _CYAN))
     # 2. Inisialisasi Scheduler
-    scheduler = ParallelScheduler(gpu_list=gpu_list, skip_models=skip_models, eval_only=args.eval_only)
+    scheduler = ParallelScheduler(
+        gpu_list=gpu_list,
+        skip_models=skip_models,
+        eval_only=args.eval_only,
+        selected_models=selected_models,
+        tasks_filter=args.tasks
+    )
     scheduler.print_plan()
-    scheduler.run()
+    if not args.dry_run:
+        scheduler.run()
+    else:
+        print(_c("  [Dry-Run] Scheduler dihentikan karena opsi --dry-run aktif.", _YELLOW, _BOLD))
 
 
 if __name__ == "__main__":

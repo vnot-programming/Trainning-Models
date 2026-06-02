@@ -42,7 +42,7 @@ Langkah 2: Jalankan skrip evaluasi dengan parameter yang sesuai:
                 mkdir -p "$LOG_DIR"
                 python3 -u utils/generate_report_single_model.py --family all 2>&1 | tee "$LOG_DIR/1_generate_report_single_model.log"
            # D. 
-                cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && LOG_DIR=$(python3 -c "import config_shared, os; print(os.path.join(config_shared.WORKSPACE_DIR, 'logs'))") && mkdir -p "$LOG_DIR" && python3 -u utils/generate_report_single_model.py --family all 2>&1 | tee "$LOG_DIR/1_generate_report_single_model.log"
+                cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && LOG_DIR=$(python3 -c "import config_shared, os; print(os.path.join(config_shared.WORKSPACE_DIR, 'logs'))") && mkdir -p "$LOG_DIR" && python3 -u utils/generate_report_single_model.py 2>&1 | tee "$LOG_DIR/1_generate_report_single_model.log"
                 
 Struktur Direktori Output (di dalam WORKSPACE_DIR):
 -------------------------------------------------
@@ -140,12 +140,14 @@ from config_shared import (
     MODEL_COLORS,
     NUM_CLASSES,
     VISUAL_NUM_SAMPLES,
+    EVAL_DATASET_LOCATION,
 )
 from telegram_utils import send_telegram_msg
 from coco_eval_utils import (
     build_coco_ground_truth,
     evaluate_coco_predictions,
     check_pycocotools,
+    load_native_coco_gt,
 )
 
 # ==============================================================================
@@ -1057,13 +1059,22 @@ def evaluate_variant_detection(
         return None
 
     print("  [GT] Membangun COCO ground truth deteksi...")
-    coco_gt_dict, image_ids = build_coco_ground_truth(DET_YAML, split="valid")
+    eval_valid_dir = os.path.join(EVAL_DATASET_LOCATION, "valid")
+    coco_json_path = os.path.join(eval_valid_dir, "_annotations.coco.json")
+    if os.path.exists(coco_json_path):
+        print(f"  [GT] Menggunakan dataset terpadu COCO dari {eval_valid_dir}...")
+        img_dir = eval_valid_dir
+        coco_gt_dict, image_ids = load_native_coco_gt(img_dir)
+        if image_ids:
+            image_ids = {os.path.join(img_dir, k): v for k, v in image_ids.items()}
+    else:
+        coco_gt_dict, image_ids = build_coco_ground_truth(DET_YAML, split="valid")
+        img_dir = _resolve_img_dir(DET_YAML)
+
     if coco_gt_dict is None:
         print("  ❌ Gagal membangun COCO ground truth")
         return None
     print(f"  [GT] {len(image_ids)} gambar ditemukan.")
-
-    img_dir    = _resolve_img_dir(DET_YAML)
     world_size = len(gpu_ids)
 
     print(f"  [Spawn] Menjalankan {world_size} GPU worker deteksi...")
@@ -1192,13 +1203,22 @@ def evaluate_variant_segmentation(
         return None
 
     print("  [GT] Membangun COCO ground truth segmentasi...")
-    coco_gt_dict, image_ids = build_coco_ground_truth(SEG_YAML, split="valid")
+    eval_valid_dir = os.path.join(EVAL_DATASET_LOCATION, "valid")
+    coco_json_path = os.path.join(eval_valid_dir, "_annotations.coco.json")
+    if os.path.exists(coco_json_path):
+        print(f"  [GT] Menggunakan dataset terpadu COCO dari {eval_valid_dir}...")
+        img_dir = eval_valid_dir
+        coco_gt_dict, image_ids = load_native_coco_gt(img_dir)
+        if image_ids:
+            image_ids = {os.path.join(img_dir, k): v for k, v in image_ids.items()}
+    else:
+        coco_gt_dict, image_ids = build_coco_ground_truth(SEG_YAML, split="valid")
+        img_dir = _resolve_img_dir(SEG_YAML)
+
     if coco_gt_dict is None:
         print("  ❌ Gagal membangun COCO ground truth")
         return None
     print(f"  [GT] {len(image_ids)} gambar ditemukan.")
-
-    img_dir    = _resolve_img_dir(SEG_YAML)
     world_size = len(gpu_ids)
 
     print(f"  [Spawn] Menjalankan {world_size} GPU worker segmentasi...")
@@ -1271,13 +1291,22 @@ def evaluate_maskrcnn_segmentation(
         return None
 
     print("  [GT] Membangun COCO ground truth segmentasi...")
-    coco_gt_dict, image_ids = build_coco_ground_truth(SEG_YAML, split="valid")
+    eval_valid_dir = os.path.join(EVAL_DATASET_LOCATION, "valid")
+    coco_json_path = os.path.join(eval_valid_dir, "_annotations.coco.json")
+    if os.path.exists(coco_json_path):
+        print(f"  [GT] Menggunakan dataset terpadu COCO dari {eval_valid_dir}...")
+        img_dir = eval_valid_dir
+        coco_gt_dict, image_ids = load_native_coco_gt(img_dir)
+        if image_ids:
+            image_ids = {os.path.join(img_dir, k): v for k, v in image_ids.items()}
+    else:
+        coco_gt_dict, image_ids = build_coco_ground_truth(SEG_YAML, split="valid")
+        img_dir = _resolve_img_dir(SEG_YAML)
+
     if coco_gt_dict is None:
         print("  ❌ Gagal membangun COCO ground truth")
         return None
     print(f"  [GT] {len(image_ids)} gambar ditemukan.")
-
-    img_dir    = _resolve_img_dir(SEG_YAML)
     world_size = len(gpu_ids)
 
     print(f"  [Spawn] Menjalankan {world_size} GPU worker segmentasi Mask R-CNN...")
@@ -1352,13 +1381,22 @@ def evaluate_hybrid_segmentation(
         return None
 
     print("  [GT] Membangun COCO ground truth segmentasi...")
-    coco_gt_dict, image_ids = build_coco_ground_truth(SEG_YAML, split="valid")
+    eval_valid_dir = os.path.join(EVAL_DATASET_LOCATION, "valid")
+    coco_json_path = os.path.join(eval_valid_dir, "_annotations.coco.json")
+    if os.path.exists(coco_json_path):
+        print(f"  [GT] Menggunakan dataset terpadu COCO dari {eval_valid_dir}...")
+        img_dir = eval_valid_dir
+        coco_gt_dict, image_ids = load_native_coco_gt(img_dir)
+        if image_ids:
+            image_ids = {os.path.join(img_dir, k): v for k, v in image_ids.items()}
+    else:
+        coco_gt_dict, image_ids = build_coco_ground_truth(SEG_YAML, split="valid")
+        img_dir = _resolve_img_dir(SEG_YAML)
+
     if coco_gt_dict is None:
         print("  ❌ Gagal membangun COCO ground truth")
         return None
     print(f"  [GT] {len(image_ids)} gambar ditemukan.")
-
-    img_dir    = _resolve_img_dir(SEG_YAML)
     world_size = len(gpu_ids)
 
     print(f"  [Spawn] Menjalankan {world_size} GPU worker segmentasi Hybrid...")

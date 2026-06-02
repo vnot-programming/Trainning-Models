@@ -1,26 +1,31 @@
 # -*- coding: utf-8 -*-
 """
-utils/generate_standar_report-new_method.py
+utils/generate_golden_report-new_method.py
 ================================================================================
-SKRIP GABUNGAN ORKESTRASI EVALUASI KUANTITATIF (CSV) & KUALITATIF (VISUALISASI)
+SKRIP TERPADU ORKESTRASI EVALUASI GOLDEN DATASET: KUANTITATIF (CSV) & KUALITATIF (VISUALISASI)
 ================================================================================
 Penulis: Google Professional Full Stack Developer Persona (Antigravity AI Agent)
 Proyek: Fine-Tuning & Benchmarking 49 Model YOLO & Hybrid (SAM2) — Scopus Q1/Q2
 
-Konsep Utama:
-------------
-Skrip ini menggabungkan fungsi evaluasi kuantitatif multi-GPU (mAP COCOeval) 
-dan visualisasi grid kualitatif secara terpadu dan independen, hanya bergantung pada
-config_shared.py dan datasets lokal.
+Deskripsi Fungsional:
+--------------------
+Skrip ini menggabungkan evaluasi kuantitatif (COCOeval mAP) paralel multi-GPU 
+dan visualisasi komparatif grid kualitatif untuk Golden Dataset secara terintegrasi 
+dan mandiri, hanya bergantung pada config_shared.py dan datasets lokal.
+Di dalam skrip ini, seluruh input koordinat bounding box ke SAM2 (model Hybrid) 
+distandardisasi menggunakan Tensor GPU Mentah (res.boxes.xyxy) langsung untuk 
+menjamin keakuratan koordinat dan efisiensi VRAM.
 
 Alur Kerja:
 ----------
 1. Tahap 1 (Kuantitatif): Mengukur mAP50 dan mAP50-95 secara paralel multi-GPU 
-   untuk YOLO, Mask R-CNN, dan Hybrid (YOLO+SAM2) pada dataset validasi standar.
-   Hasil akhirnya disimpan ke laporan CSV di folder reports/paper1/csv/new-method/.
+   untuk YOLO, Mask R-CNN, dan Hybrid (YOLO+SAM2) pada Golden Dataset.
+   Hasil akhirnya diekspor ke:
+     - reports/paper1/csv/new-method/golden_det.csv
+     - reports/paper1/csv/new-method/golden_seg.csv
 2. Tahap 2 (Kualitatif): Membaca gambar dari folder sampel tetap,
    melakukan rendering visual (masker semi-transparan, bounding box, label teks kontras),
-   serta memplot grid komparasi dual-generasi (YOLOv8 dan YOLO11) ke folder visuals/.
+   serta memplot grid komparasi dual-generasi (YOLOv8 dan YOLO11) ke folder golden/comparison/.
 
 Cara menjalankan:
 ----------------
@@ -28,10 +33,11 @@ Hubungkan terminal Anda ke Compute Node GPU yang telah dibooking:
 $ cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils && ./attach_gpu.sh
 
 Jalankan skrip terpadu ini:
-$ python3 -u utils/generate_standar_report-new_method.py --gpus 0
+$ python3 -u utils/generate_golden_report-new_method.py --gpus 0
 
-atau 
-cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && LOG_DIR=$(python3 -c "import config_shared, os; print(os.path.join(config_shared.WORKSPACE_DIR, 'logs'))") && mkdir -p "$LOG_DIR" && python3 -u utils/generate_standar_report-new_method.py --gpus 0 2>&1 | tee "$LOG_DIR/2_generate_standar_report-new_method.log"
+atau
+
+cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && LOG_DIR=$(python3 -c "import config_shared, os; print(os.path.join(config_shared.WORKSPACE_DIR, 'logs'))") && mkdir -p "$LOG_DIR" && python3 -u utils/generate_golden_report-new_method.py --gpus 0 2>&1 | tee "$LOG_DIR/3_generate_golden_report-new_method.log"
 """
 
 import os
@@ -44,8 +50,6 @@ import pickle
 import argparse
 import tempfile
 import shutil
-import tarfile
-from datetime import datetime
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
@@ -68,9 +72,9 @@ import torch.multiprocessing as mp
 
 from config_shared import (
     WORKSPACE_DIR, SEG_YAML, DET_YAML, IMAGE_SIZE, NUM_CLASSES,
-    get_output_dir, REPORTS_DIR, DATA_FILES_DIR, STANDAR_SEG_DATASET_LOCATION, STANDAR_DET_DATASET_LOCATION,
+    get_output_dir, REPORTS_DIR, DATA_FILES_DIR, GOLDEN_SEG_DATASET_LOCATION, GOLDEN_DET_DATASET_LOCATION,
     PAPER1_CSV_DIR, PAPER1_VIS_DIR, EVAL_CONF, EVAL_IOU, VISUAL_CONF, VISUAL_IOU, flush_gpu,
-    IMAGE_SAMPLES_DIR, EVAL_DATASET_LOCATION
+    IMAGE_SAMPLES_DIR
 )
 from telegram_utils import send_telegram_msg
 from coco_eval_utils import (
@@ -84,6 +88,14 @@ from ultralytics import YOLO, SAM
 SAM_MODEL_PATH = os.path.join(ROOT, "models", "sam2.1_t.pt")
 YOLO11L_DET_PATH  = os.path.join(WORKSPACE_DIR, "runs", "yolo11l", "weights", "best.pt")
 YOLO11L_SEG_PATH  = os.path.join(WORKSPACE_DIR, "runs", "yolo11l_seg", "weights", "best.pt")
+
+# Output Directories
+GOLD_VIS_DIR  = os.path.join(PAPER1_VIS_DIR, "new-method", "golden")
+IMG_SAMPLE_DIR = os.path.join(GOLD_VIS_DIR, "images_sample")
+DET_OUT_DIR    = os.path.join(GOLD_VIS_DIR, "detection")
+SEG_OUT_DIR    = os.path.join(GOLD_VIS_DIR, "segmentation")
+COMP_DET_DIR   = os.path.join(GOLD_VIS_DIR, "comparison", "detection")
+COMP_SEG_DIR   = os.path.join(GOLD_VIS_DIR, "comparison", "segmentation")
 
 MODELS_CONFIG = [
     # ── YOLO Detection (9 Models) ─────────────────────────────────────────────
@@ -333,11 +345,11 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
                 pred_confs = res.boxes.conf.cpu().numpy()
                 pred_clss = res.boxes.cls.cpu().numpy().astype(int)
                 
-                # 1. SAM2 Inference (menggunakan model callable berdasarkan list bbox koordinat)
+                # 1. SAM2 Inference — STANDARDIZED: Menggunakan Tensor GPU Mentah (res.boxes.xyxy)
                 torch.cuda.synchronize()
                 sam_inf_st = time.perf_counter()
                 try:
-                    sam_res = sam_model(res.orig_img, bboxes=pred_boxes.tolist(), device=device_str, verbose=False)
+                    sam_res = sam_model(res.orig_img, bboxes=res.boxes.xyxy, device=device_str, verbose=False)
                     torch.cuda.synchronize()
                     sam_inf_et = time.perf_counter()
                     sam_inf_time = (sam_inf_et - sam_inf_st) * 1000
@@ -547,7 +559,7 @@ def plot_grid(images, titles, save_path):
 # MAIN EXECUTION ORCHESTRATOR
 # ==============================================================================
 def main():
-    parser = argparse.ArgumentParser(description="Distributed mAP Evaluation & Visualisation pipeline")
+    parser = argparse.ArgumentParser(description="Distributed Golden mAP Evaluation & Visualisation pipeline")
     parser.add_argument("--gpus", type=str, default="0", help="Daftar GPU komputasi, contoh: '0' atau '0,1'")
     parser.add_argument("--skip-eval", action="store_true", help="Lewati fase evaluasi kuantitatif (CSV)")
     parser.add_argument("--skip-visual", action="store_true", help="Lewati fase visualisasi kualitatif (Grid)")
@@ -557,39 +569,23 @@ def main():
     world_size = len(gpu_ids)
     
     print("="*80)
-    print("  ORKESTRASI METODE BARU: KUANTITATIF (CSV) & KUALITATIF (VISUALISASI)")
+    print("  ORKESTRASI GOLDEN DATASET: KUANTITATIF (CSV) & KUALITATIF (VISUALISASI)")
     print("="*80)
     
     # --------------------------------------------------------------------------
-    # FASE 1: EVALUASI KUANTITATIF (PENGHASIL CSV)
+    # FASE 1: EVALUASI KUANTITATIF (PENGHASIL CSV GOLDEN)
     # --------------------------------------------------------------------------
     if not args.skip_eval:
-        print("\n>>> Memulai FASE 1: Evaluasi Kuantitatif (COCOeval mAP)...")
-        # 1. Bangun GT dari standard datasets atau eval_dataset_coco menggunakan format native COCO JSON
-        eval_valid_dir = os.path.join(EVAL_DATASET_LOCATION, "valid")
-        coco_json_path = os.path.join(eval_valid_dir, "_annotations.coco.json")
-        if os.path.exists(coco_json_path):
-            print(f"  [GT] Menggunakan dataset terpadu COCO dari {eval_valid_dir}...")
-            coco_gt_det, image_ids_det = load_native_coco_gt(eval_valid_dir)
-            coco_gt_seg, image_ids_seg = load_native_coco_gt(eval_valid_dir)
-            img_dir_det = eval_valid_dir
-            img_dir_seg = eval_valid_dir
-        else:
-            print("  [GT] Menggunakan dataset standard bawaan...")
-            coco_gt_det, image_ids_det = load_native_coco_gt(os.path.join(STANDAR_DET_DATASET_LOCATION, "valid"))
-            coco_gt_seg, image_ids_seg = load_native_coco_gt(os.path.join(STANDAR_SEG_DATASET_LOCATION, "valid"))
-            img_dir_det = os.path.join(STANDAR_DET_DATASET_LOCATION, "valid")
-            img_dir_seg = os.path.join(STANDAR_SEG_DATASET_LOCATION, "valid")
-
-        # Konversi keys image_ids menjadi path absolut agar 100% konsisten dengan data worker
-        if image_ids_det:
-            image_ids_det = {os.path.join(img_dir_det, k): v for k, v in image_ids_det.items()}
-        if image_ids_seg:
-            image_ids_seg = {os.path.join(img_dir_seg, k): v for k, v in image_ids_seg.items()}
-
+        print("\n>>> Memulai FASE 1: Evaluasi Kuantitatif Golden Dataset (COCOeval mAP)...")
+        coco_gt_det, image_ids_det = load_native_coco_gt(os.path.join(GOLDEN_DET_DATASET_LOCATION, "valid"))
+        coco_gt_seg, image_ids_seg = load_native_coco_gt(os.path.join(GOLDEN_SEG_DATASET_LOCATION, "valid"))
+        
         if coco_gt_det is None or coco_gt_seg is None:
-            print("❌ Gagal memuat Ground Truth COCO. Periksa ketersediaan berkas _annotations.coco.json!")
+            print("❌ Gagal memuat Ground Truth COCO untuk Golden datasets. Periksa ketersediaan berkas _annotations.coco.json!")
             sys.exit(1)
+            
+        img_dir_det = os.path.join(GOLDEN_DET_DATASET_LOCATION, "valid")
+        img_dir_seg = os.path.join(GOLDEN_SEG_DATASET_LOCATION, "valid")
         
         gpu_report = _gpu_report_str(gpu_ids)
         rows = []
@@ -600,18 +596,16 @@ def main():
             label, mkey, mtype = mcfg["label"], mcfg["key"], mcfg["type"]
             print(f"\n[Eval Kuantitatif] Running: {label}...")
             
-            # Persiapkan direktori & parameter dataset
             if mtype in ["yolo_det", "hybrid_det"]:
                 img_dir, image_ids, coco_gt = img_dir_det, image_ids_det, coco_gt_det
             else:
                 img_dir, image_ids, coco_gt = img_dir_seg, image_ids_seg, coco_gt_seg
                 
             metrics = _get_model_metrics(mcfg)
-            tmp_dir = tempfile.mkdtemp(prefix=f"eval_{mkey}_")
+            tmp_dir = tempfile.mkdtemp(prefix=f"eval_gold_{mkey}_")
             t0 = time.perf_counter()
             
             try:
-                # Menjalankan worker inference paralel multi-GPU
                 mp.spawn(
                     _infer_worker,
                     args=(gpu_ids, mcfg, img_dir, image_ids, tmp_dir),
@@ -619,7 +613,6 @@ def main():
                     join=True
                 )
                 
-                # Mengumpulkan hasil worker pkl
                 dt_bbox, dt_segm = [], []
                 n_imgs = 0
                 all_pre, all_inf, all_post = [], [], []
@@ -627,15 +620,15 @@ def main():
                 for r in range(world_size):
                     pkl_path = os.path.join(tmp_dir, f"rank{r}.pkl")
                     if os.path.exists(pkl_path):
-                        with open(pkl_path, "rb") as f:
-                            data = pickle.load(f)
-                            dt_bbox.extend(data["dt_bbox"])
-                            dt_segm.extend(data["dt_segm"])
-                            n_imgs += data["n_imgs"]
-                            all_pre.extend(data["pre"])
-                            all_inf.extend(data["inf"])
-                            all_post.extend(data["post"])
-                            
+                         with open(pkl_path, "rb") as f:
+                             data = pickle.load(f)
+                             dt_bbox.extend(data["dt_bbox"])
+                             dt_segm.extend(data["dt_segm"])
+                             n_imgs += data["n_imgs"]
+                             all_pre.extend(data["pre"])
+                             all_inf.extend(data["inf"])
+                             all_post.extend(data["post"])
+                             
                 elapsed = time.perf_counter() - t0
                 
                 # Evaluasi mAP COCOeval
@@ -644,7 +637,7 @@ def main():
                 
                 from pycocotools.coco import COCO
                 from pycocotools.cocoeval import COCOeval
-
+                
                 # Bounding Box mAP
                 if len(dt_bbox) > 0 and (mtype in ["yolo_det", "maskrcnn", "hybrid_det"] or (mtype in ["yolo_seg", "hybrid_seg"])):
                     try:
@@ -697,13 +690,13 @@ def main():
                     except Exception as ev_err:
                         print(f"  [Eval-Error] Gagal hitung mAP Mask: {ev_err}")
                         
-                # Hitung Rata-rata Latensi Kecepatan
                 avg_pre = round(np.mean(all_pre), 2) if all_pre else 0.0
                 avg_inf = round(np.mean(all_inf), 2) if all_inf else 0.0
                 avg_post = round(np.mean(all_post), 2) if all_post else 0.0
                 lat = round(elapsed * 1000 / n_imgs, 2) if n_imgs > 0 else "N/A"
                 fps = round(n_imgs / elapsed, 2) if elapsed > 0 else "N/A"
                 
+                # Masukkan ke rows gabungan
                 rows.append({
                     "Model": label,
                     "mAP50 (Box)": mAP50_box,
@@ -754,51 +747,53 @@ def main():
                 shutil.rmtree(tmp_dir, ignore_errors=True)
                 
         # Export ke CSV
-        os.makedirs(PAPER1_CSV_DIR, exist_ok=True)
-        csv_path = os.path.join(PAPER1_CSV_DIR, "kompilasi_new_method_standar.csv")
-        fields = [
-            "Model", "mAP50 (Box)", "mAP50-95 (Box)", "mAP50 (Mask)", "mAP50-95 (Mask)",
-            "Speed Preprocess (ms)", "Speed Inference (ms)", "Speed Postprocess (ms)",
-            "Weights Size (MB)", "Parameters (M)", "GPUs"
-        ]
-        with open(csv_path, "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=fields)
-            w.writeheader()
-            w.writerows(rows)
-        print(f"\n>>> FASE 1 SELESAI. CSV berhasil diekspor ke: {csv_path}")
-
-        # Tambahan ekspor standar_det.csv dan standar_seg.csv ke new-method/
         NEW_CSV_DIR = os.path.join(PAPER1_CSV_DIR, "new-method")
         os.makedirs(NEW_CSV_DIR, exist_ok=True)
-        det_csv = os.path.join(NEW_CSV_DIR, "standar_det.csv")
-        seg_csv = os.path.join(NEW_CSV_DIR, "standar_seg.csv")
-
+        
+        det_csv = os.path.join(NEW_CSV_DIR, "golden_det.csv")
+        seg_csv = os.path.join(NEW_CSV_DIR, "golden_seg.csv")
+        
         if rows_det:
             with open(det_csv, "w", newline="", encoding="utf-8") as f:
                 w = csv.DictWriter(f, fieldnames=list(rows_det[0].keys()))
                 w.writeheader()
                 w.writerows(rows_det)
-            print(f">>> CSV Deteksi Standar diekspor ke: {det_csv}")
-
+            print(f"\n>>> FASE 1 SELESAI. CSV Deteksi Golden diekspor ke: {det_csv}")
+            
         if rows_seg:
             with open(seg_csv, "w", newline="", encoding="utf-8") as f:
                 w = csv.DictWriter(f, fieldnames=list(rows_seg[0].keys()))
                 w.writeheader()
                 w.writerows(rows_seg)
-            print(f">>> CSV Segmentasi Standar diekspor ke: {seg_csv}")
-        
+            print(f"\n>>> FASE 1 SELESAI. CSV Segmentasi Golden diekspor ke: {seg_csv}")
+
+        # Tambahan ekspor kompilasi_new_method_golden.csv ke PAPER1_CSV_DIR
+        os.makedirs(PAPER1_CSV_DIR, exist_ok=True)
+        comp_gold_csv = os.path.join(PAPER1_CSV_DIR, "kompilasi_new_method_golden.csv")
+        fields = [
+            "Model", "mAP50 (Box)", "mAP50-95 (Box)", "mAP50 (Mask)", "mAP50-95 (Mask)",
+            "Speed Preprocess (ms)", "Speed Inference (ms)", "Speed Postprocess (ms)",
+            "Weights Size (MB)", "Parameters (M)", "GPUs"
+        ]
+        with open(comp_gold_csv, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=fields)
+            w.writeheader()
+            w.writerows(rows)
+        print(f">>> CSV Kompilasi Golden diekspor ke: {comp_gold_csv}")
+            
         # Kirim notifikasi telegram
         send_telegram_msg(
-            f"📊 <b>Fase 1 Kuantitatif Selesai</b>\n"
-            f"Output: <code>{os.path.basename(csv_path)}</code>\n"
-            f"Total Evaluasi: {len(rows)} model."
+            f"📊 <b>Fase 1 Kuantitatif Golden Selesai</b>\n"
+            f"Output: <code>golden_det.csv</code> & <code>golden_seg.csv</code>\n"
+            f"Kompilasi: <code>kompilasi_new_method_golden.csv</code>\n"
+            f"Total Evaluasi: {len(rows_det) + len(rows_seg)} model."
         )
 
     # --------------------------------------------------------------------------
-    # FASE 2: EVALUASI KUALITATIF (PENGHASIL GRID VISUALISASI)
+    # FASE 2: EVALUASI KUALITATIF (PENGHASIL GRID VISUALISASI GOLDEN)
     # --------------------------------------------------------------------------
     if not args.skip_visual:
-        print("\n>>> Memulai FASE 2: Evaluasi Kualitatif (Sample Grid Visualization)...")
+        print("\n>>> Memulai FASE 2: Evaluasi Kualitatif Golden Dataset (Sample Grid)...")
         print(f"    Membaca berkas sampel dari: {IMAGE_SAMPLES_DIR}")
         
         if not os.path.isdir(IMAGE_SAMPLES_DIR) or not os.listdir(IMAGE_SAMPLES_DIR):
@@ -809,17 +804,7 @@ def main():
         device = torch.device(device_str if torch.cuda.is_available() else "cpu")
         
         # Inisialisasi visual output directory
-        STD_VIS_DIR = os.path.join(PAPER1_VIS_DIR, "new-method", "standard")
-        IMG_SAMPLE_DIR = os.path.join(STD_VIS_DIR, "images_sample")
-        DET_OUT_DIR = os.path.join(STD_VIS_DIR, "detection")
-        SEG_OUT_DIR = os.path.join(STD_VIS_DIR, "segmentation")
-        COMP_DET_DIR = os.path.join(STD_VIS_DIR, "comparison", "detection")
-        COMP_SEG_DIR = os.path.join(STD_VIS_DIR, "comparison", "segmentation")
-        
-        for d in [IMG_SAMPLE_DIR, DET_OUT_DIR, SEG_OUT_DIR, COMP_DET_DIR, COMP_SEG_DIR]:
-            os.makedirs(d, exist_ok=True)
-            
-        init_classes_from_coco(STANDAR_SEG_DATASET_LOCATION)
+        init_classes_from_coco(GOLDEN_SEG_DATASET_LOCATION)
         
         # Load Models (Detection)
         print("  [Visual] Loading Detection Models...")
@@ -836,8 +821,8 @@ def main():
         sam2_model = SAM(SAM_MODEL_PATH)
         
         # Load GT COCO Anotasi
-        coco_det = load_gt_annotations(STANDAR_DET_DATASET_LOCATION)
-        coco_seg = load_gt_annotations(STANDAR_SEG_DATASET_LOCATION)
+        coco_det = load_gt_annotations(GOLDEN_DET_DATASET_LOCATION)
+        coco_seg = load_gt_annotations(GOLDEN_SEG_DATASET_LOCATION)
         
         img_names = sorted([f for f in os.listdir(IMAGE_SAMPLES_DIR) if f.lower().endswith(('.jpg', '.png', '.jpeg'))])
         print(f"  [Visual] Memproses visualisasi untuk {len(img_names)} gambar...")
@@ -891,11 +876,11 @@ def main():
             img_mrcnn_det = draw_custom(img_path, bmrcnn, None, cmrcnn, clsmrcnn, color=(0, 255, 255))
             if img_mrcnn_det is not None: cv2.imwrite(os.path.join(DET_OUT_DIR, f"maskrcnn_{img_name}"), img_mrcnn_det)
             
-            # 5. Hybrid Detection V8 (YOLOv8m + SAM2)
+            # 5. Hybrid Detection V8 (YOLOv8m + SAM2) — STANDARDIZED: Menggunakan Tensor GPU Mentah (res8_det.boxes.xyxy)
             sam_m_det_v8 = None
             if len(b8) > 0:
                 try:
-                    sam_res_det_v8 = sam2_model(res8_det.orig_img, bboxes=b8.tolist(), device=device_str, verbose=False)[0]
+                    sam_res_det_v8 = sam2_model(res8_det.orig_img, bboxes=res8_det.boxes.xyxy, device=device_str, verbose=False)[0]
                     if sam_res_det_v8.masks is not None:
                         sam_m_det_v8 = sam_res_det_v8.masks.data.cpu().numpy()
                         h, w = sam_res_det_v8.orig_img.shape[:2]
@@ -905,11 +890,11 @@ def main():
             img_hybrid_det_v8 = draw_custom(img_path, b8, sam_m_det_v8, c8, cls8, color=(255, 0, 255))
             if img_hybrid_det_v8 is not None: cv2.imwrite(os.path.join(DET_OUT_DIR, f"hybrid_v8_{img_name}"), img_hybrid_det_v8)
             
-            # 5.1 Hybrid Detection V11 (YOLO11l + SAM2)
+            # 5.1 Hybrid Detection V11 (YOLO11l + SAM2) — STANDARDIZED: Menggunakan Tensor GPU Mentah (res11_det.boxes.xyxy)
             sam_m_det_v11 = None
             if len(b11) > 0:
                 try:
-                    sam_res_det_v11 = sam2_model(res11_det.orig_img, bboxes=b11.tolist(), device=device_str, verbose=False)[0]
+                    sam_res_det_v11 = sam2_model(res11_det.orig_img, bboxes=res11_det.boxes.xyxy, device=device_str, verbose=False)[0]
                     if sam_res_det_v11.masks is not None:
                         sam_m_det_v11 = sam_res_det_v11.masks.data.cpu().numpy()
                         h, w = sam_res_det_v11.orig_img.shape[:2]
@@ -985,11 +970,11 @@ def main():
             img_mrcnn_seg = draw_custom(img_path, bmrcnn, mmrcnn_resized, cmrcnn, clsmrcnn, color=(0, 255, 255))
             if img_mrcnn_seg is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"maskrcnn_{img_name}"), img_mrcnn_seg)
 
-            # 5. Hybrid Seg V8 (YOLOv8m-Seg + SAM2)
+            # 5. Hybrid Seg V8 (YOLOv8m-Seg + SAM2) — STANDARDIZED: Menggunakan Tensor GPU Mentah (res8_seg.boxes.xyxy)
             sam_m_seg_v8 = None
             if len(b8s) > 0:
                 try:
-                    sam_res_seg_v8 = sam2_model(res8_seg.orig_img, bboxes=b8s.tolist(), device=device_str, verbose=False)[0]
+                    sam_res_seg_v8 = sam2_model(res8_seg.orig_img, bboxes=res8_seg.boxes.xyxy, device=device_str, verbose=False)[0]
                     if sam_res_seg_v8.masks is not None:
                         sam_m_seg_v8 = sam_res_seg_v8.masks.data.cpu().numpy()
                         h, w = sam_res_seg_v8.orig_img.shape[:2]
@@ -999,11 +984,11 @@ def main():
             img_hybrid_seg_v8 = draw_custom(img_path, b8s, sam_m_seg_v8, c8s, cls8s, color=(255, 0, 255))
             if img_hybrid_seg_v8 is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"hybrid_v8_{img_name}"), img_hybrid_seg_v8)
 
-            # 5.1 Hybrid Seg V11 (YOLO11l-Seg + SAM2)
+            # 5.1 Hybrid Seg V11 (YOLO11l-Seg + SAM2) — STANDARDIZED: Menggunakan Tensor GPU Mentah (res11_seg.boxes.xyxy)
             sam_m_seg_v11 = None
             if len(b11s) > 0:
                 try:
-                    sam_res_seg_v11 = sam2_model(res11_seg.orig_img, bboxes=b11s.tolist(), device=device_str, verbose=False)[0]
+                    sam_res_seg_v11 = sam2_model(res11_seg.orig_img, bboxes=res11_seg.boxes.xyxy, device=device_str, verbose=False)[0]
                     if sam_res_seg_v11.masks is not None:
                         sam_m_seg_v11 = sam_res_seg_v11.masks.data.cpu().numpy()
                         h, w = sam_res_seg_v11.orig_img.shape[:2]
@@ -1029,9 +1014,9 @@ def main():
                 os.path.join(COMP_SEG_DIR, f"grid_seg_v11_{img_name}")
             )
             
-            flush_gpu(gpu_ids[0], f"visuals_{img_name}")
+            flush_gpu(gpu_ids[0], f"visuals_gold_{img_name}")
             
-        print(f"\n>>> FASE 2 SELESAI. Visualisasi tersimpan di: {STD_VIS_DIR}")
+        print(f"\n>>> FASE 2 SELESAI. Visualisasi Golden tersimpan di: {GOLD_VIS_DIR}")
 
 if __name__ == "__main__":
     main()

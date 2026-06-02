@@ -243,7 +243,24 @@ def evaluate_coco_predictions(coco_gt_dict, image_ids, predictions, iou_type="bb
     """
     from pycocotools.coco import COCO
     from pycocotools.cocoeval import COCOeval
+    import copy
     
+    # Filter empty segmentations for segm evaluation to prevent pycocotools crash
+    if iou_type == "segm":
+        coco_gt_dict = copy.deepcopy(coco_gt_dict)
+        valid_anns = []
+        for ann in coco_gt_dict.get("annotations", []):
+            seg = ann.get("segmentation")
+            # segmentation can be a dict (RLE) or list (polygon)
+            if seg and (isinstance(seg, dict) or (isinstance(seg, list) and len(seg) > 0)):
+                valid_anns.append(ann)
+            else:
+                # Provide a tiny dummy mask to prevent crash if we want to keep the GT
+                # or just ignore it. Ignoring it is safer but will count as False Positive
+                # if the model predicts it. We'll just remove it for stability.
+                pass
+        coco_gt_dict["annotations"] = valid_anns
+
     # Create COCO GT object from dict
     coco_gt = COCO()
     coco_gt.dataset = coco_gt_dict

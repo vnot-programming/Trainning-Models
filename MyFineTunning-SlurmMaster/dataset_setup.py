@@ -62,6 +62,16 @@ rf = Roboflow(api_key="tjeBcHkWc1oOc0oOv9kI")
 project = rf.workspace("vnot").project("me-bottle-isempty-ku3-h61lr-seg")
 version = project.version(1)
 dataset = version.download("coco-segmentation")
+
+
+# Evaluation Dataset - For All Evaluation | Pipeline, Standar 
+!pip install roboflow
+from roboflow import Roboflow
+rf = Roboflow(api_key="F0VtV8b5YBdJHZbasy0w")
+project = rf.workspace("wbc-laboratory").project("me-bottle-isempty-ku3")
+version = project.version(9)
+dataset = version.download("coco")
+
 """
 
 import os
@@ -103,6 +113,11 @@ STANDAR_DET_WORKSPACE  = "vnot"
 STANDAR_DET_PROJECT    = "me-bottle-isempty-ku3-h61lr"
 STANDAR_DET_VERSION    = 2
 STANDAR_DET_FORMAT     = "coco"
+                
+EVAL_DATASET_WORKSPACE = "wbc-laboratory"
+EVAL_DATASET_PROJECT = "me-bottle-isempty-ku3"
+EVAL_DATASET_VERSION = 9
+EVAL_DATASET_FORMAT = "coco"
 
 # ==============================================================================
 # DATASETS_DIR — dari config_shared (jika sudah diimport), atau fallback manual
@@ -404,6 +419,44 @@ def setup_h61lr_segmentation_dataset(key_unu: Optional[str]) -> str:
         raise RuntimeError(f"❌ Gagal download dataset h61lr segmentation: {e}") from e
 
 # ==============================================================================
+# DATASET EVALUASI COCO (V9)
+# ==============================================================================
+def setup_eval_dataset(key: Optional[str]) -> str:
+    """
+    Download dataset wbc-laboratory/me-bottle-isempty-ku3 versi 9 dalam format COCO
+    untuk keperluan Evaluasi Kuantitatif (CSV).
+    """
+    datasets_dir = _get_datasets_dir()
+    target_loc = str(datasets_dir / "eval_dataset_coco")
+    
+    # Cek apakah sudah ada secara lokal
+    if os.path.isdir(target_loc) and os.path.isfile(os.path.join(target_loc, "valid", "_annotations.coco.json")):
+        print(f"\n📁 Dataset Evaluasi COCO (V9): ditemukan lokal → {target_loc}")
+        return target_loc
+
+    print(f"\n🌐 Dataset Evaluasi COCO (V9): belum ada. Download dari Roboflow...")
+    if not key:
+        raise RuntimeError(
+            f"❌ API Key tidak ditemukan. Set {_KEY_NAME} di .env atau environment variable."
+        )
+
+    try:
+        from roboflow import Roboflow
+        rf = Roboflow(api_key=key)
+        project = rf.workspace(EVAL_DATASET_WORKSPACE).project(EVAL_DATASET_PROJECT)
+        dataset = project.version(EVAL_DATASET_VERSION).download(
+            EVAL_DATASET_FORMAT,
+            location=target_loc,
+            overwrite=False
+        )
+        location = dataset.location
+    except Exception as e:
+        raise RuntimeError(f"❌ Gagal download dataset evaluasi COCO V9: {e}") from e
+
+    print(f"   → {location}")
+    return location
+
+# ==============================================================================
 # SETUP SEMUA DATASET
 # ==============================================================================
 def setup_all_datasets() -> dict:
@@ -420,23 +473,22 @@ def setup_all_datasets() -> dict:
     coco_det_location = setup_coco_detection_dataset_unu(key_unu)
     h61lr_det_yaml = setup_h61lr_detection_dataset(key_unu)
     h61lr_seg_yaml = setup_h61lr_segmentation_dataset(key_unu)
+    eval_location = setup_eval_dataset(key)
 
-    print(f"\n[Dataset] ✅ Deteksi    : {det_location}")
-    print(f"[Dataset] ✅ Segmentasi : {seg_location}")
-    print(f"[Dataset] ✅ Golden Seg   : {coco_seg_location}")
-    print(f"[Dataset] ✅ Golden Det   : {coco_det_location}")
-    print(f"[Dataset] ✅ Standart Det  : {h61lr_det_yaml}")
-    print(f"[Dataset] ✅ Standart Seg  : {h61lr_seg_yaml}")
+    print(f"\n[Dataset] ✅ Deteksi     : {det_location}")
+    print(f"[Dataset] ✅ Segmentasi  : {seg_location}")
+    print(f"[Dataset] ✅ Golden Seg  : {coco_seg_location}")
+    print(f"[Dataset] ✅ Golden Det  : {coco_det_location}")
+    print(f"[Dataset] ✅ Standart Det: {h61lr_det_yaml}")
+    print(f"[Dataset] ✅ Standart Seg: {h61lr_seg_yaml}")
+    print(f"[Dataset] ✅ Eval COCO V9: {eval_location}")
 
-        # "det_location": det_location,
-        # "det_yaml":     det_yaml,
-        # "seg_location": seg_location,
-        # "seg_yaml":     seg_yaml,
     return {
         "coco_seg_location": coco_seg_location,
         "coco_det_location": coco_det_location,
         "h61lr_det_yaml": h61lr_det_yaml,
         "h61lr_seg_yaml": h61lr_seg_yaml,
+        "eval_location": eval_location,
         "key":          key,
         "key_unu":      key_unu,
     }
