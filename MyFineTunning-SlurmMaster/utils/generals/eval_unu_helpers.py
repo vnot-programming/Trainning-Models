@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-utils/eval_unu_helpers.py
-=========================
+utils/generals/eval_unu_helpers.py
+==================================
 Shared helpers untuk eval_unu_dual.py — Boundary IoU bootstrap,
 inference functions, evaluation runners, dan visual generators.
 """
@@ -10,9 +10,14 @@ import os, sys, gc, subprocess, copy, time
 import numpy as np
 import cv2
 
-_UTILS_DIR = os.path.abspath(os.path.dirname(__file__))
+# ==============================================================================
+# PATH SETUP — resolve ROOT dari lokasi file ini (utils/generals/eval_unu_helpers.py)
+# ==============================================================================
+_THIS_DIR = os.path.abspath(os.path.dirname(__file__))
+_UTILS_DIR = os.path.abspath(os.path.join(_THIS_DIR, ".."))
 ROOT = os.path.abspath(os.path.join(_UTILS_DIR, ".."))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, _UTILS_DIR)
 
 import torch
 from config_shared import IMAGE_SIZE, NUM_CLASSES, get_output_dir, MODEL_COLORS

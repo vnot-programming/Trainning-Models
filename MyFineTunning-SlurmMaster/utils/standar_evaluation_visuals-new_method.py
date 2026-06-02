@@ -49,10 +49,8 @@ from ultralytics import YOLO, SAM
 from config_shared import (
     get_output_dir, NUM_CLASSES, IMAGE_SIZE, WORKSPACE_DIR, IMAGE_SAMPLES_DIR,
     STANDAR_SEG_DATASET_LOCATION, STANDAR_DET_DATASET_LOCATION, PAPER1_VIS_DIR,
-    VISUAL_CONF, VISUAL_IOU
+    VISUAL_CONF, VISUAL_IOU, flush_gpu
 )
-from eval_unu_helpers import flush_gpu
-from eval_paper import load_maskrcnn
 
 # ====================================================================
 # Konfigurasi Direktori — Standard Dataset & New Method
@@ -76,6 +74,22 @@ SAM_MODEL_PATH = os.path.join(ROOT, "models", "sam2.1_t.pt")
 # ====================================================================
 # Util Functions
 # ====================================================================
+def load_maskrcnn(device):
+    import torchvision
+    from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+    from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+    model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None)
+    in_box = model.roi_heads.box_predictor.cls_score.in_features
+    model.roi_heads.box_predictor = FastRCNNPredictor(in_box, NUM_CLASSES + 1)
+    in_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
+    model.roi_heads.mask_predictor = MaskRCNNPredictor(in_mask, 256, NUM_CLASSES + 1)
+    pt = os.path.join(get_output_dir("maskrcnn"), "weights", "best.pt")
+    if os.path.exists(pt):
+        model.load_state_dict(torch.load(pt, map_location=device, weights_only=True))
+        model.to(device).eval()
+        return model
+    return None
+
 CLASS_NAMES = []
 COLORS = []
 

@@ -694,6 +694,21 @@ def generate_models_markdown_summary():
     print("[Models] ✅ Rangkuman markdown berhasil dibuat!")
 
 
+def flush_gpu(label: str = ""):
+    """Membersihkan cache CUDA dan melakukan garbage collection secara paksa untuk menghemat VRAM."""
+    import gc
+    import torch
+    gc.collect()
+    torch.cuda.empty_cache()
+    if torch.cuda.is_available():
+        try:
+            torch.cuda.synchronize()
+            free, total = torch.cuda.mem_get_info(0)
+            print(f"  [MemFlush] {label} — VRAM: {free/1e9:.2f}/{total/1e9:.2f} GB", flush=True)
+        except Exception:
+            pass
+
+
 if __name__ == "__main__":
     print("============================================================")
     print("  MyFineTunning — Unduh Model & Buat Rangkuman")

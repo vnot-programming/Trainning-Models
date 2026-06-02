@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-eval_boundary_iou.py  (ROOT — MyFineTunning-dev)
-=================================================
+utils/generals/eval_boundary_iou.py
+===================================
 Evaluasi Boundary Mask AP untuk semua model segmentasi menggunakan
 Boundary IoU (Cheng et al., CVPR 2021).
 
@@ -15,16 +15,13 @@ Model yang dievaluasi:
   5. Hybrid (YOLO11l + SAM2)
 
 Cara menjalankan:
-    python eval_boundary_iou.py
-    python eval_boundary_iou.py --gpus 0
-    python eval_boundary_iou.py --gpus 0,1
+    python utils/generals/eval_boundary_iou.py
+    python utils/generals/eval_boundary_iou.py --gpus 0
 
 Atau via tmux (recommended):
-tmux new-session -d -s eval_boundary_iou "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && \\
-      cd /home/my/Trainning-Models/MyFineTunning-dev && \\
-      python -u eval_boundary_iou.py 2>&1 | tee eval_boundary_iou.log"
-
-tmux new-session -d -s eval_boundary_iou "cd /home/my/Trainning-Models/MyFineTunning-dev && python3 eval_boundary_iou.py 2>&1 | tee eval_boundary_iou.log"
+tmux new-session -d -s eval_boundary_iou "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && \
+      cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && \
+      python -u utils/generals/eval_boundary_iou.py 2>&1 | tee utils/generals/eval_boundary_iou.log"
 
 Output:
     REPORTS_DIR/report_boundary_iou_comparison.csv
@@ -38,8 +35,15 @@ import cv2
 os.environ["TORCHDYNAMO_DISABLE"]     = "1"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-_SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
-sys.path.insert(0, _SCRIPT_DIR)
+# ==============================================================================
+# PATH SETUP — resolve ROOT dari lokasi file ini (utils/generals/eval_boundary_iou.py)
+# ==============================================================================
+_THIS_DIR = os.path.abspath(os.path.dirname(__file__))
+_UTILS_DIR = os.path.abspath(os.path.join(_THIS_DIR, ".."))
+ROOT = os.path.abspath(os.path.join(_UTILS_DIR, ".."))
+sys.path.insert(0, ROOT)
+sys.path.insert(0, _UTILS_DIR)
+sys.path.insert(0, _THIS_DIR)
 
 import torch
 from config_shared import (
@@ -112,17 +116,9 @@ def _ensure_boundary_iou_installed() -> bool:
     return False
 
 
-
 def _patch_boundary_iou_numpy(clone_dir: str) -> None:
-    """Patch deprecated np.float/np.bool/np.int aliases + numpy bbox comparison.
-
-    boundary-iou-api menggunakan `np.float` yang sudah dihapus sejak NumPy 1.24.
-    Selain itu, loadRes() di coco.py gagal ketika dt_segm mengandung field 'bbox'
-    sebagai numpy array (4,) karena perbandingan `!= []` tidak aman untuk numpy.
-    Karena install via `-e` (editable), patch langsung ke source tree.
-    """
+    """Patch deprecated np.float/np.bool/np.int aliases + numpy bbox comparison."""
     import re
-    # ── Patch 1: deprecated numpy aliases ─────────────────────────────────────
     targets_numpy = [
         os.path.join(clone_dir, "boundary_iou", "coco_instance_api", "cocoeval.py"),
         os.path.join(clone_dir, "boundary_iou", "lvis_instance_api", "eval.py"),
@@ -150,11 +146,6 @@ def _patch_boundary_iou_numpy(clone_dir: str) -> None:
                 f.write(patched)
             print(f"  [Patch] ✅ NumPy alias dipatch: {os.path.basename(fpath)}")
 
-    # ── Patch 2: loadRes bbox comparison agar aman dengan numpy array ──────────
-    # pycocotools.loadRes() memodifikasi dt_segm in-place & menambah field 'bbox'
-    # sebagai numpy array. Ketika list yang sama diteruskan ke boundary_iou.loadRes(),
-    # baris `not anns[0]['bbox'] == []` gagal karena numpy array tidak bisa
-    # dibandingkan langsung dengan list kosong menggunakan operator ==.
     coco_path = os.path.join(
         clone_dir, "boundary_iou", "coco_instance_api", "coco.py"
     )
@@ -171,7 +162,6 @@ def _patch_boundary_iou_numpy(clone_dir: str) -> None:
             with open(coco_path, "w", encoding="utf-8") as f:
                 f.write(patched)
             print(f"  [Patch] ✅ loadRes bbox numpy-safe dipatch: coco.py")
-
 
 
 def _flush_gpu(label: str = ""):
@@ -232,12 +222,7 @@ def _run_boundary_eval(coco_gt, dt_segm: list, label: str) -> dict:
 
 
 def _run_standard_mask_eval(coco_gt, dt_segm: list, label: str) -> dict:
-    """Jalankan COCOeval STANDAR (pycocotools) dengan iouType='segm'.
-
-    Ini adalah Mask mAP standar industri — sengaja dijalankan berdampingan
-    dengan Boundary AP untuk membuktikan bahwa model Hybrid kalah pada
-    metrik ini (karena GT bias/kasar) namun unggul pada tepian presisi.
-    """
+    """Jalankan COCOeval STANDAR (pycocotools) dengan iouType='segm'."""
     from pycocotools.coco import COCO as StdCOCO
     from pycocotools.cocoeval import COCOeval as StdCOCOeval
 
@@ -264,10 +249,6 @@ def _run_standard_mask_eval(coco_gt, dt_segm: list, label: str) -> dict:
     }
 
 
-# ==============================================================================
-# GROUND TRUTH
-# ==============================================================================
-
 def _build_gt(split: str = "valid"):
     """Build pycocotools COCO GT object dari SEG_YAML."""
     from pycocotools.coco import COCO
@@ -282,10 +263,6 @@ def _build_gt(split: str = "valid"):
     print(f"[GT] {len(image_ids)} gambar, {len(coco_gt_dict['annotations'])} anotasi.")
     return coco_gt, image_ids, coco_gt_dict
 
-
-# ==============================================================================
-# INFERENCE: YOLO-SEG (yolov8m, yolov9c, yolo11m)
-# ==============================================================================
 
 def _infer_yolo_seg(model_key: str, pt_path: str, image_ids: dict,
                     device_str: str) -> list:
@@ -335,23 +312,6 @@ def _infer_yolo_seg(model_key: str, pt_path: str, image_ids: dict,
     return dt_segm
 
 
-# ==============================================================================
-# INFERENCE: MASK R-CNN (torchvision state_dict)
-# ==============================================================================
-
-def _build_maskrcnn_model(device: torch.device) -> torch.nn.Module:
-    import torchvision
-    from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-    from torchvision.models.detection.mask_rcnn   import MaskRCNNPredictor
-
-    model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None)
-    in_box = model.roi_heads.box_predictor.cls_score.in_features
-    model.roi_heads.box_predictor = FastRCNNPredictor(in_box, NUM_CLASSES + 1)
-    in_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
-    model.roi_heads.mask_predictor = MaskRCNNPredictor(in_mask, 256, NUM_CLASSES + 1)
-    return model.to(device)
-
-
 def _infer_maskrcnn(pt_path: str, image_ids: dict, device: torch.device) -> list:
     """Load Mask R-CNN dari state_dict best.pt, jalankan inference."""
     import torchvision.transforms.functional as TF
@@ -399,10 +359,6 @@ def _infer_maskrcnn(pt_path: str, image_ids: dict, device: torch.device) -> list
     return dt_segm
 
 
-# ==============================================================================
-# INFERENCE: HYBRID (YOLO11m + SAM2)
-# ==============================================================================
-
 def _infer_hybrid(yolo_pt: str, sam_pt: str, image_ids: dict,
                   device_str: str) -> list:
     """YOLO11m deteksi → SAM2 segmentasi per bbox."""
@@ -446,7 +402,7 @@ def _infer_hybrid(yolo_pt: str, sam_pt: str, image_ids: dict,
 
         try:
             sam_result = sam_model.predict(det_result[0].orig_img,
-                                           bboxes=pred_boxes, verbose=False)
+                                           bboxes=pred_boxes.tolist(), verbose=False)
         except Exception as e:
             print(f"  ⚠️ SAM2 error: {e}")
             sam_result = None
@@ -478,11 +434,7 @@ def _infer_hybrid(yolo_pt: str, sam_pt: str, image_ids: dict,
     return dt_segm
 
 
-# ==============================================================================
-
-
 def _save_csv(rows: list, out_dir: str):
-
     os.makedirs(out_dir, exist_ok=True)
     csv_path = os.path.join(out_dir, "report_boundary_iou_comparison.csv")
     fields = [
@@ -543,7 +495,7 @@ def _save_markdown(rows: list, out_dir: str):
         "Standard COCO Mask mAP menggunakan **pixel-level IoU** antara prediksi dan GT.",
         "GT poligon manusia (Roboflow) seringkali kasar — tidak mengikuti tepian objek",
         "secara akurat. SAM2 menghasilkan mask yang *terlalu presisi* dibanding GT kasar,",
-        "sehingga IoU-nya justru lebih rendah. Ini adalah **bias anotasi**, bukan",
+        "soalnya IoU-nya justru lebih rendah. Ini adalah **bias anotasi**, bukan",
         "kelemahan model.",
         "",
         "### Mengapa Boundary AP Adalah Metrik yang Lebih Adil?",
@@ -566,11 +518,6 @@ def _save_markdown(rows: list, out_dir: str):
     print(f"✅ Markdown: {md_path}")
     return md_path
 
-
-
-# ==============================================================================
-# MAIN RUNNER
-# ==============================================================================
 
 def run_evaluation(device_str: str = "cuda:0"):
     """Evaluasi Boundary AP untuk semua model secara sequential."""
@@ -616,7 +563,7 @@ def run_evaluation(device_str: str = "cuda:0"):
             "label":     "Hybrid (YOLO11l+SAM2)",
             "type":      "hybrid",
             "yolo_key":  "yolo11l",
-            "sam_path":  os.path.join(_SCRIPT_DIR, "models", "sam2.1_t.pt"),
+            "sam_path":  os.path.join(ROOT, "models", "sam2.1_t.pt"),
         },
     ]
 
@@ -658,10 +605,6 @@ def run_evaluation(device_str: str = "cuda:0"):
             dt_segm = []
 
         # ── Evaluasi Dual: Standard Mask mAP + Boundary AP ────────────────────
-        # PENTING: deepcopy wajib — pycocotools.loadRes() memodifikasi dt_segm
-        # in-place (menambahkan field 'bbox' sebagai numpy array). Jika list yang
-        # sama diteruskan ke boundary_iou.loadRes(), perbandingan numpy array (4,)
-        # vs [] akan gagal dengan ValueError.
         import copy
         std_metrics   = _run_standard_mask_eval(coco_gt, copy.deepcopy(dt_segm), label)
         bound_metrics = _run_boundary_eval(coco_gt, copy.deepcopy(dt_segm), label)
@@ -720,9 +663,6 @@ def run_evaluation(device_str: str = "cuda:0"):
     return rows
 
 
-# ==============================================================================
-# ENTRYPOINT
-# ==============================================================================
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Boundary IoU Evaluation — Semua Model Segmentasi"

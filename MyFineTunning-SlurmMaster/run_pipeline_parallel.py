@@ -24,6 +24,8 @@ PANDUAN EKSEKUSI AGAR TIDAK TERPUTUS (WORKFLOW TMUX YANG BENAR):
    Tekan Ctrl+b, lalu tekan d. atau 
    di mac Tekan tombol control (^)+b tekan tombol d (untuk detach).
    (Untuk kembali melihat proses nanti, jalankan: tmux attach -t training_pipeline)
+5. Melakukan Evaluasi Only
+    cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && LOG_DIR=$(python3 -c "import config_shared, os; print(os.path.join(config_shared.WORKSPACE_DIR, 'logs'))") && mkdir -p "$LOG_DIR" && python3 run_pipeline_parallel.py --eval-only 2>&1 | tee "$LOG_DIR/run_pipeline_parallel-eval-only.log"
 
 Catatan: Argumen --gpus bersifat opsional. Jika tidak diisi, sistem akan 
 menggunakan seluruh GPU yang tersedia secara otomatis.
@@ -164,6 +166,13 @@ class ParallelScheduler:
         for spec in eval_specs:
             # Jika eval-only aktif, evaluasi tidak di-skip. Jika tidak, ikuti aturan skip model.
             is_skipped = False if self.eval_only else (spec["name"] in self.skip_models)
+            # Saat eval_only: hapus dependency ke training tasks (yang sudah SKIPPED).
+            # Jika dep training dibiarkan, _update_failed_dependencies() akan
+            # otomatis men-cascade-skip eval tasks karena dep = SKIPPED.
+            if self.eval_only:
+                resolved_deps = []  # Eval tasks berdiri sendiri — tidak ada dep training
+            else:
+                resolved_deps = spec["deps"]
             self.tasks[spec["id"]] = {
                 "id": spec["id"],
                 "label": spec["label"],
@@ -172,7 +181,7 @@ class ParallelScheduler:
                 "script": spec["script"],
                 "args": spec["args"],
                 "device_arg": spec["device_arg"],
-                "dependencies": spec["deps"],
+                "dependencies": resolved_deps,
                 "state": "SKIPPED" if is_skipped else "PENDING",
                 "proc": None,
                 "gpu": None,
@@ -182,8 +191,23 @@ class ParallelScheduler:
             }
             
         # Daftarkan Global Evaluation Task
-        # Global eval hanya aktif jika ada model yang ditraining / dievaluasi
-        run_any = any(self.tasks[tid]["state"] == "PENDING" for tid in ["train_yolo8", "train_yolo9", "train_yolo10", "train_yolo11", "train_maskrcnn", "train_rtdetr"])
+        # Global eval aktif jika:
+        #   (a) ada training task yang PENDING (skenario normal), ATAU
+        #   (b) --eval-only aktif → eval tasks sudah PENDING (deps training sudah dikosongkan)
+        _eval_task_ids = ["eval_yolo8", "eval_yolo9", "eval_yolo10", "eval_yolo11",
+                          "eval_maskrcnn", "eval_hybrid", "eval_rtdetr"]
+        run_any = (
+            any(self.tasks[tid]["state"] == "PENDING"
+                for tid in ["train_yolo8", "train_yolo9", "train_yolo10",
+                            "train_yolo11", "train_maskrcnn", "train_rtdetr"])
+            or
+            any(self.tasks[tid]["state"] == "PENDING" for tid in _eval_task_ids)
+        )
+        # Saat eval_only: global_eval hanya bergantung pada eval tasks (bukan train tasks)
+        global_deps = [
+            dep for dep in global_eval["deps"]
+            if self.tasks[dep]["state"] != "SKIPPED"
+        ]
         self.tasks[global_eval["id"]] = {
             "id": global_eval["id"],
             "label": global_eval["label"],
@@ -192,7 +216,7 @@ class ParallelScheduler:
             "script": global_eval["script"],
             "args": global_eval["args"],
             "device_arg": global_eval["device_arg"],
-            "dependencies": [dep for dep in global_eval["deps"] if self.tasks[dep]["state"] != "SKIPPED"],
+            "dependencies": global_deps,
             "state": "PENDING" if run_any else "SKIPPED",
             "proc": None,
             "gpu": None,

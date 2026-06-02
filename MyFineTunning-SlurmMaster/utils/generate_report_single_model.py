@@ -1,69 +1,104 @@
 # -*- coding: utf-8 -*-
 """
 utils/generate_report_single_model.py
-=======================================
-Skrip sentral untuk:
-  1. Menghasilkan visualisasi prediksi per gambar sampel:
-     - N gambar prediksi individual (satu per varian model)
-     - 1 panel grid (semua varian + Ground Truth)
-  2. Mengompilasi laporan CSV dengan struktur hierarkis:
-     - Per-varian: reports/pipeline/csv/<family>/<variant>_<task>.csv
-     - Per-model:  reports/pipeline/csv/kompilasi_<family>_<task>.csv
-     - ALL:        reports/pipeline/csv/kompilasi_ALL_<task>.csv
+================================================================================
+SKRIP SENTRAL EVALUASI KUANTITATIF & VISUALISASI KUALITATIF MULTI-MODEL
+================================================================================
+Penulis: Google Professional Full Stack Developer Persona (Antigravity AI Agent)
+Proyek: Fine-Tuning & Benchmarking 49 Model YOLO & Hybrid (SAM2) — Scopus Q1/Q2
 
-Cara menjalankan:
-    # Satu family (semua varian):
-    python -u utils/generate_report_single_model.py --family yolo8 --gpus 0
+Deskripsi Fungsional:
+--------------------
+Skrip ini dirancang secara terintegrasi untuk mengeksekusi dua pilar evaluasi:
+  1. Pilar Visualisasi Kualitatif (Sample-Based):
+     - Membangun panel grid komparatif gabungan (_panel.jpg) per model family.
+     - Menyusun visualisasi dengan urutan Ground Truth (GT) di posisi awal (indeks pertama).
+     - Menyematkan Title Bar minimalis putih bersih dengan perataan tengah (Horizontal Center).
+     - Menampilkan label teks bounding box kontras otomatis (hitam/putih) terhadap warna box.
+     - Mengabaikan penyimpanan gambar prediksi individual demi efisiensi VRAM dan kapasitas disk.
+     - Menyimpan seluruh hasil visualisasi secara hierarkis ke dalam subfolder family masing-masing.
 
-    # Family spesifik dengan varian terpilih:
-    python -u utils/generate_report_single_model.py --family yolo9 --variants yolov9m,yolov9e --gpus 0
+  2. Pilar Evaluasi Kuantitatif (Metric-Based):
+     - Mengalkulasi metrik mAP50 dan mAP50-95 (COCOeval) secara paralel terdistribusi.
+     - Mengekspor laporan evaluasi CSV berstruktur hierarkis ke subfolder tujuan.
+     - Menghasilkan laporan kompilasi per-family serta laporan gabungan global (ALL).
 
-    # Semua family sekaligus:
-    python -u utils/generate_report_single_model.py --family all --gpus 0
+Petunjuk Pengoperasian (CLI Usage):
+----------------------------------
+Langkah 1: Hubungkan terminal Anda ke Compute Node GPU yang telah dibooking:
+           $ cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils
+           $ ./attach_gpu.sh
 
-Struktur output (di dalam WORKSPACE_DIR):
-    reports/pipeline/
-    ├── csv/
-    │   ├── yolo8/
-    │   │   ├── yolov8m_detection.csv
-    │   │   ├── yolov8m-seg_segmentation.csv
-    │   │   ├── yolov8x_detection.csv
-    │   │   └── yolov8x-seg_segmentation.csv
-    │   ├── yolo9/
-    │   │   ├── yolov9m_detection.csv
-    │   │   ├── yolov9c-seg_segmentation.csv
-    │   │   ├── yolov9e_detection.csv
-    │   │   └── yolov9e-seg_segmentation.csv
-    │   ├── yolov10/
-    │   │   ├── yolov10m_detection.csv
-    │   │   └── yolov10x_detection.csv
-    │   ├── yolo11/
-    │   │   ├── yolo11n_detection.csv
-    │   │   ├── yolo11n-seg_segmentation.csv
-    │   │   ├── yolo11l_detection.csv
-    │   │   ├── yolo11l-seg_segmentation.csv
-    │   │   ├── yolo11x_detection.csv
-    │   │   └── yolo11x-seg_segmentation.csv
-    │   ├── maskrcnn/
-    │   │   └── maskrcnn_segmentation.csv
-    │   ├── hybrid/
-    │   │   └── hybrid_segmentation.csv
-    │   ├── kompilasi_yolo8_detection.csv
-    │   ├── kompilasi_yolo8_segmentation.csv
-    │   ├── kompilasi_yolo9_detection.csv
-    │   ├── kompilasi_yolo9_segmentation.csv
-    │   ├── kompilasi_yolov10_detection.csv
-    │   ├── kompilasi_yolo11_detection.csv
-    │   ├── kompilasi_yolo11_segmentation.csv
-    │   ├── kompilasi_maskrcnn_segmentation.csv
-    │   ├── kompilasi_hybrid_segmentation.csv
-    │   ├── kompilasi_ALL_detection.csv
-    │   └── kompilasi_ALL_segmentation.csv
-    └── visuals/
-        ├── A1_yolov8m.jpg
-        ├── A1_yolov8m-seg.jpg
-        ├── A1_yolov8_panel.jpg          ← Grid: semua varian + GT
-        └── ...
+Langkah 2: Jalankan skrip evaluasi dengan parameter yang sesuai:
+           # A. Evaluasi seluruh varian dalam satu family (Contoh: YOLOv8)
+           $ python3 -u utils/generate_report_single_model.py --family yolo8 --gpus 0
+
+           # B. Evaluasi varian tertentu secara spesifik (Contoh: YOLOv9m & YOLOv9e)
+           $ python3 -u utils/generate_report_single_model.py --family yolo9 --variants yolov9m,yolov9e --gpus 0
+
+           # C. Eksekusi orkestrasi otomatis untuk seluruh family sekaligus (Pipeline Mode)
+           $ WS_ID=$(cat .workspace_id)
+           $ LOG_DIR="data-files/MyFineTunning-${WS_ID}/logs"
+           $ mkdir -p "$LOG_DIR"
+           $ python3 -u utils/generate_report_single_model.py --family all 2>&1 | tee "$LOG_DIR/1_generate_report_single_model.log"
+
+Struktur Direktori Output (di dalam WORKSPACE_DIR):
+-------------------------------------------------
+reports/pipeline/
+├── csv/
+│   ├── yolo8/
+│   │   ├── yolov8m_detection.csv
+│   │   ├── yolov8m-seg_segmentation.csv
+│   │   ├── yolov8x_detection.csv
+│   │   └── yolov8x-seg_segmentation.csv
+│   ├── yolo9/
+│   │   ├── yolov9m_detection.csv
+│   │   ├── yolov9c-seg_segmentation.csv
+│   │   ├── yolov9e_detection.csv
+│   │   └── yolov9e-seg_segmentation.csv
+│   ├── yolov10/
+│   │   ├── yolov10m_detection.csv
+│   │   └── yolov10x_detection.csv
+│   ├── yolo11/
+│   │   ├── yolo11n_detection.csv
+│   │   ├── yolo11n-seg_segmentation.csv
+│   │   ├── yolo11l_detection.csv
+│   │   ├── yolo11l-seg_segmentation.csv
+│   │   ├── yolo11x_detection.csv
+│   │   └── yolo11x-seg_segmentation.csv
+│   ├── maskrcnn/
+│   │   └── maskrcnn_segmentation.csv
+│   ├── hybrid/
+│   │   └── hybrid_segmentation.csv
+│   ├── rtdetr/
+│   │   └── rtdetr_detection.csv
+│   ├── kompilasi_yolo8_detection.csv
+│   ├── kompilasi_yolo8_segmentation.csv
+│   ├── kompilasi_yolo9_detection.csv
+│   ├── kompilasi_yolo9_segmentation.csv
+│   ├── kompilasi_yolov10_detection.csv
+│   ├── kompilasi_yolo11_detection.csv
+│   ├── kompilasi_yolo11_segmentation.csv
+│   ├── kompilasi_maskrcnn_segmentation.csv
+│   ├── kompilasi_hybrid_segmentation.csv
+│   ├── kompilasi_rtdetr_detection.csv
+│   ├── kompilasi_ALL_detection.csv
+│   └── kompilasi_ALL_segmentation.csv
+└── visuals/
+    ├── yolo8/
+    │   └── <sample_id>_yolo8_panel.jpg     ← Panel Grid: GT (indeks awal) + Varian YOLOv8
+    ├── yolo9/
+    │   └── <sample_id>_yolo9_panel.jpg     ← Panel Grid: GT (indeks awal) + Varian YOLOv9
+    ├── yolov10/
+    │   └── <sample_id>_yolov10_panel.jpg   ← Panel Grid: GT (indeks awal) + Varian YOLOv10
+    ├── yolo11/
+    │   └── <sample_id>_yolo11_panel.jpg    ← Panel Grid: GT (indeks awal) + Varian YOLO11
+    ├── maskrcnn/
+    │   └── <sample_id>_maskrcnn_panel.jpg  ← Panel Grid: GT (indeks awal) + Mask R-CNN
+    ├── hybrid/
+    │   └── <sample_id>_hybrid_panel.jpg    ← Panel Grid: GT (indeks awal) + Varian Hybrid
+    └── rtdetr/
+        └── <sample_id>_rtdetr_panel.jpg    ← Panel Grid: GT (indeks awal) + RT-DETR-L
 """
 
 from __future__ import annotations
@@ -232,9 +267,12 @@ def _get_csv_dir(family: str) -> str:
     return d
 
 
-def _get_visuals_dir() -> str:
-    """Kembalikan path folder output visual. Buat jika belum ada."""
-    d = os.path.join(REPORTS_DIR, "visuals")
+def _get_visuals_dir(family: str = None) -> str:
+    """Kembalikan path folder output visual, opsional dengan subdirektori family. Buat jika belum ada."""
+    if family:
+        d = os.path.join(REPORTS_DIR, "visuals", family)
+    else:
+        d = os.path.join(REPORTS_DIR, "visuals")
     os.makedirs(d, exist_ok=True)
     return d
 
@@ -242,6 +280,31 @@ def _get_visuals_dir() -> str:
 # ==============================================================================
 # MODUL 1 — VISUALISASI: Per gambar sampel → N prediksi individual + 1 panel grid
 # ==============================================================================
+
+def _get_contrast_color(bgr_color: tuple) -> tuple:
+    """Tentukan warna teks (hitam/putih) paling kontras dengan warna BGR background."""
+    B, G, R = bgr_color
+    brightness = 0.299 * R + 0.587 * G + 0.114 * B
+    return (0, 0, 0) if brightness > 127.5 else (255, 255, 255)
+
+
+def _load_class_names(yaml_path: str) -> dict:
+    """Load class names dictionary dari YAML dataset."""
+    try:
+        import yaml
+        if os.path.exists(yaml_path):
+            with open(yaml_path, "r") as f:
+                data = yaml.safe_load(f)
+            if data and "names" in data:
+                names_data = data["names"]
+                if isinstance(names_data, dict):
+                    return {int(k): v for k, v in names_data.items()}
+                elif isinstance(names_data, list):
+                    return {i: v for i, v in enumerate(names_data)}
+    except Exception as e:
+        print(f"  [Warning] Gagal memuat nama kelas dari {yaml_path}: {e}")
+    return {}
+
 
 def _draw_predictions_on_image(img_bgr, result, theme_color: tuple) -> None:
     """Gambar bounding box, label, dan mask pada image (in-place)."""
@@ -271,6 +334,9 @@ def _draw_predictions_on_image(img_bgr, result, theme_color: tuple) -> None:
         boxes_conf = result.boxes.conf.cpu().numpy()
         boxes_cls  = result.boxes.cls.cpu().numpy().astype(int)
 
+        # Contrast-safe text color
+        text_color = _get_contrast_color(theme_color)
+
         for i in range(len(boxes_xyxy)):
             x1, y1, x2, y2 = map(int, boxes_xyxy[i])
             conf    = float(boxes_conf[i])
@@ -283,7 +349,7 @@ def _draw_predictions_on_image(img_bgr, result, theme_color: tuple) -> None:
             (tw, th), _ = cv2.getTextSize(label_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
             cv2.rectangle(img_bgr, (x1, y1 - th - 6), (x1 + tw + 4, y1), theme_color, -1)
             cv2.putText(img_bgr, label_txt, (x1 + 2, y1 - 3),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, text_color, 1, cv2.LINE_AA)
 
 
 def generate_visuals_for_family(
@@ -310,7 +376,8 @@ def generate_visuals_for_family(
     import numpy as np
     from ultralytics import YOLO
 
-    visuals_dir = _get_visuals_dir()
+    visuals_dir = _get_visuals_dir(family)
+    names_dict = _load_class_names(SEG_YAML)
 
     # Validasi direktori samples
     if not os.path.isdir(IMAGE_SAMPLES_DIR):
@@ -348,52 +415,198 @@ def generate_visuals_for_family(
         panel_labels.append("Ground Truth")
 
         # --- Prediksi per varian ---
-        gpu_cycle = gpu_ids[0] if gpu_ids else 0  # Gunakan GPU pertama untuk visualisasi
+        gpu_cycle  = gpu_ids[0] if gpu_ids else 0
+        device_str = f"cuda:{gpu_cycle}"
+
         for spec in variants:
             model_key   = spec["key"]
             model_label = spec["label"]
-            pt_path     = os.path.join(get_output_dir(model_key), "weights", "best.pt")
+            theme_color = MODEL_COLORS.get(model_key, (255, 255, 0))
+
+            # ──────────────────────────────────────────────────────────────
+            # Tentukan pt_path berdasarkan tipe family:
+            #
+            # • YOLO normal   → get_output_dir(model_key)/weights/best.pt
+            # • Mask R-CNN    → WORKSPACE_DIR/runs/maskrcnn/weights/best.pt
+            # • Hybrid        → Hybrid BUKAN model terlatih tersendiri.
+            #                   Ia memakai weights YOLO dasar yang sudah ada
+            #                   (misal hybrid_yolov8m → runs/yolov8m/weights/best.pt)
+            #                   lalu di-refine oleh SAM2.
+            # ──────────────────────────────────────────────────────────────
+            is_maskrcnn = (family == "maskrcnn")
+            is_hybrid   = model_key.startswith("hybrid_")
+
+            if is_hybrid:
+                # Ekstrak base YOLO key: "hybrid_yolov8m" → "yolov8m"
+                yolo_base_key = model_key[len("hybrid_"):]
+                pt_path = os.path.join(get_output_dir(yolo_base_key), "weights", "best.pt")
+            else:
+                pt_path = os.path.join(get_output_dir(model_key), "weights", "best.pt")
 
             if not os.path.exists(pt_path):
                 print(f"  [Visual] ⚠️  best.pt tidak ditemukan untuk {model_label}: {pt_path}")
-                # Tambahkan blank image ke panel agar grid tetap konsisten
                 blank = gt_img.copy()
-                cv2.putText(blank, f"{model_label}: N/A", (10, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                H_b, W_b = blank.shape[:2]
+                na_text = "Weights Not Found (N/A)"
+                (tw, th), _ = cv2.getTextSize(na_text, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)
+                cx, cy = (W_b - tw) // 2, (H_b + th) // 2
+                cv2.putText(blank, na_text, (cx, cy),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 200), 2, cv2.LINE_AA)
                 panel_images.append(blank)
-                panel_labels.append(f"{model_label} (N/A)")
+                panel_labels.append(f"{model_label} ⚠ N/A")
                 continue
 
             try:
-                theme_color = MODEL_COLORS.get(model_key, (255, 255, 0))
-                model = YOLO(pt_path)
-                result = model.predict(
-                    sample_path, conf=conf, imgsz=IMAGE_SIZE,
-                    device=gpu_cycle, verbose=False
-                )[0]
+                # ── MASK R-CNN: Gunakan TorchVision loader (bukan YOLO) ──
+                if is_maskrcnn:
+                    import torch
+                    import torchvision.transforms.functional as TF
+                    from PIL import Image as PILImage
 
-                # Gambar prediksi individual
-                pred_img = result.orig_img.copy()
-                _draw_predictions_on_image(pred_img, result, theme_color)
+                    sys.path.insert(0, os.path.join(ROOT, "mask-r-cnn"))
+                    from maskrcnn_builder import build_model
+
+                    device = torch.device(device_str)
+                    mrcnn_model = build_model(device)
+                    mrcnn_model.load_state_dict(
+                        torch.load(pt_path, map_location=device, weights_only=True)
+                    )
+                    mrcnn_model.eval()
+
+                    pil_img = PILImage.open(sample_path).convert("RGB")
+                    W_i, H_i = pil_img.size
+                    t_img = TF.to_tensor(pil_img).unsqueeze(0).to(device)
+
+                    with torch.no_grad():
+                        preds_out = mrcnn_model(t_img)[0]
+
+                    scores = preds_out["scores"].cpu().numpy()
+                    labels_arr = preds_out["labels"].cpu().numpy()
+                    boxes_arr  = preds_out["boxes"].cpu().numpy()
+                    masks_arr  = preds_out["masks"].cpu().numpy()
+
+                    pred_img = cv2.imread(sample_path)
+                    keep = scores >= conf
+                    for i, (sc, lb, bx, mk) in enumerate(
+                        zip(scores[keep], labels_arr[keep], boxes_arr[keep], masks_arr[keep])
+                    ):
+                        bin_mask = (mk[0] > 0.5).astype(np.uint8)
+                        if bin_mask.shape != (H_i, W_i):
+                            bin_mask = cv2.resize(bin_mask, (W_i, H_i),
+                                                  interpolation=cv2.INTER_NEAREST)
+                        colored = np.zeros_like(pred_img)
+                        colored[bin_mask == 1] = theme_color
+                        cv2.addWeighted(colored, 0.45, pred_img, 1.0, 0, pred_img)
+
+                        x1, y1, x2, y2 = map(int, bx)
+                        cls_id = int(lb) - 1  # Konversi 1-indexed TorchVision ke 0-indexed YOLO
+                        cls_name = names_dict.get(cls_id, f"cls{cls_id}")
+                        text_color = _get_contrast_color(theme_color)
+
+                        cv2.rectangle(pred_img, (x1, y1), (x2, y2), theme_color, 2)
+                        lbl_txt = f"{cls_name} {sc:.2f}"
+                        (tw, th), _ = cv2.getTextSize(lbl_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
+                        cv2.rectangle(pred_img, (x1, y1 - th - 6), (x1 + tw + 4, y1), theme_color, -1)
+                        cv2.putText(pred_img, lbl_txt, (x1 + 2, y1 - 3),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, text_color, 1, cv2.LINE_AA)
+
+                    del mrcnn_model
+                    gc.collect()
+
+                # ── HYBRID: YOLO base + SAM2 ─────────────────────────────
+                elif is_hybrid:
+                    from ultralytics import YOLO as _YOLO, SAM
+
+                    yolo_model = _YOLO(pt_path)
+                    sam_pt     = os.path.join(ROOT, "models", "sam2.1_t.pt")
+                    sam_model  = SAM(sam_pt)
+
+                    det_res = yolo_model.predict(
+                        sample_path, conf=conf, imgsz=IMAGE_SIZE,
+                        device=device_str, verbose=False
+                    )[0]
+
+                    pred_img = det_res.orig_img.copy()
+                    H_i, W_i = pred_img.shape[:2]
+
+                    if det_res.boxes is not None and len(det_res.boxes) > 0:
+                        pred_boxes = det_res.boxes.xyxy
+                        pred_confs = det_res.boxes.conf.cpu().numpy()
+                        pred_clss  = det_res.boxes.cls.cpu().numpy().astype(int)
+
+                        # Kirim list Python koordinat absolut agar aman dari distorsi scale internal SAM
+                        sam_res = sam_model.predict(
+                            det_res.orig_img, bboxes=pred_boxes.tolist(), verbose=False
+                        )
+
+                        if sam_res and sam_res[0].masks is not None:
+                            sam_masks = sam_res[0].masks.data.cpu().numpy()
+                        else:
+                            sam_masks = []
+
+                        text_color = _get_contrast_color(theme_color)
+
+                        for idx_b in range(len(pred_boxes)):
+                            sc       = float(pred_confs[idx_b])
+                            cls_id   = int(pred_clss[idx_b])
+                            cls_name = det_res.names.get(cls_id, f"cls{cls_id}")
+
+                            if idx_b < len(sam_masks):
+                                mk = sam_masks[idx_b]
+                                if mk.shape != (H_i, W_i):
+                                    mk = cv2.resize(mk.astype(np.float32), (W_i, H_i),
+                                                    interpolation=cv2.INTER_NEAREST)
+                                bin_mask = (mk > 0.5).astype(np.uint8)
+                                colored = np.zeros_like(pred_img)
+                                colored[bin_mask == 1] = theme_color
+                                cv2.addWeighted(colored, 0.45, pred_img, 1.0, 0, pred_img)
+
+                            bx_arr = det_res.boxes.xyxy.cpu().numpy()[idx_b]
+                            x1, y1, x2, y2 = map(int, bx_arr)
+                            cv2.rectangle(pred_img, (x1, y1), (x2, y2), theme_color, 2)
+                            lbl_txt = f"{cls_name} {sc:.2f}"
+                            (tw, th), _ = cv2.getTextSize(lbl_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
+                            cv2.rectangle(pred_img, (x1, y1 - th - 6), (x1 + tw + 4, y1), theme_color, -1)
+                            cv2.putText(pred_img, lbl_txt, (x1 + 2, y1 - 3),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, text_color, 1, cv2.LINE_AA)
+
+                    del yolo_model, sam_model
+                    gc.collect()
+
+                # ── YOLO (semua family lainnya) ───────────────────────────
+                else:
+                    model = YOLO(pt_path)
+                    result = model.predict(
+                        sample_path, conf=conf, imgsz=IMAGE_SIZE,
+                        device=gpu_cycle, verbose=False
+                    )[0]
+                    pred_img = result.orig_img.copy()
+                    _draw_predictions_on_image(pred_img, result, theme_color)
+                    del model, result
+                    gc.collect()
 
                 # Simpan gambar individual: <base>_<model_key>.jpg
-                individual_path = os.path.join(visuals_dir, f"{base}_{model_key}.jpg")
-                cv2.imwrite(individual_path, pred_img)
-                print(f"    ➡️  Individual: {os.path.basename(individual_path)}")
+                # individual_path = os.path.join(visuals_dir, f"{base}_{model_key}.jpg")
+                # cv2.imwrite(individual_path, pred_img)
+                # print(f"    ➡️  Individual: {os.path.basename(individual_path)}")
+                
+                # Lewati penyimpanan gambar individual demi efisiensi visualisasi
 
                 panel_images.append(pred_img.copy())
                 panel_labels.append(model_label)
 
-                del model, result
-                gc.collect()
-
             except Exception as e:
                 print(f"  [Visual] ❌ Gagal {model_label}: {e}")
                 blank = gt_img.copy()
-                cv2.putText(blank, f"{model_label}: ERROR", (10, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                H_b, W_b = blank.shape[:2]
+                err_text = f"Inference Error: {type(e).__name__}"
+                font_sc = 0.55
+                (tw, th), _ = cv2.getTextSize(err_text, cv2.FONT_HERSHEY_SIMPLEX, font_sc, 2)
+                cx, cy = (W_b - tw) // 2, (H_b + th) // 2
+                cv2.putText(blank, err_text, (cx, cy),
+                            cv2.FONT_HERSHEY_SIMPLEX, font_sc, (0, 0, 200), 2, cv2.LINE_AA)
                 panel_images.append(blank)
-                panel_labels.append(f"{model_label} (Error)")
+                panel_labels.append(f"{model_label} ✗ Error")
 
         # --- Bangun panel grid ---
         panel_path = os.path.join(visuals_dir, f"{base}_{family}_panel.jpg")
@@ -401,9 +614,26 @@ def generate_visuals_for_family(
         print(f"    🖼️  Panel grid: {os.path.basename(panel_path)}")
 
 
+# Palet warna title bar per index panel (BGR) — dipakai berurutan
+_PANEL_BAR_COLORS = [
+    (80,  80,  80),   # 0: Abu-abu tua  → Ground Truth
+    (200, 100,   0),  # 1: Biru tua     → Varian 1
+    (  0, 180,   0),  # 2: Hijau        → Varian 2
+    (  0,   0, 200),  # 3: Merah        → Varian 3
+    (200,   0, 200),  # 4: Magenta      → Varian 4
+    (  0, 165, 255),  # 5: Oranye       → Varian 5
+    (255, 140,   0),  # 6: Biru langit  → Varian 6
+    ( 30, 200, 200),  # 7: Kuning emas  → Varian 7
+    (180,   0, 180),  # 8: Ungu         → Varian 8
+    (  0, 210, 210),  # 9: Teal         → Varian 9
+]
+
+
 def _build_panel_grid(images: list, labels: list, out_path: str, cols: int = 3) -> None:
     """
     Bangun dan simpan panel grid dari daftar gambar.
+    Caption nama model diletakkan sebagai COLOR TITLE BAR di ATAS setiap panel
+    (konsisten dengan desain comparison grid di eval_unu_helpers.py).
 
     Parameter
     ---------
@@ -422,6 +652,9 @@ def _build_panel_grid(images: list, labels: list, out_path: str, cols: int = 3) 
 
     # Resize semua gambar ke ukuran yang sama
     target_h, target_w = 480, 640
+    # Tinggi title bar di atas setiap panel
+    bar_h = 32
+
     resized = []
     for img in images:
         r = cv2.resize(img, (target_w, target_h))
@@ -436,18 +669,41 @@ def _build_panel_grid(images: list, labels: list, out_path: str, cols: int = 3) 
         resized.append(blank)
         labels.append("")
 
-    # Tambahkan label ke setiap sel
+    # Tambahkan TITLE BAR di ATAS setiap panel
+    # Warna bar putih bersih, teks hitam tebal (merah gelap jika error/N/A)
+    paneled = []
     for i, (img, lbl) in enumerate(zip(resized, labels)):
+        bar_color = (255, 255, 255) # Putih bersih
+        text_color = (0, 0, 0)      # Teks hitam
+
+        if lbl and ("N/A" in lbl or "Error" in lbl or "✗" in lbl or "⚠" in lbl):
+            text_color = (0, 0, 180) # Merah gelap untuk status error/N/A
+
+        # Buat bar kosong
+        bar = np.full((bar_h, target_w, 3), bar_color, dtype=np.uint8)
+
+        # Tulis teks label di bar
         if lbl:
-            cv2.putText(img, lbl, (8, target_h - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2, cv2.LINE_AA)
-            cv2.putText(img, lbl, (8, target_h - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.65, (30, 30, 30), 1, cv2.LINE_AA)
+            # Hitung ukuran teks untuk penempatan vertikal & horizontal center yang tepat
+            font_scale = 0.60
+            thickness  = 1 # Tidak perlu di-bold
+            (tw, th), baseline = cv2.getTextSize(
+                lbl, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+            # Posisi X & Y di tengah bar (Horizontal & Vertical Center)
+            text_x = (target_w - tw) // 2
+            text_y = (bar_h + th) // 2 - baseline // 2
+            # Teks utama (tanpa shadow hitam, terpusat sempurna)
+            cv2.putText(bar, lbl, (text_x, text_y),
+                        cv2.FONT_HERSHEY_SIMPLEX, font_scale, text_color, thickness, cv2.LINE_AA)
+
+        # Gabungkan: bar atas + gambar
+        cell = np.vstack([bar, img])
+        paneled.append(cell)
 
     # Susun baris dan gabungkan
     row_imgs = []
     for r in range(rows):
-        row_slice = resized[r * cols: (r + 1) * cols]
+        row_slice = paneled[r * cols: (r + 1) * cols]
         row_imgs.append(np.hstack(row_slice))
 
     grid = np.vstack(row_imgs)
@@ -1338,14 +1594,15 @@ def run_family(
         compile_family_csv(family, family_det_rows, family_seg_rows)
 
     # Visualisasi (terpisah dari evaluasi agar VRAM sudah bebas)
+    # generate_visuals_for_family() kini mendukung SEMUA family:
+    #   - YOLO (yolo8/9/10/11/rtdetr) → YOLO() Ultralytics
+    #   - maskrcnn → TorchVision loader (maskrcnn_builder.build_model)
+    #   - hybrid   → YOLO base (strip prefix "hybrid_") + SAM2
     if not skip_visual:
-        if family in ["maskrcnn", "hybrid"]:
-            print(f"[Pipeline] ℹ️  Visualisasi untuk {family} dilakukan oleh skrip terpisah. Melewati visualisasi Ultralytics.")
-        else:
-            try:
-                generate_visuals_for_family(family, variants, gpu_ids, n_samples=n_samples)
-            except Exception as e:
-                print(f"[Pipeline] ⚠️  Visualisasi gagal untuk family {family}: {e}")
+        try:
+            generate_visuals_for_family(family, variants, gpu_ids, n_samples=n_samples)
+        except Exception as e:
+            print(f"[Pipeline] ⚠️  Visualisasi gagal untuk family {family}: {e}")
 
     return family_det_rows, family_seg_rows
 

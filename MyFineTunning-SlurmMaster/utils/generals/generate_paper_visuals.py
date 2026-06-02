@@ -1,6 +1,6 @@
 """
 tmux kill-session -t generate_paper_visuals; 
-tmux new-session -d -s generate_paper_visuals "cd /root/Trainning-Models/MyFineTunning-RunPOD && python3 -u utils/generate_paper_visuals.py 2>&1 | tee utils/generate_paper_visuals.log"
+tmux new-session -d -s generate_paper_visuals "cd /root/Trainning-Models/MyFineTunning-RunPOD && python3 -u utils/generals/generate_paper_visuals.py 2>&1 | tee utils/generals/generate_paper_visuals.log"
 
 """
 # -*- coding: utf-8 -*-
@@ -16,8 +16,11 @@ import torch
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-# Add root to sys.path
-_UTILS_DIR = os.path.abspath(os.path.dirname(__file__))
+# ==============================================================================
+# PATH SETUP — resolve ROOT dari lokasi file ini (utils/generals/generate_paper_visuals.py)
+# ==============================================================================
+_THIS_DIR = os.path.abspath(os.path.dirname(__file__))
+_UTILS_DIR = os.path.abspath(os.path.join(_THIS_DIR, ".."))
 ROOT = os.path.abspath(os.path.join(_UTILS_DIR, ".."))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, _UTILS_DIR)
@@ -25,7 +28,6 @@ sys.path.insert(0, _UTILS_DIR)
 from ultralytics import YOLO, SAM
 from config_shared import DATASETS_DIR, get_output_dir, NUM_CLASSES, IMAGE_SIZE, WORKSPACE_DIR
 from eval_unu_helpers import flush_gpu
-from eval_paper import load_maskrcnn
 
 # ====================================================================
 # Konfigurasi Direktori
@@ -48,6 +50,22 @@ for d in [IMG_SAMPLE_DIR, DET_OUT_DIR, SEG_OUT_DIR, COMP_DET_DIR, COMP_SEG_DIR]:
 # ====================================================================
 # Util Functions
 # ====================================================================
+def load_maskrcnn(device):
+    import torchvision
+    from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+    from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+    model = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None)
+    in_box = model.roi_heads.box_predictor.cls_score.in_features
+    model.roi_heads.box_predictor = FastRCNNPredictor(in_box, NUM_CLASSES + 1)
+    in_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
+    model.roi_heads.mask_predictor = MaskRCNNPredictor(in_mask, 256, NUM_CLASSES + 1)
+    pt = os.path.join(get_output_dir("maskrcnn"), "weights", "best.pt")
+    if os.path.exists(pt):
+        model.load_state_dict(torch.load(pt, map_location=device, weights_only=True))
+        model.to(device).eval()
+        return model
+    return None
+
 CLASS_NAMES = []
 COLORS = []
 
@@ -302,7 +320,7 @@ def main():
         else: m9s_resized = None
         img9_seg = draw_custom(img_path, b9s, m9s_resized, c9s, cls9s, color=(255, 0, 0)) # Blue
         if img9_seg is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"yolov9c_seg_{img_name}"), img9_seg)
-
+ 
         # 3. YOLO11m-Seg
         res11_seg = yolo11_seg.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device="cuda:0", verbose=False)[0]
         b11s = res11_seg.boxes.xyxy.cpu().numpy() if res11_seg.boxes else []

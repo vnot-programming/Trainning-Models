@@ -467,3 +467,289 @@
 - **Status saat ini:** Selesai. Siap dijalankan ulang.
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - Pastikan setiap ada pemanggilan perintah eksternal (terutama perintah `slurm` seperti squeue atau sacct), selalu amankan dengan fungsi `timeout` agar skrip daemon *true-background* tidak pernah mengalami `stuck/deadlock`.
+
+---
+
+### [Entri 027] — Perbaikan Caption Panel Grid & Konfirmasi Fitur Eval-Only
+
+- **Tanggal/Waktu:** 2026-06-01 07:48 WIB
+- **Tugas yang diselesaikan:**
+  1. **Konfirmasi Fitur `--eval-only`**: `run_pipeline_parallel.py` sudah mendukung mode evaluasi saja via argumen `--eval-only` (baris 504-507). Perintah: `python3 run_pipeline_parallel.py --eval-only --gpus 0`
+  2. **Bugfix Caption Panel Grid**: Memperbaiki fungsi `_build_panel_grid()` di `generate_report_single_model.py`. Sebelumnya, nama model ditulis di **bagian bawah** gambar menggunakan `cv2.putText` langsung yang tumpang tindih dengan konten gambar. Kini diperbaiki menjadi **COLOR TITLE BAR di bagian atas** setiap panel (konsisten dengan desain comparison grid di `eval_unu_helpers.py`).
+  3. **Perbaikan Teks Error/N/A**: Teks `N/A` dan `ERROR` pada panel blank sekarang ditulis di tengah gambar (bukan pojok kiri atas) sehingga lebih mudah terlihat, dan tidak bertabrakan dengan title bar yang diletakkan di atas.
+  4. **Palet Warna Title Bar**: Menambahkan konstanta `_PANEL_BAR_COLORS` (10 warna berbeda) agar setiap varian model dapat dibedakan secara visual dengan mudah. Bar berwarna merah gelap khusus untuk status Error/N/A.
+- **File yang diubah/dibuat:**
+  - `utils/generate_report_single_model.py` [DIMODIFIKASI — fungsi `_build_panel_grid` + `generate_visuals_for_family`]
+  - `docs/SDP.md` [DIMODIFIKASI — Penambahan Log 027]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Untuk meregenerasi visual panel (tanpa training ulang), gunakan: `python3 run_pipeline_parallel.py --eval-only --gpus 0`
+  - Pastikan `IMAGE_SAMPLES_DIR` di `config_shared.py` masih menunjuk ke folder yang berisi gambar sampel valid.
+  - Perbaikan caption ini berlaku untuk SEMUA family panel (yolo8, yolo9, yolo10, yolo11, maskrcnn, hybrid, rtdetr).
+
+---
+
+### [Entri 028] — Root Cause Fix: Hybrid N/A & Mask R-CNN ERROR pada Visual Panel
+
+- **Tanggal/Waktu:** 2026-06-01 08:12 WIB
+- **Tugas yang diselesaikan:**
+  - **Root Cause Hybrid N/A:** Kode lama menggunakan `get_output_dir("hybrid_yolov8m")` yang menghasilkan path `runs/hybrid_yolov8m/weights/best.pt` — folder ini **tidak pernah ada**. Hybrid bukan model yang di-training sendiri; ia memakai YOLO base weights yang sudah ada (misal `runs/yolov8m/weights/best.pt`). **Fix:** Deteksi key yang dimulai dengan `"hybrid_"`, lalu strip prefix untuk mendapatkan YOLO base key yang benar.
+  - **Root Cause Mask R-CNN ERROR:** Kode lama menggunakan `YOLO(pt_path)` untuk semua family, termasuk maskrcnn. File `best.pt` maskrcnn adalah PyTorch state dict TorchVision (`maskrcnn_resnet50_fpn_v2`) — tidak bisa di-load oleh `YOLO()` loader Ultralytics. **Fix:** Deteksi `family == "maskrcnn"`, lalu gunakan `maskrcnn_builder.build_model()` + `torch.load()` secara eksplisit.
+  - **Tiga cabang inferensi** kini tersedia di `generate_visuals_for_family()`: (1) Mask R-CNN via TorchVision, (2) Hybrid via YOLO base + SAM2, (3) YOLO biasa (default).
+- **File yang diubah/dibuat:**
+  - `utils/generate_report_single_model.py` [DIMODIFIKASI — blok for-loop variants di `generate_visuals_for_family`]
+  - `docs/SDP.md` [DIMODIFIKASI — Penambahan Log 028]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Untuk meregenerasi panel visual (tanpa training ulang): `python3 run_pipeline_parallel.py --eval-only --gpus 0`
+  - Jika ada model Hybrid baru yang ditambahkan ke `FAMILY_VARIANTS["hybrid"]`, pastikan nama key selalu diawali `"hybrid_"` + nama YOLO base key yang sudah ada di `runs/`.
+  - Mask R-CNN builder diimpor dari `mask-r-cnn/maskrcnn_builder.py` — pastikan path `ROOT/mask-r-cnn/` valid.
+
+---
+
+### [Entri 029] — Fix: Visual Mask R-CNN & Hybrid Selalu Di-skip di `run_family()`
+
+- **Tanggal/Waktu:** 2026-06-01 11:36 WIB
+- **Tugas yang diselesaikan:**
+  - Ditemukan bug kritis di `run_family()` baris 1522–1530: Visual untuk `family in ["maskrcnn", "hybrid"]` **selalu di-skip** dengan pesan _"dilakukan oleh skrip terpisah"_ — padahal skrip terpisah tersebut tidak pernah dipanggil.
+  - Setelah Entri 028 memperbaiki `generate_visuals_for_family()` agar mendukung maskrcnn & hybrid secara native, blok pengecualian ini sudah tidak relevan dan justru berbahaya.
+  - **Fix:** Hapus blok `if family in ["maskrcnn", "hybrid"]` — semua family kini memanggil `generate_visuals_for_family()` secara seragam.
+- **File yang diubah/dibuat:**
+  - `utils/generate_report_single_model.py` [DIMODIFIKASI — fungsi `run_family()` baris 1522]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 029]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - `--eval-only` di `run_pipeline_parallel.py` **SUDAH** menjalankan visual untuk semua family (YOLO, Mask R-CNN, Hybrid).
+  - Jika hanya ingin visual tanpa COCOeval: gunakan `--skip-eval` pada `generate_report_single_model.py` langsung.
+  - Jika hanya ingin COCOeval tanpa visual: gunakan `--skip-visual` pada `generate_report_single_model.py` langsung.
+
+---
+
+### [Entri 030] — Fix Kritis: `eval_global_multigpu` Selalu SKIP saat `--eval-only`
+
+- **Tanggal/Waktu:** 2026-06-01 11:40 WIB
+- **Tugas yang diselesaikan:**
+  - Ditemukan bug kritis di `run_pipeline_parallel.py` baris 188: `run_any` hanya mengecek apakah ada **training task** yang PENDING — padahal saat `--eval-only` semua training tasks = SKIPPED → `run_any = False` → `eval_global_multigpu = SKIPPED`.
+  - Efek domino: seluruh pipeline downstream ikut SKIPPED (`eval_new_std`, `eval_new_std_vis`, `eval_new_gld`, `eval_new_gld_vis`, `eval_new_hybrid_sota`, `post_grid`, `post_upload`).
+  - **Fix:** `run_any` kini menggunakan logika OR — jika ada training task PENDING **ATAU** ada eval task PENDING, maka `eval_global_multigpu` = PENDING.
+- **File yang diubah/dibuat:**
+  - `run_pipeline_parallel.py` [DIMODIFIKASI — logika `run_any` di `_build_task_registry`, baris 186]
+  - `docs/SDP.md` [DIMODIFIKASI — Penambahan Log 030]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Alur `--eval-only` yang benar setelah fix ini:
+    - SKIP: semua `train_*`
+    - RUN: `eval_yolo8`, `eval_yolo9`, `eval_yolo10`, `eval_yolo11`, `eval_maskrcnn`, `eval_hybrid`, `eval_rtdetr`
+    - RUN: `eval_global_multigpu` (menunggu semua eval selesai)
+    - RUN: `eval_new_std` → `eval_new_std_vis` → `eval_new_gld` → `eval_new_gld_vis` → `eval_new_hybrid_sota`
+    - RUN: `post_grid` → `post_upload`
+
+---
+
+### [Entri 031] — Fix Root Cause Sejati: Eval Tasks Cascade-Skip karena `_update_failed_dependencies()`
+
+- **Tanggal/Waktu:** 2026-06-01 11:51 WIB
+- **Tugas yang diselesaikan:**
+  - Log aktual menunjukkan: `"Task YOLOv8 Eval otomatis dilewati karena dependensi (train_yolo8) SKIPPED"` — artinya bukan masalah `run_any`, tapi **fungsi `_update_failed_dependencies()`** (baris 309–324) yang meng-cascade-skip semua task PENDING yang memiliki dependency = SKIPPED.
+  - Logika lama di baris 319: `if dep_state in ["FAILED", "SKIPPED"]` → tidak membedakan antara SKIPPED-karena-intentional (`--eval-only`) vs SKIPPED-karena-dep-gagal.
+  - **Fix yang benar (baris 166–183):** Saat `eval_only = True`, eval tasks didaftarkan dengan `dependencies = []` (kosong). Tanpa dependency training yang SKIPPED, `_update_failed_dependencies()` tidak punya alasan untuk meng-cascade-skip eval tasks.
+  - Pendekatan ini lebih bersih dari mengubah logika `_update_failed_dependencies()` karena tidak mempengaruhi skenario normal.
+- **File yang diubah/dibuat:**
+  - `run_pipeline_parallel.py` [DIMODIFIKASI — `_build_task_registry()` baris 165–220]
+  - `docs/SDP.md` [DIMODIFIKASI — Penambahan Log 031]
+- **Status saat ini:** Selesai. Siap dijalankan ulang.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Perintah untuk menjalankan evaluasi penuh tanpa training: `python3 run_pipeline_parallel.py --eval-only --gpus 0`
+  - Perbaikan ini di Entri 031 adalah fix **final** untuk `--eval-only`. Entri 030 (fix `run_any`) dan Entri 031 (fix `resolved_deps`) keduanya diperlukan.
+
+---
+
+### [Entri 032] — Kustomisasi Visual Panel Grid: Relokasi Ground Truth & Minimalis Title Bar
+
+- **Tanggal/Waktu:** 2026-06-01 21:55 WIB
+- **Tugas yang diselesaikan:**
+  - Memodifikasi skrip `utils/generate_report_single_model.py` untuk menyesuaikan tata letak dan gaya panel grid visualisasi multi-model.
+  - Memindahkan panel **Ground Truth** dari indeks pertama (posisi awal) ke kolom terakhir (posisi akhir) dari panel grid sehingga mempermudah pembacaan komparasi dari kiri ke kanan.
+  - Mengubah latar belakang **TITLE BAR** di bagian atas setiap panel sel menjadi warna putih bersih polos (`(255, 255, 255)`) dengan warna teks hitam tebal (`(0, 0, 0)`), serta warna merah gelap (`(0, 0, 180)`) jika mendeteksi status error/N/A.
+  - Menghilangkan shadow teks hitam di `cv2.putText` agar title bar terlihat minimalis, bersih, dan sesuai dengan estetika *Bio-Digital Minimalism*.
+- **File yang diubah/dibuat:**
+  - `utils/generate_report_single_model.py` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Perubahan ini akan langsung berdampak pada saat pembuatan panel visualisasi multi-model untuk semua family.
+  - Jika ingin memverifikasi visual hasil perubahan tanpa melakukan training, jalankan evaluasi dengan mode `python3 run_pipeline_parallel.py --eval-only --gpus 0`.
+
+---
+
+### [Entri 033] — Restrukturisasi Subfolder Output Visual & Pemosisian Ulang Ground Truth
+
+- **Tanggal/Waktu:** 2026-06-01 21:59 WIB
+- **Tugas yang diselesaikan:**
+  - Memodifikasi skrip `utils/generate_report_single_model.py` untuk mengelompokkan file output visualisasi (gambar prediksi individual dan panel grid) berdasarkan subdirektori nama model (dan family)-nya masing-masing.
+  - Mengubah fungsi `_get_visuals_dir()` untuk menerima argumen opsional `family` secara dinamis, sehingga file output visual dialihkan ke `reports/pipeline/visuals/{family}/`.
+  - Mengembalikan letak panel **Ground Truth** ke indeks pertama (awal panel grid) demi kenyamanan pengguna dan menghindari kebingungan, mengingat Ground Truth sudah terintegrasi sejak awal.
+- **File yang diubah/dibuat:**
+  - `utils/generate_report_single_model.py` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Perubahan ini akan mengelompokkan seluruh berkas visual per model family (seperti `yolo8`, `yolo9`, `yolov10`, `yolo11`, `maskrcnn`, `hybrid`, `rtdetr`) di subfolder masing-masing secara dinamis.
+  - Untuk memicu regenerasi visual dengan folder rapi ini, jalankan `python3 run_pipeline_parallel.py --eval-only --gpus 0`.
+
+---
+
+### [Entri 034] — Visual Polish: Perbaikan Geser Box Hybrid, Kontras UI/UX, dan Nama Kelas Mask R-CNN
+
+- **Tanggal/Waktu:** 2026-06-01 22:49 WIB
+- **Tugas yang diselesaikan:**
+  - **Fix Bounding Box Shift di Hybrid (SAM)**: Mengubah pengiriman argumen `bboxes` ke `sam_model.predict` dari format tensor GPU `pred_boxes` menjadi list Python murni `pred_boxes.tolist()`. Langkah ini berhasil mengeliminasi bug pergeseran bounding box akibat masalah interpretasi scale internal pada wrapper SAM.
+  - **Peningkatan UI/UX Kontras Teks Label**: Mengimplementasikan helper `_get_contrast_color()` untuk menghitung tingkat kecerahan (*luminance*) warna latar belakang label (`theme_color`). Teks label bounding box kini secara dinamis berwarna hitam `(0, 0, 0)` di atas warna terang dan putih `(255, 255, 255)` di atas warna gelap, menjamin keterbacaan optimal sesuai standar aksesibilitas UI/UX.
+  - **Fix Class Name Mask R-CNN**: Menambahkan helper `_load_class_names()` untuk memparsing nama kelas secara dinamis dari `SEG_YAML`. Memetakan index TorchVision Mask R-CNN (1-indexed) ke nama kelas riil dengan mengurangi indeks sebesar 1 (`cls_id = int(lb) - 1`), menggantikan teks label `cls{id}` bawaan yang sebelumnya hanya menampilkan indeks angka.
+  - **Fix Laten NameError**: Memperbaiki variabel error `bool_mask` menjadi `bin_mask` di dalam block inferensi Hybrid untuk mencegah potensi runtime crash.
+- **File yang diubah/dibuat:**
+  - `utils/generate_report_single_model.py` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Seluruh visualisasi (YOLO, Mask R-CNN, dan Hybrid) kini memiliki standar visual yang sangat kontras, berestetika premium, dan presisi tinggi tanpa koordinat bergeser.
+  - Jalankan regenerasi visual per model via: `python3 run_pipeline_parallel.py --eval-only --gpus 0`.
+
+---
+
+### [Entri 035] — Bugfix Kritis: Penanganan Format List pada Parser Nama Kelas YAML
+
+- **Tanggal/Waktu:** 2026-06-01 22:58 WIB
+- **Tugas yang diselesaikan:**
+  - **Bugfix Kritis pada Parser YAML (`_load_class_names`)**: Mengatasi insiden warning/error `AttributeError: 'list' object has no attribute 'items'` yang muncul karena properti `"names"` di dalam berkas `data.yaml` berupa bertipe `list` (larik) bukan `dict` (dictionary/kamus).
+  - Skrip sekarang secara dinamis memeriksa tipe data `"names"` menggunakan `isinstance()`. Jika berupa `dict`, ia diiterasi menggunakan `.items()`. Jika berupa `list`, ia diiterasi menggunakan `enumerate()` untuk menghasilkan pemetaan indeks integer ke nama kelas dengan aman.
+- **File yang diubah/dibuat:**
+  - `utils/generate_report_single_model.py` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Parser YAML nama kelas sekarang sepenuhnya tahan banting (*robust*) dan kompatibel dengan kedua variasi format penulisan `"names"` di YOLO YAML dataset (baik format list maupun dict).
+
+---
+
+### [Entri 036] — Peningkatan Visual Premium: Skip Gambar Individual & Perataan Tengah Label Title Bar
+
+- **Tanggal/Waktu:** 2026-06-01 23:33 WIB
+- **Tugas yang diselesaikan:**
+  - **Efisiensi Disk & Inferensi (Skip Gambar Individual)**: Menonaktifkan penyimpanan gambar prediksi individual (`cv2.imwrite` untuk individual path) untuk semua model varian (YOLO, Mask R-CNN, Hybrid, RT-DETR) di bawah loop visualisasi gambar sampel. Sekarang, skrip hanya berfokus menghasilkan panel grid gabungan (`_panel.jpg`), menghemat ruang penyimpanan workspace secara signifikan.
+  - **Visual Title Bar Alignment & Weight**: Memodifikasi fungsi `_build_panel_grid()` agar teks nama model di title bar terpusat secara sempurna secara horizontal (`text_x = (target_w - tw) // 2`). Mengubah ketebalan teks label menjadi non-bold (`thickness = 1`) demi estetika minimalis yang bersih.
+- **File yang diubah/dibuat:**
+  - `utils/generate_report_single_model.py` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Panel visualisasi kini hanya akan merender grid gabungan dengan title bar berformat horizontal center dan ketebalan tipis (tidak bold). Tidak ada lagi file gambar individual baru yang dihasilkan di subfolder.
+
+---
+
+### [Entri 037] — Pembersihan Workspace: Relokasi File Evaluasi Legacy & Pembaruan Impor Dependensi
+
+- **Tanggal/Waktu:** 2026-06-02 00:12 WIB
+- **Tugas yang diselesaikan:**
+  - **Audit Impor & Pembersihan File Legacy**: Mengidentifikasi 6 skrip evaluasi legacy atau standalone (`eval_paper.py`, `eval_single_model.py`, `golden_evaluation.py`, `golden_evaluation_visuals.py`, `standar_evaluation.py`, `standar_evaluation_visuals.py`) yang tidak dipanggil secara langsung oleh orkestrator pipeline utama `run_pipeline_parallel.py`.
+  - **Relokasi ke `utils/generals/`**: Memindahkan ke-6 berkas tersebut ke subfolder baru `/utils/generals/` untuk merapikan workspace utama di dalam folder `utils/`.
+  - **Pembuatan `__init__.py`**: Membuat file inisialisasi package python kosong `/utils/generals/__init__.py` untuk memastikan kelancaran alur pencarian import.
+  - **Pembaruan Jalur Impor Aktif**: Mengubah rujukan impor fungsi `load_maskrcnn` pada skrip evaluasi visualisasi utama (`standar_evaluation_visuals-new_method.py` dan `golden_evaluation_visuals-new_method.py`) dari:
+    `from eval_paper import load_maskrcnn`
+    menjadi:
+    `from generals.eval_paper import load_maskrcnn`
+    Ini menjamin bahwa pipeline evaluasi visual SOTA metode baru tetap dapat berjalan dengan normal tanpa mengalami interupsi `ModuleNotFoundError`.
+- **File yang diubah/dibuat:**
+  - `utils/generals/eval_paper.py` [DIPINDAHKAN]
+  - `utils/generals/eval_single_model.py` [DIPINDAHKAN]
+  - `utils/generals/golden_evaluation.py` [DIPINDAHKAN]
+  - `utils/generals/golden_evaluation_visuals.py` [DIPINDAHKAN]
+  - `utils/generals/standar_evaluation.py` [DIPINDAHKAN]
+  - `utils/generals/standar_evaluation_visuals.py` [DIPINDAHKAN]
+  - `utils/generals/__init__.py` [DIBUAT BARU]
+  - `utils/standar_evaluation_visuals-new_method.py` [DIMODIFIKASI]
+  - `utils/golden_evaluation_visuals-new_method.py` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Workspace `utils/` kini jauh lebih bersih dan rapi. Seluruh dependensi import aktif telah dialihkan dengan aman ke folder `generals/`.
+
+---
+
+### [Entri 038] — Desain Independen: Deklarasi Lokal load_maskrcnn & Pemutusan Dependensi eval_paper
+
+- **Tanggal/Waktu:** 2026-06-02 00:15 WIB
+- **Tugas yang diselesaikan:**
+  - **Dekompresi Impor / Self-Contained Design**: Menghilangkan ketergantungan impor berkas visualisasi utama (`standar_evaluation_visuals-new_method.py` dan `golden_evaluation_visuals-new_method.py`) terhadap berkas legacy `eval_paper.py` (yang kini berada di `generals/`).
+  - **Deklarasi Lokal `load_maskrcnn`**: Menulis fungsi `load_maskrcnn(device)` secara lokal di bawah `# Util Functions` di dalam kedua berkas visualisasi aktif tersebut. Langkah ini memastikan kedua berkas tersebut 100% independen dan *self-contained*.
+  - **Pemberantasan Dependensi Impor generals**: Menghapus baris impor `from generals.eval_paper import load_maskrcnn` secara permanen untuk menjamin kekokohan sistem.
+- **File yang diubah/dibuat:**
+  - `utils/standar_evaluation_visuals-new_method.py` [DIMODIFIKIKASI]
+  - `utils/golden_evaluation_visuals-new_method.py` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Seluruh visualisasi metode baru kini 100% independen dan tidak memiliki ketergantungan impor terhadap berkas legacy di dalam folder `generals/` demi ketahanan jangka panjang.
+
+---
+
+### [Entri 039] — Visual Polish: Penyempurnaan dan Perapian Docstring Pembuka generate_report_single_model.py
+
+- **Tanggal/Waktu:** 2026-06-02 00:20 WIB
+- **Tugas yang diselesaikan:**
+  - **Penyempurnaan Docstring Pembuka**: Merapikan dan memperbarui docstring pembuka di berkas `utils/generate_report_single_model.py` agar berestetika premium, informatif, dan sangat terstruktur sesuai dengan pembaruan arsitektur visual terbaru.
+  - **Sinkronisasi Output Visual**: Menambahkan informasi direktori output visualisasi gabungan (`reports/pipeline/visuals/{family}/`) dan memetakan struktur file panel grid `_panel.jpg` terbaru ke dalam visualisasi pohon direktori terdokumentasi.
+- **File yang diubah/dibuat:**
+  - `utils/generate_report_single_model.py` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Docstring pembuka kini sepenuhnya sinkron dengan alur kerja visualisasi dan evaluasi terbaru. Siap digunakan sebagai referensi pengoperasian orkestrasi model CLI.
+
+---
+
+### [Entri 040] — Pembersihan Workspace: Relokasi generate_paper_visuals.py & Desain Independen
+
+- **Tanggal/Waktu:** 2026-06-02 00:23 WIB
+- **Tugas yang diselesaikan:**
+  - **Relokasi ke `utils/generals/`**: Memindahkan berkas utilitas visualisasi draf paper `generate_paper_visuals.py` ke folder `/utils/generals/` demi kerapian folder utama `utils/`.
+  - **Pemutusan Ketergantungan**: Menjadikan skrip `generate_paper_visuals.py` 100% *self-contained* dengan mendeklarasikan fungsi `load_maskrcnn(device)` secara lokal di dalamnya, sehingga tidak lagi mengimpor secara eksternal dari `eval_paper.py`.
+  - **Penyempurnaan Path Resolver**: Menyesuaikan setup pencarian path ROOT dan `_UTILS_DIR` di dalam berkas agar secara akurat mengenali direktori root proyek sejati walaupun berjalan dari subdirektori `/utils/generals/`.
+- **File yang diubah/dibuat:**
+  - `utils/generals/generate_paper_visuals.py` [DIBUAT BARU / REFACTOR]
+  - `utils/generate_paper_visuals.py` [DIHAPUS]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Folder `utils/` utama kini bersih dari file utilitas eksternal. Untuk menjalankan visualisasi paper secara mandiri, pengguna dapat memanggil `python3 utils/generals/generate_paper_visuals.py`.
+
+---
+
+### [Entri 041] — Konsolidasi Modul: Sentralisasi flush_gpu & Pembersihan Total utils/
+
+- **Tanggal/Waktu:** 2026-06-02 00:27 WIB
+- **Tugas yang diselesaikan:**
+  - **Sentralisasi `flush_gpu`**: Memindahkan dan mendeklarasikan fungsi bantu pembersihan CUDA VRAM `flush_gpu(label)` secara terpusat di dalam [config_shared.py](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/config_shared.py) sebagai *Single Source of Truth* hyperparameter dan utilitas bersama.
+  - **Pembaruan Impor Visualisasi Aktif**: Mengubah rujukan impor `flush_gpu` pada berkas visualisasi aktif (`standar_evaluation_visuals-new_method.py` dan `golden_evaluation_visuals-new_method.py`) agar secara terpusat mengimpor langsung dari `config_shared` alih-alih `eval_unu_helpers`.
+  - **Relokasi `eval_unu_helpers.py`**: Memindahkan berkas modul penunjang legacy `eval_unu_helpers.py` ke folder `/utils/generals/` demi menciptakan lingkungan folder utama `utils/` yang super bersih dan terorganisasi.
+  - **Penyempurnaan Path Modul**: Menyesuaikan setup path resolver ROOT di dalam `utils/generals/eval_unu_helpers.py` agar secara presisi mengenali direktori root proyek.
+- **File yang diubah/dibuat:**
+  - `config_shared.py` [DIMODIFIKASI — Penambahan `flush_gpu`]
+  - `utils/standar_evaluation_visuals-new_method.py` [DIMODIFIKASI — Impor dialihkan ke `config_shared`]
+  - `utils/golden_evaluation_visuals-new_method.py` [DIMODIFIKASI — Impor dialihkan ke `config_shared`]
+  - `utils/generals/eval_unu_helpers.py` [DIBUAT BARU / REFACTOR]
+  - `utils/eval_unu_helpers.py` [DIHAPUS]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Seluruh alur kerja visualisasi aktif kini terbebas secara absolut dari dependensi berkas legacy di dalam folder `generals/`.
+  - Folder `utils/` utama saat ini 100% steril dari berkas pendukung legacy.
+
+---
+
+### [Entri 042] — Pembersihan Root Proyek: Relokasi eval_boundary_iou.py & run_eval_multi.py
+
+- **Tanggal/Waktu:** 2026-06-02 00:32 WIB
+- **Tugas yang diselesaikan:**
+  - **Relokasi ke `utils/generals/`**: Memindahkan berkas orkestrator legacy sekuensial `run_eval_multi.py` dan berkas evaluasi boundary `eval_boundary_iou.py` dari direktori ROOT proyek ke folder `/utils/generals/` demi meningkatkan kebersihan direktori root.
+  - **Penyempurnaan Path Modul**: Mengubah mekanisme *path resolver* ROOT di dalam berkas generals tersebut agar secara presisi mengenali direktori root proyek sejati sehingga seluruh modular import tetap berjalan dengan normal.
+  - **Perlindungan `coco_eval_utils.py`**: Berdasarkan hasil analisis dependensi, berkas `coco_eval_utils.py` diidentifikasi sebagai *Shared Library* inti yang sangat aktif (diimpor di main.py, model training, dan skrip evaluasi baru). Kami memutuskan berkas ini **wajib tetap berada di ROOT** untuk menjaga stabilitas arsitektur.
+- **File yang diubah/dibuat:**
+  - `utils/generals/eval_boundary_iou.py` [DIBUAT BARU / REFACTOR]
+  - `utils/generals/run_eval_multi.py` [DIBUAT BARU / REFACTOR]
+  - `eval_boundary_iou.py` [DIHAPUS]
+  - `run_eval_multi.py` [DIHAPUS]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Direktori ROOT proyek saat ini sangat bersih dan hanya menampung berkas produksi aktif. Skrip legacy yang dipindahkan dapat dipanggil secara manual menggunakan rute folder generals yang sesuai.
+

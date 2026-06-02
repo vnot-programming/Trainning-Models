@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-run_pipeline_multi.py
-=====================
+utils/generals/run_eval_multi.py
+================================
 Pipeline orchestrator — menjalankan semua eval_multigpu.py secara SEKUENSIAL
 menggunakan virtual environment .venv yang tersedia di direktori ini.
 
@@ -13,23 +13,11 @@ Urutan eksekusi:
   5. hybrid/eval_multigpu.py
 
 Cara menjalankan:
-    # Langsung (tanpa aktivasi venv manual):
-    python run_pipeline_multi.py
+    # Langsung:
+    python utils/generals/run_eval_multi.py
 
     # Background via tmux:
-    tmux new-session -d -s run_pipeline_multi "cd /root/Trainning-Models/MyFineTunning-dev && python3 run_pipeline_multi.py 2>&1 | tee run_pipeline_multi.log"
-
-    # Lanjut hanya model tertentu (skip yang sudah selesai):
-    python run_pipeline_multi.py --skip yolo8,yolo9
-
-Argumen:
-    --skip   Nama model yang dilewati, dipisah koma.
-             Pilihan: yolo8, yolo9, yolo11, maskrcnn, hybrid
-    --gpus   GPU yang digunakan, diteruskan ke setiap skrip.
-             Contoh: '0,1' atau 'all' (default). 
-
-Log:
-    run_pipeline_multi.log  (jika dijalankan dengan tee)
+    tmux new-session -d -s run_pipeline_multi "cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && python3 utils/generals/run_eval_multi.py 2>&1 | tee utils/generals/run_pipeline_multi.log"
 """
 
 import os
@@ -41,39 +29,44 @@ import datetime
 
 # ── Konfigurasi utama ──────────────────────────────────────────────────────────
 _THIS_DIR  = os.path.abspath(os.path.dirname(__file__))
+_UTILS_DIR = os.path.abspath(os.path.join(_THIS_DIR, ".."))
+ROOT = os.path.abspath(os.path.join(_UTILS_DIR, ".."))
+sys.path.insert(0, ROOT)
+sys.path.insert(0, _UTILS_DIR)
+
 _VENV_PYTHON = sys.executable
 
-# Daftar skrip dalam urutan eksekusi
+# Daftar skrip dalam urutan eksekusi (Merujuk ke ROOT proyek sejati)
 _PIPELINE = [
     {
         "name":    "yolo8",
         "label":   "YOLOv8m  (Det + Seg)",
-        "script":  os.path.join(_THIS_DIR, "yolo", "yolo8",   "eval_multigpu.py"),
-        "cwd":     os.path.join(_THIS_DIR, "yolo", "yolo8"),
+        "script":  os.path.join(ROOT, "yolo", "yolo8",   "eval_multigpu.py"),
+        "cwd":     os.path.join(ROOT, "yolo", "yolo8"),
     },
     {
         "name":    "yolo9",
         "label":   "YOLOv9m  (Det + Seg)",
-        "script":  os.path.join(_THIS_DIR, "yolo", "yolo9",   "eval_multigpu.py"),
-        "cwd":     os.path.join(_THIS_DIR, "yolo", "yolo9"),
+        "script":  os.path.join(ROOT, "yolo", "yolo9",   "eval_multigpu.py"),
+        "cwd":     os.path.join(ROOT, "yolo", "yolo9"),
     },
     {
         "name":    "yolo11",
         "label":   "YOLO11m  (Det + Seg)",
-        "script":  os.path.join(_THIS_DIR, "yolo", "yolo11",  "eval_multigpu.py"),
-        "cwd":     os.path.join(_THIS_DIR, "yolo", "yolo11"),
+        "script":  os.path.join(ROOT, "yolo", "yolo11",  "eval_multigpu.py"),
+        "cwd":     os.path.join(ROOT, "yolo", "yolo11"),
     },
     {
         "name":    "maskrcnn",
         "label":   "Mask R-CNN",
-        "script":  os.path.join(_THIS_DIR, "mask-r-cnn",      "eval_multigpu.py"),
-        "cwd":     os.path.join(_THIS_DIR, "mask-r-cnn"),
+        "script":  os.path.join(ROOT, "mask-r-cnn",      "eval_multigpu.py"),
+        "cwd":     os.path.join(ROOT, "mask-r-cnn"),
     },
     {
         "name":    "hybrid",
         "label":   "Hybrid (YOLO11m + SAM2)",
-        "script":  os.path.join(_THIS_DIR, "hybrid",          "eval_multigpu.py"),
-        "cwd":     os.path.join(_THIS_DIR, "hybrid"),
+        "script":  os.path.join(ROOT, "hybrid",          "eval_multigpu.py"),
+        "cwd":     os.path.join(ROOT, "hybrid"),
     },
 ]
 
@@ -109,7 +102,7 @@ def _print_header():
     print(_c("  Semua model dievaluasi secara sekuensial", _DIM))
     print(_c(_hr(), _BOLD, _CYAN))
     print(f"  {'Venv Python':<18}: {_VENV_PYTHON}")
-    print(f"  {'Working Dir':<18}: {_THIS_DIR}")
+    print(f"  {'Working Dir':<18}: {ROOT}")
     print(f"  {'Mulai':<18}: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(_c(_hr(), _BOLD, _CYAN))
 
