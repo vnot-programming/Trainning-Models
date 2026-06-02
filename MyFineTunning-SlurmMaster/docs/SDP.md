@@ -753,3 +753,209 @@
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - Direktori ROOT proyek saat ini sangat bersih dan hanya menampung berkas produksi aktif. Skrip legacy yang dipindahkan dapat dipanggil secara manual menggunakan rute folder generals yang sesuai.
 
+---
+
+### [Entri 043] — Terpadu & Independen: Penyatuan Skrip Evaluasi & Visualisasi New Method
+
+- **Tanggal/Waktu:** 2026-06-02 10:55 WIB
+- **Tugas yang diselesaikan:**
+  - **Penciptaan `generate_report-new_method.py`**: Menggabungkan fungsionalitas skrip evaluasi kuantitatif `standar_evaluation-new_method.py` (penghasil CSV) dan skrip evaluasi kualitatif `standar_evaluation_visuals-new_method.py` (penghasil grid visualisasi komparatif) ke dalam satu berkas terpadu yang independen [utils/generate_report-new_method.py](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/generate_report-new_method.py).
+  - **Dukungan CLI Fleksibel**: Menyediakan argument parser (`--skip-eval` dan `--skip-visual`) agar pengguna dapat menjalankan salah satu fase (kuantitatif atau kualitatif saja) atau keduanya secara berurutan.
+  - **Konfigurasi Path Sampel Tetap**: Mengarahkan rute gambar masukan visualisasi sampel secara eksklisit ke direktori tetap `/data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/data-files/MyFineTunning-20260526_123630/image_samples` sesuai instruksi.
+  - **Sentralisasi Dependensi**: Menjamin berkas terpadu ini 100% independen dan tidak memiliki ketergantungan impor luar selain dari `config_shared.py` dan datasets.
+- **File yang diubah/dibuat:**
+  - `utils/generate_report-new_method.py` [DIBUAT BARU]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pengguna dapat menjalankan evaluasi terpadu metode baru secara lengkap dengan mengeksekusi: `python3 utils/generate_report-new_method.py --gpus 0`.
+
+---
+
+### [Entri 044] — Rename Skrip Terpadu & Sinkronisasi Docstring
+
+- **Tanggal/Waktu:** 2026-06-02 11:15 WIB
+- **Tugas yang diselesaikan:**
+  - **Relokasi Fisik & Rename**: Mengubah nama berkas terpadu `utils/generate_report-new_method.py` menjadi `utils/generate_standar_report-new_method.py` [utils/generate_standar_report-new_method.py](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/generate_standar_report-new_method.py) secara aman untuk mencegah kebingungan penamaan dengan laporan model tunggal.
+  - **Sinkronisasi Docstring**: Menyesuaikan referensi nama berkas dan instruksi pemanggilan CLI di dalam docstring pembuka skrip tersebut agar merujuk ke nama yang baru (`generate_standar_report-new_method.py`).
+- **File yang diubah/dibuat:**
+  - `utils/generate_standar_report-new_method.py` [DIBUAT BARU via Rename]
+  - `utils/generate_report-new_method.py` [DIHAPUS via Rename]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pemanggilan skrip terpadu metode baru kini resmi menggunakan nama baru: `python3 utils/generate_standar_report-new_method.py --gpus 0`.
+
+---
+
+### [Entri 045] — Sentralisasi Konfigurasi Visual Sampel (VISUAL_NUM_SAMPLES)
+
+- **Tanggal/Waktu:** 2026-06-02 11:32 WIB
+- **Tugas yang diselesaikan:**
+  - Mengidentifikasi anomali di mana visualisasi tetap menggunakan `5` sampel meskipun parameter bawaan diubah menjadi `10`, yang disebabkan oleh _overriding_ parameter CLI (`--samples 5`) dan panggilan lokal dalam `run_family()`.
+  - Menambahkan _Single Source of Truth_ `VISUAL_NUM_SAMPLES = 10` ke dalam `config_shared.py` (baris 205).
+  - Mengimpor variabel tersebut ke `utils/generate_report_single_model.py` dan menggunakannya sebagai nilai bawaan (default) pada CLI argumen `--samples`, parameter `generate_visuals_for_family`, dan parameter `run_family`.
+- **File yang diubah/dibuat:**
+  - `config_shared.py` [DIMODIFIKASI]
+  - `utils/generate_report_single_model.py` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Jumlah sampel gambar yang diproses untuk visualisasi sekarang diatur terpusat di `config_shared.py` lewat konstanta `VISUAL_NUM_SAMPLES`. Jangan lagi meng-_hardcode_ angka tersebut di dalam skrip evaluasi tunggal manapun.
+
+---
+
+### [Entri 046] — Sentralisasi IMAGE_SAMPLES_DIR pada generate_standar_report-new_method.py
+
+- **Tanggal/Waktu:** 2026-06-02 11:48 WIB
+- **Tugas yang diselesaikan:**
+  - Mengubah konfigurasi `IMAGE_SAMPLES_DIR` di dalam [generate_standar_report-new_method.py](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/generate_standar_report-new_method.py) agar diimpor langsung dari [config_shared.py](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/config_shared.py) (Single Source of Truth) menggantikan nilai path absolut yang sebelumnya di-hardcode.
+- **File yang diubah/dibuat:**
+  - `utils/generate_standar_report-new_method.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan semua skrip evaluasi baru maupun lama merujuk ke parameter path yang didefinisikan di `config_shared.py` untuk menghindari ketidakcocokan workspace antarsesi.
+
+---
+
+### [Entri 047] — Pembuatan Rencana Model Baru ("Eco" YOLO-SAM Hybrid)
+
+- **Tanggal/Waktu:** 2026-06-02 12:08 WIB
+- **Tugas yang diselesaikan:**
+  - Menyusun dan menganalisis kelayakan akademis penggabungan model deteksi/segmentasi YOLO (`best.pt`) dengan SAM2 (`sam2.1_t.pt`) ke dalam berkas bobot tunggal (`hybrid.pt`) sebagai base model kustom baru ("Eco").
+  - Menganalisis perbedaan *differentiability* pada *backpropagation* antara model deteksi (BBox prompt) dan model segmentasi (mask-to-mask prompt).
+  - Menyimpan seluruh analisis dan rekomendasi arsitektur di dalam dokumen rencana baru [docs/rencana-new-models.md](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/docs/rencana-new-models.md).
+- **File yang diubah/dibuat:**
+  - `docs/rencana-new-models.md` [DIBUAT/DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Konsep model "Eco" YOLO-SAM Hybrid siap diajukan untuk rancangan implementasi fase berikutnya. Rencana arsitektur difokuskan pada skenario *differentiable mask prompting* (Mask-to-Mask) untuk meloloskan gradien backpropagation secara penuh.
+
+---
+
+### [Entri 048] — Integrasi Strategi Desain Model Baru untuk Perangkat Edge
+
+- **Tanggal/Waktu:** 2026-06-02 12:15 WIB
+- **Tugas yang diselesaikan:**
+  - Menambahkan strategi desain model baru yang menggabungkan akurasi, kecepatan, dan kompatibilitas perangkat *edge* (Jetson Orin / Raspberry Pi) ke dalam [rencana-new-models.md](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/docs/rencana-new-models.md).
+  - Menyusun 4 strategi optimasi: Cascaded Dynamic Execution, Knowledge Distillation (Teacher-Student), Hardware-Aware Optimization (TensorRT + INT8 Quantization), dan Lightweight Vision Transformer (EfficientViT).
+- **File yang diubah/dibuat:**
+  - `docs/rencana-new-models.md` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Untuk uji coba performa nyata di Jetson Orin (`orin1`), prioritaskan kompilasi ONNX/TensorRT dengan skema INT8 Quantization untuk memeras VRAM seminimal mungkin.
+
+---
+
+### [Entri 049] — Koreksi Argumen CLI pada Petunjuk Pemanggilan generate_standar_report-new_method.py
+
+- **Tanggal/Waktu:** 2026-06-02 12:36 WIB
+- **Tugas yang diselesaikan:**
+  - Mengoreksi contoh perintah eksekusi di dalam docstring header [generate_standar_report-new_method.py](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/generate_standar_report-new_method.py) dengan mengganti argumen `--family all` yang tidak didukung menjadi `--gpus 0` agar tidak menimbulkan kesalahan parsing `unrecognized arguments` saat dijalankan.
+- **File yang diubah/dibuat:**
+  - `utils/generate_standar_report-new_method.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Skrip `generate_standar_report-new_method.py` menguji seluruh model secara terpadu dan tidak mendukung filter per-family. Gunakan argumen `--gpus <GPU_ID>` untuk mengarahkan pemrosesan paralel multi-GPU.
+
+---
+
+### [Entri 050] — Perbaikan Kompatibilitas Tanda Tangan Fungsi flush_gpu
+
+- **Tanggal/Waktu:** 2026-06-02 12:40 WIB
+- **Tugas yang diselesaikan:**
+  - Mengatasi error `TypeError: flush_gpu() takes from 0 to 1 positional arguments but 2 were given` pada skrip `generate_standar_report-new_method.py` saat inferensi worker.
+  - Memodifikasi fungsi `flush_gpu` di [config_shared.py](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/config_shared.py) agar mendukung parameter opsional `gpu_id` (untuk sinkronisasi CUDA multi-GPU) secara fleksibel.
+  - Menambahkan penanganan bertipe data dinamis (backward compatibility) sehingga jika parameter pertama bertipe string, fungsi otomatis memperlakukannya sebagai `label` dengan default `gpu_id = 0`, sehingga tidak merusak pemanggilan versi lama.
+- **File yang diubah/dibuat:**
+  - `config_shared.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Fungsi `flush_gpu` kini resmi mendukung pemanggilan satu argumen `flush_gpu("label")` maupun dua argumen `flush_gpu(gpu_id, "label")` secara aman di seluruh codebase.
+
+---
+
+### [Entri 051] — Perbaikan Evaluasi COCOeval pada generate_standar_report-new_method.py
+
+- **Tanggal/Waktu:** 2026-06-02 12:42 WIB
+- **Tugas yang diselesaikan:**
+  - Mengatasi error `TypeError: expected str, bytes or os.PathLike object, not dict` yang disebabkan oleh pemanggilan fungsi `load_native_coco_gt` dengan argument bertipe kamus (dictionary) `coco_gt` (hasil kembalian `build_coco_ground_truth`).
+  - Mengganti alur evaluasi dari fungsi pembungkus eksternal ke pemanggilan native `pycocotools.coco.COCO` dan `pycocotools.cocoeval.COCOeval` secara langsung di dalam berkas [generate_standar_report-new_method.py](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/generate_standar_report-new_method.py), karena variabel hasil worker `dt_bbox` dan `dt_segm` sudah berformat native COCO.
+- **File yang diubah/dibuat:**
+  - `utils/generate_standar_report-new_method.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Proses evaluasi metrik kuantitatif mAP Box dan mAP Mask saat ini 100% menggunakan API native `pycocotools` secara langsung untuk menjamin keandalan pemrosesan kamus ground truth hasil bentukan memori.
+
+---
+
+### [Entri 052] — Penyelarasan Dataset Evaluasi Standard pada generate_standar_report-new_method.py
+
+- **Tanggal/Waktu:** 2026-06-02 12:46 WIB
+- **Tugas yang diselesaikan:**
+  - Menyelaraskan sumber data evaluasi kuantitatif (Fase 1) pada skrip terpadu [generate_standar_report-new_method.py](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/generate_standar_report-new_method.py) agar menggunakan dataset evaluasi standard (`standard_datasets_det` untuk deteksi dan `standard_datasets_seg` untuk segmentasi) alih-alih dataset pelatihan/baseline (`DET_YAML`/`SEG_YAML` yang mengarah ke `training_det`/`training_seg`).
+  - Mengubah fungsi pembangun ground truth menggunakan `load_native_coco_gt` dengan parameter folder `valid` dari masing-masing dataset standar untuk memuat data annotasi secara langsung.
+- **File yang diubah/dibuat:**
+  - `utils/generate_standar_report-new_method.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Evaluasi kuantitatif dan visualisasi kualitatif pada skrip terpadu metode standar sekarang secara konsisten menggunakan dataset evaluasi yang sama dari `standard_datasets_det` and `standard_datasets_seg`.
+
+---
+
+### [Entri 053] — Penambahan Impor Pustaka json pada generate_standar_report-new_method.py
+
+- **Tanggal/Waktu:** 2026-06-02 12:57 WIB
+- **Tugas yang diselesaikan:**
+  - Memperbaiki bug `NameError: name 'json' is not defined` di dalam skrip [generate_standar_report-new_method.py](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/generate_standar_report-new_method.py) pada baris 436 (fungsi `init_classes_from_coco`).
+  - Menambahkan impor modul bawaan `json` pada daftar deklarasi impor awal skrip.
+- **File yang diubah/dibuat:**
+  - `utils/generate_standar_report-new_method.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pemanggilan parsing JSON dalam inisialisasi kelas COCO kini dapat dieksekusi dengan aman tanpa memicu kegagalan runtime.
+
+---
+
+### [Entri 054] — Perbaikan Perhitungan Ukuran Buffer Mask R-CNN pada generate_standar_report-new_method.py
+
+- **Tanggal/Waktu:** 2026-06-02 13:00 WIB
+- **Tugas yang diselesaikan:**
+  - Memperbaiki bug `NameError: name 'b' is not defined` di dalam skrip [generate_standar_report-new_method.py](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/generate_standar_report-new_method.py) pada baris 184 (fungsi `_get_model_metrics`).
+  - Mengubah kode `sum(b.nelement() * b.buffers())` yang tidak valid menjadi `sum(b.nelement() * b.element_size() for b in m.buffers())` untuk melakukan loop dan menghitung ukuran memori buffer model Mask R-CNN secara tepat.
+- **File yang diubah/dibuat:**
+  - `utils/generate_standar_report-new_method.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Ukuran file (MB) dan jumlah parameter (M) untuk model Mask R-CNN sekarang dapat dihitung dengan benar di awal eksekusi kuantitatif tanpa memicu *warning* kegagalan hitung.
+
+---
+
+### [Entri 055] — Penambahan Impor Global YOLO dan SAM pada generate_standar_report-new_method.py
+
+- **Tanggal/Waktu:** 2026-06-02 13:09 WIB
+- **Tugas yang diselesaikan:**
+  - Memperbaiki bug `NameError: name 'YOLO' is not defined` pada skrip [generate_standar_report-new_method.py](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/generate_standar_report-new_method.py) di baris 737 (fungsi `main` saat memuat model deteksi YOLOv8m).
+  - Memindahkan impor `YOLO` dan `SAM` dari pustaka `ultralytics` ke tingkat global (top level) agar dapat diakses dari seluruh fungsi, termasuk fungsi orkestrasi `main`.
+- **File yang diubah/dibuat:**
+  - `utils/generate_standar_report-new_method.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan semua pemanggilan kelas-kelas model Ultralytics (YOLO/SAM) di dalam skrip orkestrasi tidak didefinisikan secara lokal di dalam worker saja, melainkan dideklarasikan secara global untuk kebersihan dan keandalan runtime.
+
+
+
+
+
+
+
+
+
+

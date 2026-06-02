@@ -202,6 +202,7 @@ EVAL_CONF           = 0.75 # Ambang batas confidence minimum untuk evaluasi (YOL
 EVAL_IOU            = 0.15   # Ambang batas IOU untuk evaluasi NMS (YOLO)
 VISUAL_CONF         = 0.75  # Ambang batas confidence untuk visualisasi
 VISUAL_IOU          = 0.15   # Ambang batas IOU untuk NMS saat visualisasi
+VISUAL_NUM_SAMPLES  = 10     # Jumlah maksimum gambar sampel yang akan diuji visualnya
 
 # ==============================================================================
 # HYPERPARAMETER PARALEL & EARLY STOPPING (Standard 2026)
@@ -694,7 +695,7 @@ def generate_models_markdown_summary():
     print("[Models] ✅ Rangkuman markdown berhasil dibuat!")
 
 
-def flush_gpu(label: str = ""):
+def flush_gpu(gpu_id_or_label=0, label: str = ""):
     """Membersihkan cache CUDA dan melakukan garbage collection secara paksa untuk menghemat VRAM."""
     import gc
     import torch
@@ -702,9 +703,16 @@ def flush_gpu(label: str = ""):
     torch.cuda.empty_cache()
     if torch.cuda.is_available():
         try:
-            torch.cuda.synchronize()
-            free, total = torch.cuda.mem_get_info(0)
-            print(f"  [MemFlush] {label} — VRAM: {free/1e9:.2f}/{total/1e9:.2f} GB", flush=True)
+            # Kompatibilitas ke belakang: jika parameter pertama adalah string, itu adalah label
+            if isinstance(gpu_id_or_label, str):
+                label = gpu_id_or_label
+                gpu_id = 0
+            else:
+                gpu_id = int(gpu_id_or_label)
+            
+            torch.cuda.synchronize(gpu_id)
+            free, total = torch.cuda.mem_get_info(gpu_id)
+            print(f"  [GPU:{gpu_id}][MemFlush] {label} — VRAM: {free/1e9:.2f}/{total/1e9:.2f} GB", flush=True)
         except Exception:
             pass
 

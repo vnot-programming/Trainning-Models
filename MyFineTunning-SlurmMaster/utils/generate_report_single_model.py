@@ -37,11 +37,13 @@ Langkah 2: Jalankan skrip evaluasi dengan parameter yang sesuai:
            $ python3 -u utils/generate_report_single_model.py --family yolo9 --variants yolov9m,yolov9e --gpus 0
 
            # C. Eksekusi orkestrasi otomatis untuk seluruh family sekaligus (Pipeline Mode)
-           $ WS_ID=$(cat .workspace_id)
-           $ LOG_DIR="data-files/MyFineTunning-${WS_ID}/logs"
-           $ mkdir -p "$LOG_DIR"
-           $ python3 -u utils/generate_report_single_model.py --family all 2>&1 | tee "$LOG_DIR/1_generate_report_single_model.log"
-
+                WS_ID=$(cat .workspace_id)
+                LOG_DIR="data-files/MyFineTunning-${WS_ID}/logs"
+                mkdir -p "$LOG_DIR"
+                python3 -u utils/generate_report_single_model.py --family all 2>&1 | tee "$LOG_DIR/1_generate_report_single_model.log"
+           # D. 
+                cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster && LOG_DIR=$(python3 -c "import config_shared, os; print(os.path.join(config_shared.WORKSPACE_DIR, 'logs'))") && mkdir -p "$LOG_DIR" && python3 -u utils/generate_report_single_model.py --family all 2>&1 | tee "$LOG_DIR/1_generate_report_single_model.log"
+                
 Struktur Direktori Output (di dalam WORKSPACE_DIR):
 -------------------------------------------------
 reports/pipeline/
@@ -137,6 +139,7 @@ from config_shared import (
     get_output_dir,
     MODEL_COLORS,
     NUM_CLASSES,
+    VISUAL_NUM_SAMPLES,
 )
 from telegram_utils import send_telegram_msg
 from coco_eval_utils import (
@@ -356,7 +359,7 @@ def generate_visuals_for_family(
     family: str,
     variants: list[dict],
     gpu_ids: list[int],
-    n_samples: int = 5,
+    n_samples: int = VISUAL_NUM_SAMPLES,
     conf: float = 0.5,
 ) -> None:
     """
@@ -1506,7 +1509,7 @@ def run_family(
     skip_eval: bool = False,
     skip_visual: bool = False,
     variant_filter: Optional[list[str]] = None,
-    n_samples: int = 5,
+    n_samples: int = VISUAL_NUM_SAMPLES,
 ) -> tuple[list[dict], list[dict]]:
     """
     Jalankan evaluasi + visualisasi untuk satu family model.
@@ -1637,8 +1640,8 @@ def main() -> None:
         help="GPU yang digunakan (pisahkan dengan koma). Contoh: --gpus 0,1. Default: 0."
     )
     parser.add_argument(
-        "--samples", type=int, default=5,
-        help="Jumlah gambar sampel untuk visualisasi. Default: 5."
+        "--samples", type=int, default=VISUAL_NUM_SAMPLES,
+        help=f"Jumlah gambar sampel untuk visualisasi. Default: {VISUAL_NUM_SAMPLES}."
     )
     parser.add_argument(
         "--skip-eval", action="store_true",
