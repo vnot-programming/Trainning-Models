@@ -1901,5 +1901,25 @@
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - Branch `dev` di repositori remote sekarang sudah sinkron 100% dengan repositori lokal (termasuk folder `RVM/` dan file konfigurasi `config_shared.py` terbaru).
 
+---
+
+### [Entri — Stabilisasi Cloudflare Tunnel & Analisis Jaringan Kampus] — 2026-06-05 23:55 WIB
+
+- **Tanggal/Waktu:** 2026-06-05 23:55 WIB
+- **Tugas yang diselesaikan:**
+  1. **Root Cause Analysis RTO**: Menganalisis log `cloudflared.log` dan mendiagnosis bahwa RTO pada `slurm.penelitian.my.id` disebabkan oleh pemutusan koneksi outbound (ICMP & persistent HTTP/2 tunnel drops) secara periodik oleh perimeter firewall Kasetsart University (KU) ke Cloudflare Edge, bukan karena binding `ssh://localhost:22`.
+  2. **Tuning Server-Side Tunnel**: Menghentikan sesi lama dan mengaktifkan ulang daemon tunnel `cloudflared` di dalam tmux session `cloudflare_tunnel` menggunakan parameter yang dioptimasi:
+     - `--edge-ip-version 4` (memaksa resolusi IPv4 yang lebih kompatibel dengan routing kampus).
+     - `--retries 10` (meningkatkan toleransi ketahanan reconnect).
+     - Berhasil meregistrasikan 4 koneksi paralel secara stabil ke lokasi `bkk06` dan `sin02`/`sin11`.
+  3. **Audit Port 22 Publik**: Melakukan uji coba dari VPS Azure (`VPS-4C56G-CF`) ke IP publik Slurm `158.108.222.131` port 22 dan mengonfirmasi status `Blocked`. Hal ini memastikan bahwa akses direct SSH diblokir oleh kampus dari luar dan Cloudflare Tunnel adalah satu-satunya gerbang masuk.
+  4. **Penyusunan Solusi Client-Side**: Merumuskan instruksi konfigurasi SSH Keepalive bagi PC/Laptop pengguna untuk mencegah penutupan koneksi idle oleh NAT/firewall kampus.
+- **File yang diubah/dibuat:**
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅ (Koneksi tunnel pulih dan stabil)
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Layanan `cloudflared` berjalan aktif di latar belakang (tmux session `cloudflare_tunnel`). Log terpantau di `/data/users/g6717500336/singularity/cloudflared.log`. Jika koneksi SSH dari client masih sering putus setelah idle, pastikan user mengonfigurasi SSH keepalive (`ServerAliveInterval 15`, `ServerAliveCountMax 5`) di sisi client (Laptop/PC).
+
+
 
 
