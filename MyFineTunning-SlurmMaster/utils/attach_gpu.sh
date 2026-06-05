@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Cari JOBID dari job bernama VnoT-Train milik user saat ini yang sedang Running
-JOBID=$(squeue -u $USER -n VnoT-Train -t R -h -o %i | head -n 1)
+# Cari JOBID dari job bernama vnot milik user saat ini yang sedang Running
+JOBID=$(squeue -u $USER -n vnot -t R -h -o %i | head -n 1)
 
 if [ -z "$JOBID" ]; then
-    echo "❌ Tidak ada job 'VnoT-Train' yang sedang berjalan."
+    echo "❌ Tidak ada job 'vnot' yang sedang berjalan."
     echo "💡 Jalankan terlebih dahulu: sbatch book_gpu.batch"
     exit 1
 fi

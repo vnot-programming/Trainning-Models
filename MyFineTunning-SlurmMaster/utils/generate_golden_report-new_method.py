@@ -74,7 +74,7 @@ from config_shared import (
     WORKSPACE_DIR, SEG_YAML, DET_YAML, IMAGE_SIZE, NUM_CLASSES,
     get_output_dir, REPORTS_DIR, DATA_FILES_DIR, GOLDEN_SEG_DATASET_LOCATION, GOLDEN_DET_DATASET_LOCATION,
     PAPER1_CSV_DIR, PAPER1_VIS_DIR, EVAL_CONF, EVAL_IOU, VISUAL_CONF, VISUAL_IOU, flush_gpu,
-    IMAGE_SAMPLES_DIR
+    IMAGE_SAMPLES_DIR, CSV_REPORT_FIELDS
 )
 from telegram_utils import send_telegram_msg
 from coco_eval_utils import (
@@ -86,6 +86,7 @@ from ultralytics import YOLO, SAM
 # KONSTANTA LOKAL & CONFIG MODEL
 # ==============================================================================
 SAM_MODEL_PATH = os.path.join(ROOT, "models", "sam2.1_t.pt")
+MOBILE_SAM_MODEL_PATH = os.path.join(ROOT, "models", "mobile_sam.pt")
 YOLO11L_DET_PATH  = os.path.join(WORKSPACE_DIR, "runs", "yolo11l", "weights", "best.pt")
 YOLO11L_SEG_PATH  = os.path.join(WORKSPACE_DIR, "runs", "yolo11l_seg", "weights", "best.pt")
 
@@ -140,6 +141,26 @@ MODELS_CONFIG = [
     {"label": "Hybrid (YOLO11n-Seg+SAM2.1_t)",  "key": "hybrid_yolo11n_seg",  "type": "hybrid_seg"},
     {"label": "Hybrid (YOLO11l-Seg+SAM2.1_t)",  "key": "hybrid_yolo11l_seg",  "type": "hybrid_seg"},
     {"label": "Hybrid (YOLO11x-Seg+SAM2.1_t)",  "key": "hybrid_yolo11x_seg",  "type": "hybrid_seg"},
+
+    # ── Hybrid Detection (7 Models - YOLO Det + MOBILE SAM) ──────────────────────────
+    {"label": "Hybrid (YOLOv8m+MobileSAM)",  "key": "hybrid_yolov8m_mobile",  "type": "hybrid_det_mobile"},
+    {"label": "Hybrid (YOLOv8x+MobileSAM)",  "key": "hybrid_yolov8x_mobile",  "type": "hybrid_det_mobile"},
+    {"label": "Hybrid (YOLOv9m+MobileSAM)",  "key": "hybrid_yolov9m_mobile",  "type": "hybrid_det_mobile"},
+    {"label": "Hybrid (YOLOv9e+MobileSAM)",  "key": "hybrid_yolov9e_mobile",  "type": "hybrid_det_mobile"},
+    {"label": "Hybrid (YOLO11n+MobileSAM)",  "key": "hybrid_yolo11n_mobile",  "type": "hybrid_det_mobile"},
+    {"label": "Hybrid (YOLO11l+MobileSAM)",  "key": "hybrid_yolo11l_mobile",  "type": "hybrid_det_mobile"},
+    {"label": "Hybrid (YOLO11x+MobileSAM)",  "key": "hybrid_yolo11x_mobile",  "type": "hybrid_det_mobile"},
+
+    # ── Hybrid Segmentation (9 Models - YOLO Seg/Det + MOBILE SAM) ──────────────────
+    {"label": "Hybrid (YOLOv8m-Seg+MobileSAM)",  "key": "hybrid_yolov8m_seg_mobile",  "type": "hybrid_seg_mobile"},
+    {"label": "Hybrid (YOLOv8x-Seg+MobileSAM)",  "key": "hybrid_yolov8x_seg_mobile",  "type": "hybrid_seg_mobile"},
+    {"label": "Hybrid (YOLOv9c-Seg+MobileSAM)",  "key": "hybrid_yolov9c_seg_mobile",  "type": "hybrid_seg_mobile"},
+    {"label": "Hybrid (YOLOv9e-Seg+MobileSAM)",  "key": "hybrid_yolov9e_seg_mobile",  "type": "hybrid_seg_mobile"},
+    {"label": "Hybrid (YOLOv10m+MobileSAM)",     "key": "hybrid_yolov10m_mobile",     "type": "hybrid_seg_mobile"},
+    {"label": "Hybrid (YOLOv10x+MobileSAM)",     "key": "hybrid_yolov10x_mobile",     "type": "hybrid_seg_mobile"},
+    {"label": "Hybrid (YOLO11n-Seg+MobileSAM)",  "key": "hybrid_yolo11n_seg_mobile",  "type": "hybrid_seg_mobile"},
+    {"label": "Hybrid (YOLO11l-Seg+MobileSAM)",  "key": "hybrid_yolo11l_seg_mobile",  "type": "hybrid_seg_mobile"},
+    {"label": "Hybrid (YOLO11x-Seg+MobileSAM)",  "key": "hybrid_yolo11x_seg_mobile",  "type": "hybrid_seg_mobile"},
 ]
 
 # ==============================================================================
@@ -198,9 +219,9 @@ def _get_model_metrics(model_cfg: dict, is_seg: bool = False) -> dict:
             del m; gc.collect()
             result["weights_size_mb"] = round(sz / 1024**2, 2)
             result["parameters_m"] = round(total_params / 1e6, 2)
-        elif mtype in ["hybrid", "hybrid_det", "hybrid_seg"]:
+        elif mtype in ["hybrid", "hybrid_det", "hybrid_seg", "hybrid_det_mobile", "hybrid_seg_mobile"]:
             from ultralytics import YOLO, SAM
-            yolo_key = mkey.replace("hybrid_", "")
+            yolo_key = mkey.replace("hybrid_", "").replace("_mobile", "")
             if yolo_key == "yolo11l":
                 pt = YOLO11L_DET_PATH
             elif yolo_key == "yolo11l_seg":
@@ -209,7 +230,8 @@ def _get_model_metrics(model_cfg: dict, is_seg: bool = False) -> dict:
                 pt = os.path.join(get_output_dir(yolo_key), "weights", "best.pt")
                 
             y_m = YOLO(pt)
-            s_m = SAM(SAM_MODEL_PATH)
+            sam_pt = MOBILE_SAM_MODEL_PATH if "mobile" in mtype else SAM_MODEL_PATH
+            s_m = SAM(sam_pt)
             y_params = sum(p.nelement() for p in y_m.model.parameters())
             s_params = sum(p.nelement() for p in s_m.model.parameters())
             y_sz = sum(p.nelement() * p.element_size() for p in y_m.model.parameters()) + sum(b.nelement() * b.element_size() for b in y_m.model.buffers())
@@ -253,9 +275,9 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
             pt = os.path.join(get_output_dir("maskrcnn"), "weights", "best.pt")
             model_obj.load_state_dict(torch.load(pt, map_location=device_str, weights_only=True))
             model_obj.to(device_str).eval()
-        elif mtype in ["hybrid_det", "hybrid_seg"]:
+        elif mtype in ["hybrid_det", "hybrid_seg", "hybrid_det_mobile", "hybrid_seg_mobile"]:
             from ultralytics import YOLO, SAM
-            yolo_key = mkey.replace("hybrid_", "")
+            yolo_key = mkey.replace("hybrid_", "").replace("_mobile", "")
             if yolo_key == "yolo11l":
                 pt = YOLO11L_DET_PATH
             elif yolo_key == "yolo11l_seg":
@@ -265,7 +287,8 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
                 
             print(f"  [GPU:{gpu}] Hybrid menggunakan {yolo_key} untuk generator prompt.")
             model_obj = YOLO(pt)
-            sam_model = SAM(SAM_MODEL_PATH)
+            sam_pt = MOBILE_SAM_MODEL_PATH if "mobile" in mtype else SAM_MODEL_PATH
+            sam_model = SAM(sam_pt)
     except Exception as e:
         print(f"  [GPU:{gpu}] ❌ Gagal load {label}: {e}", flush=True)
         with open(os.path.join(tmp_dir, f"rank{rank}.pkl"), "wb") as f:
@@ -333,7 +356,7 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
             t5 = time.perf_counter()
             spd_post = (t5 - t4) * 1000
                     
-        elif mtype in ["hybrid_det", "hybrid_seg"]:
+        elif mtype in ["hybrid_det", "hybrid_seg", "hybrid_det_mobile", "hybrid_seg_mobile"]:
             res = model_obj.predict(img_path, conf=EVAL_CONF, iou=EVAL_IOU, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
             spd = res.speed
             spd_pre = spd.get("preprocess", 0.0)
@@ -345,11 +368,11 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
                 pred_confs = res.boxes.conf.cpu().numpy()
                 pred_clss = res.boxes.cls.cpu().numpy().astype(int)
                 
-                # 1. SAM2 Inference — STANDARDIZED: Menggunakan Tensor GPU Mentah (res.boxes.xyxy)
+                # 1. SAM2/MobileSAM Inference — STANDARDIZED: Menggunakan Tensor GPU Mentah (res.boxes.xyxy)
                 torch.cuda.synchronize()
                 sam_inf_st = time.perf_counter()
                 try:
-                    sam_res = sam_model(res.orig_img, bboxes=res.boxes.xyxy, device=device_str, verbose=False)
+                    sam_res = sam_model.predict(res.orig_img, bboxes=res.boxes.xyxy, device=device_str, verbose=False)
                     torch.cuda.synchronize()
                     sam_inf_et = time.perf_counter()
                     sam_inf_time = (sam_inf_et - sam_inf_st) * 1000
@@ -357,7 +380,7 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
                     sam_res = None
                     sam_inf_time = 0.0
 
-                # 2. SAM2 Postprocess
+                # 2. SAM2/MobileSAM Postprocess
                 torch.cuda.synchronize()
                 sam_post_st = time.perf_counter()
                 if sam_res and sam_res[0].masks is not None:
@@ -389,7 +412,7 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
             })
             
         # Simpan Segmentation COCO format (RLE)
-        if mtype in ["yolo_seg", "maskrcnn", "hybrid_seg"] and len(masks_np) > 0:
+        if mtype in ["yolo_seg", "maskrcnn", "hybrid_seg", "hybrid_seg_mobile", "hybrid_det", "hybrid_det_mobile"] and len(masks_np) > 0:
             for idx in range(len(pred_boxes)):
                 if idx < len(masks_np) and masks_np[idx] is not None:
                     rle = maskUtils.encode(np.asfortranarray(masks_np[idx].astype(np.uint8)))
@@ -596,7 +619,7 @@ def main():
             label, mkey, mtype = mcfg["label"], mcfg["key"], mcfg["type"]
             print(f"\n[Eval Kuantitatif] Running: {label}...")
             
-            if mtype in ["yolo_det", "hybrid_det"]:
+            if mtype in ["yolo_det", "hybrid_det", "hybrid_det_mobile"]:
                 img_dir, image_ids, coco_gt = img_dir_det, image_ids_det, coco_gt_det
             else:
                 img_dir, image_ids, coco_gt = img_dir_seg, image_ids_seg, coco_gt_seg
@@ -639,7 +662,7 @@ def main():
                 from pycocotools.cocoeval import COCOeval
                 
                 # Bounding Box mAP
-                if len(dt_bbox) > 0 and (mtype in ["yolo_det", "maskrcnn", "hybrid_det"] or (mtype in ["yolo_seg", "hybrid_seg"])):
+                if len(dt_bbox) > 0 and (mtype in ["yolo_det", "maskrcnn", "hybrid_det", "hybrid_det_mobile", "yolo_seg", "hybrid_seg", "hybrid_seg_mobile"]):
                     try:
                         coco_gt_obj = COCO()
                         coco_gt_obj.dataset = coco_gt
@@ -660,7 +683,7 @@ def main():
                         print(f"  [Eval-Error] Gagal hitung mAP Box: {ev_err}")
                         
                 # Mask Segmentation mAP
-                if len(dt_segm) > 0 and (mtype in ["yolo_seg", "maskrcnn", "hybrid_seg"]):
+                if len(dt_segm) > 0 and (mtype in ["yolo_seg", "maskrcnn", "hybrid_seg", "hybrid_seg_mobile", "hybrid_det", "hybrid_det_mobile"]):
                     try:
                         import copy
                         # Filter annotations to keep only those with valid segmentations to prevent COCOeval crash
@@ -699,20 +722,27 @@ def main():
                 # Masukkan ke rows gabungan
                 rows.append({
                     "Model": label,
-                    "mAP50 (Box)": mAP50_box,
-                    "mAP50-95 (Box)": mAP95_box,
-                    "mAP50 (Mask)": mAP50_mask,
-                    "mAP50-95 (Mask)": mAP95_mask,
-                    "Speed Preprocess (ms)": avg_pre,
-                    "Speed Inference (ms)": avg_inf,
-                    "Speed Postprocess (ms)": avg_post,
                     "Weights Size (MB)": metrics["weights_size_mb"],
                     "Parameters (M)": metrics["parameters_m"],
+                    "mAP50-95(Box)": mAP95_box,
+                    "mAP50(Box)": mAP50_box,
+                    "mAP50-95(Mask)": mAP95_mask,
+                    "mAP50(Mask)": mAP50_mask,
+                    "Precision(Box)": precision_box,
+                    "Recall(Box)": recall_box,
+                    "Precision(Mask)": precision_mask,
+                    "Recall(Mask)": recall_mask,
+                    "Preprocess (ms)": avg_pre,
+                    "Inference (ms)": avg_inf,
+                    "Postprocess (ms)": avg_post,
+                    "Latency (ms)": lat,
+                    "FPS": fps,
                     "GPUs": gpu_report,
+                    "Evaluator": "COCOeval (pycocotools)",
                 })
 
                 # Masukkan ke row data det
-                if mcfg["type"] in ["yolo_det", "hybrid_det"]:
+                if mcfg["type"] in ["yolo_det", "hybrid_det", "hybrid_det_mobile"]:
                     rows_det.append({
                         "Model": label,
                         "Weights Size (MB)": metrics["weights_size_mb"],
@@ -725,7 +755,7 @@ def main():
                         "Latency (ms)": lat, "FPS": fps, "GPUs": gpu_report, "Evaluator": "COCOeval (pycocotools)"
                     })
                 # Masukkan ke row data seg
-                if mAP50_mask != "N/A" or mcfg["type"] in ["yolo_seg", "maskrcnn", "hybrid_seg"]:
+                if mAP50_mask != "N/A" or mcfg["type"] in ["yolo_seg", "maskrcnn", "hybrid_seg", "hybrid_seg_mobile", "hybrid_det", "hybrid_det_mobile"]:
                     rows_seg.append({
                         "Model": label,
                         "Weights Size (MB)": metrics["weights_size_mb"],
@@ -769,12 +799,8 @@ def main():
 
         # Tambahan ekspor kompilasi_new_method_golden.csv ke PAPER1_CSV_DIR
         os.makedirs(PAPER1_CSV_DIR, exist_ok=True)
-        comp_gold_csv = os.path.join(PAPER1_CSV_DIR, "kompilasi_new_method_golden.csv")
-        fields = [
-            "Model", "mAP50 (Box)", "mAP50-95 (Box)", "mAP50 (Mask)", "mAP50-95 (Mask)",
-            "Speed Preprocess (ms)", "Speed Inference (ms)", "Speed Postprocess (ms)",
-            "Weights Size (MB)", "Parameters (M)", "GPUs"
-        ]
+        comp_gold_csv = os.path.join(PAPER1_CSV_DIR, "kompilasi_ALL_new_method_golden.csv")
+        fields = CSV_REPORT_FIELDS
         with open(comp_gold_csv, "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=fields)
             w.writeheader()
@@ -785,7 +811,7 @@ def main():
         send_telegram_msg(
             f"📊 <b>Fase 1 Kuantitatif Golden Selesai</b>\n"
             f"Output: <code>golden_det.csv</code> & <code>golden_seg.csv</code>\n"
-            f"Kompilasi: <code>kompilasi_new_method_golden.csv</code>\n"
+            f"Kompilasi: <code>kompilasi_ALL_new_method_golden.csv</code>\n"
             f"Total Evaluasi: {len(rows_det) + len(rows_seg)} model."
         )
 

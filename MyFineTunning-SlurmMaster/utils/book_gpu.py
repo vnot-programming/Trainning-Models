@@ -81,18 +81,19 @@ def scan_slurm_nodes():
     return healthy_nodes, draining_nodes
 
 def generate_booking_sbatch(target_node=None, exclude_nodes=None):
-    """Membuat file sbatch booking dinamis."""
+    """Membuat file sbatch booking dinamis untuk GPU."""
     sbatch_path = os.path.join(_THIS_DIR, "submit_booking_run.sbatch")
     
     lines = [
         "#!/bin/bash",
-        "#SBATCH --job-name=VnoT-Train",
+        "#SBATCH --job-name=vnot",
         "#SBATCH --output=slurm_logs/booking_output_%j.log",
         "#SBATCH --error=slurm_logs/booking_error_%j.log",
         "#SBATCH --partition=gpu",
         "#SBATCH --gres=gpu:1",
         "#SBATCH --cpus-per-task=8",
         "#SBATCH --mem=64G"
+        "#SBATCH --signal=B:USR1@120"
     ]
     
     if target_node:
@@ -112,6 +113,10 @@ def generate_booking_sbatch(target_node=None, exclude_nodes=None):
         "echo \"Cara masuk ke node ini tanpa antre:\"",
         "echo \"  ./attach_gpu.sh\"",
         "echo \"\"",
+        "# Panggil script Ollama tanpa menyebabkan double slurm job",
+        "bash /data/users/g6717500336/singularity/ollama/sbatch_llm_service.sh &",
+        "SERVICE_PID=$!",
+        "wait $SERVICE_PID",
         "echo \"Menahan node agar tidak tertutup...\"",
         "sleep infinity"
     ])
@@ -121,9 +126,15 @@ def generate_booking_sbatch(target_node=None, exclude_nodes=None):
     return sbatch_path
 
 def get_job_state(job_id):
-    """Membaca status job Slurm."""
-    output = get_cmd_output(f"squeue -j {job_id} -h -o '%t %r'")
-    if not output:
+    """Membaca status job Slurm dengan Retry Mechanism."""
+    for attempt in range(3):
+        output = get_cmd_output(f"squeue -j {job_id} -h -o '%t %r'")
+        if output:
+            parts = output.split()
+            state = parts[0]
+            reason = " ".join(parts[1:]) if len(parts) > 1 else ""
+            return state, reason
+            
         sacct_output = get_cmd_output(f"sacct -j {job_id} -h -o 'State,ExitCode' | head -n 1")
         if sacct_output:
             parts = sacct_output.split()
@@ -131,12 +142,10 @@ def get_job_state(job_id):
                 return parts[0], " ".join(parts[1:])
             elif len(parts) == 1:
                 return parts[0], ""
-        return "UNKNOWN", ""
+                
+        time.sleep(3)
         
-    parts = output.split()
-    state = parts[0]
-    reason = " ".join(parts[1:]) if len(parts) > 1 else ""
-    return state, reason
+    return "UNKNOWN", ""
 
 def monitor_job(job_id, target_desc):
     """Fungsi monitoring utama dengan Telegram Alerting."""
@@ -198,6 +207,33 @@ def monitor_job(job_id, target_desc):
 def main():
     print("✧ SMART SLURM GPU BOOKING ✧")
     
+    # Cek apakah ada job 'vnot' milik user yang sudah aktif (R atau PD) sebelum submit baru
+    user = os.environ.get("USER", "g6717500336")
+    existing_jobs = get_cmd_output(f"squeue -u {user} -h -o '%i %j %t'")
+    if existing_jobs:
+        for line in existing_jobs.split('\n'):
+            parts = line.split()
+            if len(parts) >= 3 and parts[1] == "vnot" and parts[2] in ["R", "PD"]:
+                job_id = parts[0]
+                state = parts[2]
+                state_desc = "Running" if state == "R" else "Pending"
+                print(f"Mendeteksi job 'vnot' yang sudah aktif ({state_desc}) dengan Job ID: {job_id}")
+                print("Melompati sbatch baru dan langsung memantau...")
+                
+                # Gunakan info node jika sudah running
+                if state == "R":
+                    node_running = get_cmd_output(f"squeue -j {job_id} -h -o '%N'")
+                    desc = f"Attach ke Job Aktif di Node <b>{node_running}</b>"
+                else:
+                    desc = "Attach ke Job Aktif di Antrean"
+                
+                should_resume = monitor_job(job_id, desc)
+                if not should_resume:
+                    return
+                print("⏳ Menunggu 5 detik sebelum auto-resume...")
+                time.sleep(5)
+                break
+
     while True:
         print("Memindai topologi kluster secara real-time...")
         

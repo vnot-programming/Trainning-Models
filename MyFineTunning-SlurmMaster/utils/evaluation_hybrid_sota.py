@@ -50,7 +50,7 @@ import torch.multiprocessing as mp
 from config_shared import (
     WORKSPACE_DIR, SEG_YAML, DET_YAML, IMAGE_SIZE, NUM_CLASSES,
     get_output_dir, REPORTS_DIR, DATA_FILES_DIR, GOLDEN_SEG_DATASET_LOCATION, GOLDEN_DET_DATASET_LOCATION,
-    PAPER1_CSV_DIR, EVAL_CONF, EVAL_IOU
+    PAPER1_CSV_DIR, EVAL_CONF, EVAL_IOU, CSV_REPORT_FIELDS
 )
 from telegram_utils import send_telegram_msg
 from coco_eval_utils import (
@@ -546,6 +546,8 @@ def eval_model_distributed(model_cfg: dict, gpu_ids: list, coco_gt_dict: dict, i
             "mAP50(Box)": mAP50_box,
             "mAP50-95(Mask)": mAP50_95_mask,
             "mAP50(Mask)": mAP50_mask,
+            "Precision(Box)": precision_box,
+            "Recall(Box)": recall_box,
             "Precision(Mask)": precision_mask,
             "Recall(Mask)": recall_mask,
             "Preprocess (ms)": avg_pre, "Inference (ms)": avg_inf, "Postprocess (ms)": avg_post,
@@ -694,6 +696,61 @@ if __name__ == "__main__":
             w = csv.DictWriter(f, fieldnames=list(all_seg_rows[0].keys()))
             w.writeheader(); w.writerows(all_seg_rows)
         print(f"✅ Seg Report [New Method]: {seg_csv}")
+
+    # --- Kompilasi ALL Hybrid SOTA ---
+    unified_rows = []
+    if all_det_rows:
+        for r in all_det_rows:
+            unified_rows.append({
+                "Model":             r.get("Model", "N/A"),
+                "Weights Size (MB)": r.get("Weights Size (MB)", "N/A"),
+                "Parameters (M)":    r.get("Parameters (M)", "N/A"),
+                "mAP50-95(Box)":     r.get("mAP50-95", "N/A"),
+                "mAP50(Box)":        r.get("mAP50", "N/A"),
+                "mAP50-95(Mask)":    "N/A",
+                "mAP50(Mask)":       "N/A",
+                "Precision(Box)":    r.get("Precision", "N/A"),
+                "Recall(Box)":       r.get("Recall", "N/A"),
+                "Precision(Mask)":   "N/A",
+                "Recall(Mask)":      "N/A",
+                "Preprocess (ms)":   r.get("Preprocess (ms)", "N/A"),
+                "Inference (ms)":    r.get("Inference (ms)", "N/A"),
+                "Postprocess (ms)":  r.get("Postprocess (ms)", "N/A"),
+                "Latency (ms)":      r.get("Latency (ms)", "N/A"),
+                "FPS":               r.get("FPS", "N/A"),
+                "GPUs":              r.get("GPUs", "N/A"),
+                "Evaluator":         r.get("Evaluator", "N/A")
+            })
+    if all_seg_rows:
+        for r in all_seg_rows:
+            unified_rows.append({
+                "Model":             r.get("Model", "N/A"),
+                "Weights Size (MB)": r.get("Weights Size (MB)", "N/A"),
+                "Parameters (M)":    r.get("Parameters (M)", "N/A"),
+                "mAP50-95(Box)":     r.get("mAP50-95(Box)", "N/A"),
+                "mAP50(Box)":        r.get("mAP50(Box)", "N/A"),
+                "mAP50-95(Mask)":    r.get("mAP50-95(Mask)", "N/A"),
+                "mAP50(Mask)":       r.get("mAP50(Mask)", "N/A"),
+                "Precision(Box)":    r.get("Precision(Box)", "N/A"),
+                "Recall(Box)":       r.get("Recall(Box)", "N/A"),
+                "Precision(Mask)":   r.get("Precision(Mask)", "N/A"),
+                "Recall(Mask)":      r.get("Recall(Mask)", "N/A"),
+                "Preprocess (ms)":   r.get("Preprocess (ms)", "N/A"),
+                "Inference (ms)":    r.get("Inference (ms)", "N/A"),
+                "Postprocess (ms)":  r.get("Postprocess (ms)", "N/A"),
+                "Latency (ms)":      r.get("Latency (ms)", "N/A"),
+                "FPS":               r.get("FPS", "N/A"),
+                "GPUs":              r.get("GPUs", "N/A"),
+                "Evaluator":         r.get("Evaluator", "N/A")
+            })
+
+    if unified_rows:
+        comp_sota_csv = os.path.join(NEW_CSV_DIR, "kompilasi_ALL_hybrid_sota.csv")
+        with open(comp_sota_csv, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=CSV_REPORT_FIELDS)
+            w.writeheader()
+            w.writerows(unified_rows)
+        print(f"✅ Kompilasi ALL Hybrid SOTA [New Method]: {comp_sota_csv}")
 
     try:
         msg = f"✅ <b>Hybrid SOTA Evaluation Finished</b>\nWorkspace: <code>{os.path.basename(WORKSPACE_DIR)}</code>\n"

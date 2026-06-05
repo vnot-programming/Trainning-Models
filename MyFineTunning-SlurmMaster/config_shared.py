@@ -344,6 +344,15 @@ MODEL_COLORS = {
     "hybrid":      (  0, 165, 255),   # Orange
 }
 
+# Kolom Spesifikasi Laporan CSV Terpadu (Unified)
+CSV_REPORT_FIELDS = [
+    "Model", "Weights Size (MB)", "Parameters (M)",
+    "mAP50-95(Box)", "mAP50(Box)", "mAP50-95(Mask)", "mAP50(Mask)",
+    "Precision(Box)", "Recall(Box)", "Precision(Mask)", "Recall(Mask)",
+    "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)",
+    "Latency (ms)", "FPS", "GPUs", "Evaluator"
+]
+
 def save_yolo_visual_samples(
     model_pt: str,
     model_key: str,
@@ -721,6 +730,36 @@ def flush_gpu(gpu_id_or_label=0, label: str = ""):
         except Exception:
             pass
 
+# ==============================================================================
+# CLOUDFLARE TUNNEL CONFIGURATION
+# ==============================================================================
+CLOUDFLARE_BIN = "/data/users/g6717500336/singularity/cloudflared"
+CLOUDFLARE_TUNNEL_TOKEN = "eyJhIjoiNDgzMWNmYzhiMDgxODc0NDNiZTI3YmI4OGMxNWQ4ZjIiLCJ0IjoiMDI3MDBjMGUtYTBlYS00NjhiLThhYmQtMTk2MTlhZmZlNThlIiwicyI6IlltRm1NbVprT1RVdFlqUTFaUzAwTUdFMExXSmlZakF0WmpGallXTTRNREZsTm1RdyJ9"
+
+# ==============================================================================
+# VISUAL EVALUATION API CONFIGURATION
+# ==============================================================================
+# Konfigurasi endpoint web untuk evaluasi visual interaktif.
+# Frontend dan Backend diakses publik melalui Cloudflare Tunnel.
+#
+# ARSITEKTUR:
+#   User Browser → Cloudflare Tunnel → localhost (Login Node)
+#   Frontend (port 8501): Upload gambar & tampilkan hasil
+#   Backend  (port 8502): Inferensi model & return JSON
+#
+# CATATAN: Inferensi dilakukan di CPU login node (bukan GPU).
+# Untuk evaluasi visual 1-5 gambar, CPU cukup memadai (~2-5 detik/gambar).
+# ==============================================================================
+EVAL_API_HOST              = "0.0.0.0"
+EVAL_API_BACKEND_PORT      = 8502
+EVAL_API_FRONTEND_PORT     = 8501
+EVAL_API_MAX_UPLOAD_MB     = 16
+EVAL_API_ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+EVAL_API_DEBUG              = True
+
+# Domain publik (via Cloudflare Tunnel ID: 02700c0e-a0ea-468b-8abd-19619affe58e)
+EVAL_API_FRONTEND_URL = "https://front-rvm.penelitian.my.id"
+EVAL_API_BACKEND_URL  = "https://backend-rvm.penelitian.my.id"
 
 if __name__ == "__main__":
     print("============================================================")

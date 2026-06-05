@@ -141,6 +141,7 @@ from config_shared import (
     NUM_CLASSES,
     VISUAL_NUM_SAMPLES,
     EVAL_DATASET_LOCATION,
+    CSV_REPORT_FIELDS,
 )
 from telegram_utils import send_telegram_msg
 from coco_eval_utils import (
@@ -149,6 +150,14 @@ from coco_eval_utils import (
     check_pycocotools,
     load_native_coco_gt,
 )
+
+# ==============================================================================
+# KONSTANTA PATH MODEL
+# ==============================================================================
+SAM_MODEL_PATH = os.path.join(ROOT, "models", "sam2.1_t.pt")
+MOBILE_SAM_MODEL_PATH = os.path.join(ROOT, "models", "mobile_sam.pt")
+YOLO11L_DET_PATH  = os.path.join(WORKSPACE_DIR, "runs", "yolo11l", "weights", "best.pt")
+YOLO11L_SEG_PATH  = os.path.join(WORKSPACE_DIR, "runs", "yolo11l_seg", "weights", "best.pt")
 
 # ==============================================================================
 # KONSTANTA — Definisi Semua Family & Varian
@@ -201,6 +210,26 @@ FAMILY_VARIANTS: dict[str, list[dict]] = {
         {"key": "hybrid_yolo11l_seg", "label": "Hybrid (YOLO11l-Seg+SAM2.1_t)", "task": "seg"},
         {"key": "hybrid_yolo11x",     "label": "Hybrid (YOLO11x+SAM2.1_t)",     "task": "seg"},
         {"key": "hybrid_yolo11x_seg", "label": "Hybrid (YOLO11x-Seg+SAM2.1_t)", "task": "seg"},
+        
+        # ── Hybrid Detection + MobileSAM ──────────────────────────────────────────
+        {"key": "hybrid_yolov8m_mobile",      "label": "Hybrid (YOLOv8m+MobileSAM)",      "task": "seg"},
+        {"key": "hybrid_yolov8x_mobile",      "label": "Hybrid (YOLOv8x+MobileSAM)",      "task": "seg"},
+        {"key": "hybrid_yolov9m_mobile",      "label": "Hybrid (YOLOv9m+MobileSAM)",      "task": "seg"},
+        {"key": "hybrid_yolov9e_mobile",      "label": "Hybrid (YOLOv9e+MobileSAM)",      "task": "seg"},
+        {"key": "hybrid_yolo11n_mobile",      "label": "Hybrid (YOLO11n+MobileSAM)",      "task": "seg"},
+        {"key": "hybrid_yolo11l_mobile",      "label": "Hybrid (YOLO11l+MobileSAM)",      "task": "seg"},
+        {"key": "hybrid_yolo11x_mobile",      "label": "Hybrid (YOLO11x+MobileSAM)",      "task": "seg"},
+        
+        # ── Hybrid Segmentation + MobileSAM ───────────────────────────────────────
+        {"key": "hybrid_yolov8m_seg_mobile",  "label": "Hybrid (YOLOv8m-Seg+MobileSAM)",  "task": "seg"},
+        {"key": "hybrid_yolov8x_seg_mobile",  "label": "Hybrid (YOLOv8x-Seg+MobileSAM)",  "task": "seg"},
+        {"key": "hybrid_yolov9c_seg_mobile",  "label": "Hybrid (YOLOv9c-Seg+MobileSAM)",  "task": "seg"},
+        {"key": "hybrid_yolov9e_seg_mobile",  "label": "Hybrid (YOLOv9e-Seg+MobileSAM)",  "task": "seg"},
+        {"key": "hybrid_yolov10m_mobile",     "label": "Hybrid (YOLOv10m+MobileSAM)",     "task": "seg"},
+        {"key": "hybrid_yolov10x_mobile",     "label": "Hybrid (YOLOv10x+MobileSAM)",     "task": "seg"},
+        {"key": "hybrid_yolo11n_seg_mobile",  "label": "Hybrid (YOLO11n-Seg+MobileSAM)",  "task": "seg"},
+        {"key": "hybrid_yolo11l_seg_mobile",  "label": "Hybrid (YOLO11l-Seg+MobileSAM)",  "task": "seg"},
+        {"key": "hybrid_yolo11x_seg_mobile",  "label": "Hybrid (YOLO11x-Seg+MobileSAM)",  "task": "seg"},
     ],
     # RT-DETR — Paper 3: Edge Transformer vs CNN Benchmark
     # task="det" karena RT-DETR hanya melakukan deteksi (bukan segmentasi native).
@@ -442,8 +471,8 @@ def generate_visuals_for_family(
             is_hybrid   = model_key.startswith("hybrid_")
 
             if is_hybrid:
-                # Ekstrak base YOLO key: "hybrid_yolov8m" → "yolov8m"
-                yolo_base_key = model_key[len("hybrid_"):]
+                # Ekstrak base YOLO key: "hybrid_yolov8m_mobile" → "yolov8m"
+                yolo_base_key = model_key.replace("hybrid_", "").replace("_mobile", "")
                 pt_path = os.path.join(get_output_dir(yolo_base_key), "weights", "best.pt")
             else:
                 pt_path = os.path.join(get_output_dir(model_key), "weights", "best.pt")
@@ -518,12 +547,13 @@ def generate_visuals_for_family(
                     del mrcnn_model
                     gc.collect()
 
-                # ── HYBRID: YOLO base + SAM2 ─────────────────────────────
+                # ── HYBRID: YOLO base + SAM2/MobileSAM ───────────────────
                 elif is_hybrid:
                     from ultralytics import YOLO as _YOLO, SAM
 
                     yolo_model = _YOLO(pt_path)
-                    sam_pt     = os.path.join(ROOT, "models", "sam2.1_t.pt")
+                    is_mobile = "_mobile" in model_key
+                    sam_pt = MOBILE_SAM_MODEL_PATH if is_mobile else SAM_MODEL_PATH
                     sam_model  = SAM(sam_pt)
 
                     det_res = yolo_model.predict(
@@ -916,9 +946,9 @@ def _infer_worker_maskrcnn_spawn(
 
 def _infer_worker_hybrid_spawn(
     rank: int, gpu_ids: list, pt_path: str,
-    img_dir: str, image_ids: dict, tmp_dir: str, yolo_key: str
+    img_dir: str, image_ids: dict, tmp_dir: str, model_key: str
 ) -> None:
-    """Worker inferens Hybrid (YOLO + SAM2) — memproses subset gambar secara paralel."""
+    """Worker inferens Hybrid (YOLO + SAM2/MobileSAM) — memproses subset gambar secara paralel."""
     import torch
     from ultralytics import YOLO, SAM
     import cv2
@@ -927,14 +957,15 @@ def _infer_worker_hybrid_spawn(
     gpu = gpu_ids[rank]
     device_str = f"cuda:{gpu}"
     torch.cuda.set_device(gpu)
-    print(f"  [GPU:{gpu}] Rank {rank} mulai inferens Hybrid dengan yolo_key={yolo_key}...", flush=True)
+    print(f"  [GPU:{gpu}] Rank {rank} mulai inferens Hybrid dengan model_key={model_key}...", flush=True)
 
     # 1. Load YOLO model
     model = YOLO(pt_path)
     
-    # 2. Load SAM2 model
-    sam_model_path = os.path.join(ROOT, "models", "sam2.1_t.pt")
-    sam_model = SAM(sam_model_path)
+    # 2. Load SAM model dynamically
+    is_mobile = "_mobile" in model_key
+    sam_pt = MOBILE_SAM_MODEL_PATH if is_mobile else SAM_MODEL_PATH
+    sam_model = SAM(sam_pt)
     
     subset = _partition_images(img_dir, rank, len(gpu_ids))
     preds = []
@@ -1032,6 +1063,182 @@ def _collect_pkl_results(tmp_dir: str, prefix: str, world_size: int) -> dict:
     }
 
 
+def _get_model_metrics(model_key: str, family: str) -> dict:
+    """Mengembalikan dict berisi weights_size_mb dan parameters_m secara dinamis."""
+    result = {"weights_size_mb": "N/A", "parameters_m": "N/A"}
+    try:
+        import torch
+        # 1. Tentukan path model
+        is_hybrid = model_key.startswith("hybrid_")
+        is_maskrcnn = (family == "maskrcnn")
+        
+        if is_maskrcnn:
+            pt = os.path.join(WORKSPACE_DIR, "runs", "maskrcnn", "weights", "best.pt")
+        elif is_hybrid:
+            yolo_base_key = model_key.replace("hybrid_", "").replace("_mobile", "")
+            if yolo_base_key == "yolo11l":
+                pt = YOLO11L_DET_PATH
+            elif yolo_base_key == "yolo11l_seg":
+                pt = YOLO11L_SEG_PATH
+            else:
+                pt = os.path.join(get_output_dir(yolo_base_key), "weights", "best.pt")
+        else:
+            if model_key == "yolo11l":
+                pt = YOLO11L_DET_PATH
+            elif model_key == "yolo11l_seg":
+                pt = YOLO11L_SEG_PATH
+            else:
+                pt = os.path.join(get_output_dir(model_key), "weights", "best.pt")
+                
+        # 2. Hitung parameter & weight size
+        if is_maskrcnn:
+            import torchvision
+            from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+            from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+            m = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights=None)
+            in_box = m.roi_heads.box_predictor.cls_score.in_features
+            m.roi_heads.box_predictor = FastRCNNPredictor(in_box, NUM_CLASSES + 1)
+            in_mask = m.roi_heads.mask_predictor.conv5_mask.in_channels
+            m.roi_heads.mask_predictor = MaskRCNNPredictor(in_mask, 256, NUM_CLASSES + 1)
+            if os.path.exists(pt):
+                m.load_state_dict(torch.load(pt, map_location="cpu", weights_only=True))
+            total_params = sum(p.nelement() for p in m.parameters())
+            sz = sum(p.nelement() * p.element_size() for p in m.parameters()) + sum(b.nelement() * b.element_size() for b in m.buffers())
+            del m; gc.collect()
+            result["weights_size_mb"] = round(sz / 1024**2, 2)
+            result["parameters_m"] = round(total_params / 1e6, 2)
+        elif is_hybrid:
+            from ultralytics import YOLO, SAM
+            y_m = YOLO(pt)
+            
+            is_mobile = "_mobile" in model_key
+            sam_pt = MOBILE_SAM_MODEL_PATH if is_mobile else SAM_MODEL_PATH
+            s_m = SAM(sam_pt)
+            
+            y_params = sum(p.nelement() for p in y_m.model.parameters())
+            s_params = sum(p.nelement() for p in s_m.model.parameters())
+            y_sz = sum(p.nelement() * p.element_size() for p in y_m.model.parameters()) + sum(b.nelement() * b.element_size() for b in y_m.model.buffers())
+            s_sz = sum(p.nelement() * p.element_size() for p in s_m.model.parameters()) + sum(b.nelement() * b.element_size() for b in s_m.model.buffers())
+            del y_m, s_m; gc.collect()
+            result["weights_size_mb"] = round((y_sz + s_sz) / 1024**2, 2)
+            result["parameters_m"] = round((y_params + s_params) / 1e6, 2)
+        else:
+            from ultralytics import YOLO
+            m = YOLO(pt)
+            total_params = sum(p.nelement() for p in m.model.parameters())
+            sz = sum(p.nelement() * p.element_size() for p in m.model.parameters()) + sum(b.nelement() * b.element_size() for b in m.model.buffers())
+            del m; gc.collect()
+            result["weights_size_mb"] = round(sz / 1024**2, 2)
+            result["parameters_m"] = round(total_params / 1e6, 2)
+    except Exception as e:
+        print(f"  ⚠️ Gagal hitung ukuran/parameter untuk {model_key}: {e}")
+    return result
+
+
+def _evaluate_coco_predictions_extended(coco_gt_dict, image_ids, predictions, iou_type="bbox") -> dict:
+    """
+    Evaluate predictions using COCOeval and return a dictionary of metrics.
+    Metrics returned: mAP50, mAP50_95, precision, recall
+    """
+    from pycocotools.coco import COCO
+    from pycocotools.cocoeval import COCOeval
+    import copy
+    import numpy as np
+
+    result = {
+        "mAP50": "N/A",
+        "mAP50_95": "N/A",
+        "precision": "N/A",
+        "recall": "N/A"
+    }
+
+    if not predictions:
+        return result
+
+    try:
+        # Filter empty segmentations for segm evaluation to prevent pycocotools crash
+        if iou_type == "segm":
+            coco_gt_dict = copy.deepcopy(coco_gt_dict)
+            valid_anns = []
+            for ann in coco_gt_dict.get("annotations", []):
+                seg = ann.get("segmentation")
+                if seg and (isinstance(seg, dict) or (isinstance(seg, list) and len(seg) > 0)):
+                    valid_anns.append(ann)
+            coco_gt_dict["annotations"] = valid_anns
+
+        coco_gt = COCO()
+        coco_gt.dataset = coco_gt_dict
+        coco_gt.createIndex()
+        
+        coco_preds = []
+        for pred in predictions:
+            img_path = pred["image"]
+            if img_path not in image_ids:
+                continue
+            
+            img_id = image_ids[img_path]
+            cls = pred["pred_cls"]
+            conf = pred["pred_conf"]
+            
+            if iou_type == "bbox":
+                bbox = pred["pred_box"]
+                x1, y1, x2, y2 = bbox
+                coco_preds.append({
+                    "image_id": img_id,
+                    "category_id": cls + 1,
+                    "bbox": [x1, y1, x2 - x1, y2 - y1],
+                    "score": conf,
+                })
+            elif iou_type == "segm":
+                if "pred_mask" not in pred or pred["pred_mask"] is None:
+                    continue
+                mask = pred["pred_mask"]
+                if isinstance(mask, dict):
+                    rle = mask
+                else:
+                    from pycocotools import mask as maskUtils
+                    rle = maskUtils.encode(np.asfortranarray(mask.astype(np.uint8)))
+                    rle["counts"] = rle["counts"].decode("utf-8")
+                
+                bbox = pred["pred_box"]
+                x1, y1, x2, y2 = bbox
+                coco_preds.append({
+                    "image_id": img_id,
+                    "category_id": cls + 1,
+                    "bbox": [x1, y1, x2 - x1, y2 - y1],
+                    "segmentation": rle,
+                    "score": conf,
+                })
+                
+        if not coco_preds:
+            return result
+
+        coco_dt = coco_gt.loadRes(coco_preds)
+        coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
+        coco_eval.evaluate()
+        coco_eval.accumulate()
+        coco_eval.summarize()
+        
+        mAP50 = round(float(coco_eval.stats[1]), 4)
+        mAP50_95 = round(float(coco_eval.stats[0]), 4)
+        recall = round(float(coco_eval.stats[8]), 4)
+        
+        # Precision IoU=0.50
+        p_matrix = coco_eval.eval['precision']
+        p_iou50 = p_matrix[0, :, :, 0, 2] # IoU=0.50, all areas, maxDets=100
+        p_valid = p_iou50[p_iou50 > -1]
+        precision = round(float(np.mean(p_valid)), 4) if len(p_valid) > 0 else "N/A"
+        
+        result["mAP50"] = mAP50
+        result["mAP50_95"] = mAP50_95
+        result["precision"] = precision
+        result["recall"] = recall
+    except Exception as e:
+        print(f"  [COCOeval-Extended] ⚠️ Gagal evaluasi {iou_type}: {e}")
+        
+    return result
+
+
 def evaluate_variant_detection(
     gpu_ids: list, tmp_dir: str, model_key: str, model_label: str
 ) -> Optional[dict]:
@@ -1100,68 +1307,21 @@ def evaluate_variant_detection(
     lat_per_img_ms = round(total_wall * 1000 / total_imgs, 2) if total_imgs > 0 else "N/A"
 
     print("  [COCOeval] Menghitung mAP50 & mAP50-95...")
-    mAP50, mAP50_95 = evaluate_coco_predictions(coco_gt_dict, image_ids, all_preds, iou_type="bbox")
-    print(f"  ✅ mAP50={mAP50}  mAP50-95={mAP50_95}")
+    coco_metrics = _evaluate_coco_predictions_extended(coco_gt_dict, image_ids, all_preds, iou_type="bbox")
+    mAP50 = coco_metrics["mAP50"]
+    mAP50_95 = coco_metrics["mAP50_95"]
+    prec = coco_metrics["precision"]
+    rec = coco_metrics["recall"]
+    print(f"  ✅ mAP50={mAP50}  mAP50-95={mAP50_95}  Precision={prec}  Recall={rec}")
 
-    # Hitung Precision & Recall manual (IoU@0.5)
-    gt_det: dict[str, dict] = {}
-    for img_path, img_id in image_ids.items():
-        gt_det[img_path] = {"boxes": [], "clss": []}
-        for ann in coco_gt_dict["annotations"]:
-            if ann["image_id"] == img_id:
-                b = ann["bbox"]
-                gt_det[img_path]["boxes"].append([b[0], b[1], b[0]+b[2], b[1]+b[3]])
-                gt_det[img_path]["clss"].append(ann["category_id"] - 1)
+    metrics = _get_model_metrics(model_key, family="yolo_det")
+    weights_size_mb = metrics["weights_size_mb"]
+    parameters_m = metrics["parameters_m"]
 
-    gt_per_class: dict[int, int] = {}
-    for g in gt_det.values():
-        for c in g["clss"]:
-            gt_per_class[c] = gt_per_class.get(c, 0) + 1
-
-    total_tp, total_fp, total_gt = 0, 0, 0
-    num_classes = max(gt_per_class.keys()) + 1 if gt_per_class else 1
-    for cls_id in range(num_classes):
-        cls_preds    = [p for p in all_preds if p["pred_cls"] == cls_id]
-        cls_gt_count = gt_per_class.get(cls_id, 0)
-        total_gt    += cls_gt_count
-        if not cls_preds:
-            continue
-        gt_matched    = set()
-        gt_boxes_cls  = [
-            (ip, idx, box)
-            for ip, g in gt_det.items()
-            for idx, (box, cls) in enumerate(zip(g["boxes"], g["clss"]))
-            if cls == cls_id
-        ]
-        for pred in sorted(cls_preds, key=lambda x: x["pred_conf"], reverse=True):
-            best_iou, best_key = 0.0, None
-            pb = pred["pred_box"]
-            for gi_path, gi_idx, gb in gt_boxes_cls:
-                if pred["image"] != gi_path:
-                    continue
-                x1 = max(pb[0], gb[0]); y1 = max(pb[1], gb[1])
-                x2 = min(pb[2], gb[2]); y2 = min(pb[3], gb[3])
-                iw = max(0, x2 - x1);   ih = max(0, y2 - y1)
-                ia = iw * ih
-                pa = (pb[2]-pb[0]) * (pb[3]-pb[1])
-                ga = (gb[2]-gb[0]) * (gb[3]-gb[1])
-                ua = pa + ga - ia
-                iou = ia / ua if ua > 0 else 0.0
-                if iou > best_iou:
-                    best_iou, best_key = iou, (gi_path, gi_idx)
-            if best_iou >= 0.5 and best_key not in gt_matched:
-                total_tp += 1; gt_matched.add(best_key)
-            else:
-                total_fp += 1
-
-    prec = round(total_tp / (total_tp + total_fp), 4) if (total_tp + total_fp) > 0 else 0.0
-    rec  = round(total_tp / total_gt, 4) if total_gt > 0 else 0.0
-    print(f"  ✅ Precision={prec}  Recall={rec}")
-
-    size_mb = round(os.path.getsize(pt_path) / 1e6, 2)
     return {
         "Model":            model_label,
-        "Model Size (MB)":  size_mb,
+        "Model Size (MB)":  weights_size_mb,
+        "Parameters (M)":   parameters_m,
         "mAP50-95":         mAP50_95,
         "mAP50":            mAP50,
         "Precision":        prec,
@@ -1242,20 +1402,36 @@ def evaluate_variant_segmentation(
     lat_per_img_ms = round(total_wall * 1000 / total_imgs, 2) if total_imgs > 0 else "N/A"
 
     print("  [COCOeval] Menghitung mAP Mask & Box...")
-    mAP50_mask, mAP50_95_mask = evaluate_coco_predictions(
-        coco_gt_dict, image_ids, all_preds, iou_type="segm"
-    )
-    _, mAP50_95_box = evaluate_coco_predictions(
-        coco_gt_dict, image_ids, all_preds, iou_type="bbox"
-    )
-    print(f"  ✅ mAP50-95(Box)={mAP50_95_box}  mAP50-95(Mask)={mAP50_95_mask}")
+    coco_metrics_seg = _evaluate_coco_predictions_extended(coco_gt_dict, image_ids, all_preds, iou_type="segm")
+    mAP50_mask = coco_metrics_seg["mAP50"]
+    mAP50_95_mask = coco_metrics_seg["mAP50_95"]
+    prec_mask = coco_metrics_seg["precision"]
+    rec_mask = coco_metrics_seg["recall"]
 
-    size_mb = round(os.path.getsize(pt_path) / 1e6, 2)
+    coco_metrics_box = _evaluate_coco_predictions_extended(coco_gt_dict, image_ids, all_preds, iou_type="bbox")
+    mAP50_box = coco_metrics_box["mAP50"]
+    mAP50_95_box = coco_metrics_box["mAP50_95"]
+    prec_box = coco_metrics_box["precision"]
+    rec_box = coco_metrics_box["recall"]
+
+    print(f"  ✅ Box: mAP50={mAP50_box} mAP50-95={mAP50_95_box} | Mask: mAP50={mAP50_mask} mAP50-95={mAP50_95_mask}")
+
+    metrics = _get_model_metrics(model_key, family="yolo_seg")
+    weights_size_mb = metrics["weights_size_mb"]
+    parameters_m = metrics["parameters_m"]
+
     return {
         "Model":            model_label,
-        "Model Size (MB)":  size_mb,
+        "Model Size (MB)":  weights_size_mb,
+        "Parameters (M)":   parameters_m,
         "mAP50-95(Box)":    mAP50_95_box,
+        "mAP50(Box)":        mAP50_box,
         "mAP50-95(Mask)":   mAP50_95_mask,
+        "mAP50(Mask)":       mAP50_mask,
+        "Precision(Box)":    prec_box,
+        "Recall(Box)":       rec_box,
+        "Precision(Mask)":   prec_mask,
+        "Recall(Mask)":      rec_mask,
         "Preprocess (ms)":  avg_pre_ms,
         "Inference (ms)":   avg_inf_ms,
         "Postprocess (ms)": avg_post_ms,
@@ -1330,20 +1506,36 @@ def evaluate_maskrcnn_segmentation(
     lat_per_img_ms = round(total_wall * 1000 / total_imgs, 2) if total_imgs > 0 else 0.0
 
     print("  [COCOeval] Menghitung mAP Mask & Box...")
-    mAP50_mask, mAP50_95_mask = evaluate_coco_predictions(
-        coco_gt_dict, image_ids, all_preds, iou_type="segm"
-    )
-    _, mAP50_95_box = evaluate_coco_predictions(
-        coco_gt_dict, image_ids, all_preds, iou_type="bbox"
-    )
-    print(f"  ✅ mAP50-95(Box)={mAP50_95_box}  mAP50-95(Mask)={mAP50_95_mask}")
+    coco_metrics_seg = _evaluate_coco_predictions_extended(coco_gt_dict, image_ids, all_preds, iou_type="segm")
+    mAP50_mask = coco_metrics_seg["mAP50"]
+    mAP50_95_mask = coco_metrics_seg["mAP50_95"]
+    prec_mask = coco_metrics_seg["precision"]
+    rec_mask = coco_metrics_seg["recall"]
 
-    size_mb = round(os.path.getsize(pt_path) / 1e6, 2)
+    coco_metrics_box = _evaluate_coco_predictions_extended(coco_gt_dict, image_ids, all_preds, iou_type="bbox")
+    mAP50_box = coco_metrics_box["mAP50"]
+    mAP50_95_box = coco_metrics_box["mAP50_95"]
+    prec_box = coco_metrics_box["precision"]
+    rec_box = coco_metrics_box["recall"]
+
+    print(f"  ✅ Box: mAP50={mAP50_box} mAP50-95={mAP50_95_box} | Mask: mAP50={mAP50_mask} mAP50-95={mAP50_95_mask}")
+
+    metrics = _get_model_metrics(model_key, family="maskrcnn")
+    weights_size_mb = metrics["weights_size_mb"]
+    parameters_m = metrics["parameters_m"]
+
     return {
         "Model":            model_label,
-        "Model Size (MB)":  size_mb,
+        "Model Size (MB)":  weights_size_mb,
+        "Parameters (M)":   parameters_m,
         "mAP50-95(Box)":    mAP50_95_box,
+        "mAP50(Box)":        mAP50_box,
         "mAP50-95(Mask)":   mAP50_95_mask,
+        "mAP50(Mask)":       mAP50_mask,
+        "Precision(Box)":    prec_box,
+        "Recall(Box)":       rec_box,
+        "Precision(Mask)":   prec_mask,
+        "Recall(Mask)":      rec_mask,
         "Preprocess (ms)":  avg_pre_ms,
         "Inference (ms)":   avg_inf_ms,
         "Postprocess (ms)": avg_post_ms,
@@ -1358,7 +1550,7 @@ def evaluate_hybrid_segmentation(
     gpu_ids: list, tmp_dir: str, model_key: str, model_label: str
 ) -> Optional[dict]:
     """
-    Evaluasi COCOeval untuk Hybrid (YOLO + SAM2).
+    Evaluasi COCOeval untuk Hybrid (YOLO + SAM2/MobileSAM).
     """
     import torch
     import torch.multiprocessing as mp
@@ -1367,8 +1559,8 @@ def evaluate_hybrid_segmentation(
     print(f"  Eval Hybrid: {model_label}")
     print(f"{'='*65}")
 
-    # Resolve yolo_key from hybrid key (e.g. hybrid_yolov8m -> yolov8m)
-    yolo_key = model_key.replace("hybrid_", "")
+    # Resolve yolo_key from hybrid key (e.g. hybrid_yolov8m_mobile -> yolov8m)
+    yolo_key = model_key.replace("hybrid_", "").replace("_mobile", "")
     pt_path = os.path.join(get_output_dir(yolo_key), "weights", "best.pt")
     if not os.path.exists(pt_path):
         msg = f"best.pt tidak ditemukan untuk {model_label}: {pt_path}"
@@ -1403,7 +1595,7 @@ def evaluate_hybrid_segmentation(
     t_wall = time.perf_counter()
     mp.spawn(
         _infer_worker_hybrid_spawn,
-        args=(gpu_ids, pt_path, img_dir, image_ids, tmp_dir, yolo_key),
+        args=(gpu_ids, pt_path, img_dir, image_ids, tmp_dir, model_key),
         nprocs=world_size,
         join=True,
     )
@@ -1420,25 +1612,36 @@ def evaluate_hybrid_segmentation(
     lat_per_img_ms = round(total_wall * 1000 / total_imgs, 2) if total_imgs > 0 else 0.0
 
     print("  [COCOeval] Menghitung mAP Mask & Box...")
-    mAP50_mask, mAP50_95_mask = evaluate_coco_predictions(
-        coco_gt_dict, image_ids, all_preds, iou_type="segm"
-    )
-    _, mAP50_95_box = evaluate_coco_predictions(
-        coco_gt_dict, image_ids, all_preds, iou_type="bbox"
-    )
-    print(f"  ✅ mAP50-95(Box)={mAP50_95_box}  mAP50-95(Mask)={mAP50_95_mask}")
+    coco_metrics_seg = _evaluate_coco_predictions_extended(coco_gt_dict, image_ids, all_preds, iou_type="segm")
+    mAP50_mask = coco_metrics_seg["mAP50"]
+    mAP50_95_mask = coco_metrics_seg["mAP50_95"]
+    prec_mask = coco_metrics_seg["precision"]
+    rec_mask = coco_metrics_seg["recall"]
 
-    # Model size is YOLO size + SAM2 size
-    y_size = os.path.getsize(pt_path) / 1e6
-    sam_model_path = os.path.join(ROOT, "models", "sam2.1_t.pt")
-    s_size = os.path.getsize(sam_model_path) / 1e6 if os.path.exists(sam_model_path) else 0.0
-    size_mb = round(y_size + s_size, 2)
+    coco_metrics_box = _evaluate_coco_predictions_extended(coco_gt_dict, image_ids, all_preds, iou_type="bbox")
+    mAP50_box = coco_metrics_box["mAP50"]
+    mAP50_95_box = coco_metrics_box["mAP50_95"]
+    prec_box = coco_metrics_box["precision"]
+    rec_box = coco_metrics_box["recall"]
+
+    print(f"  ✅ Box: mAP50={mAP50_box} mAP50-95={mAP50_95_box} | Mask: mAP50={mAP50_mask} mAP50-95={mAP50_95_mask}")
+
+    metrics = _get_model_metrics(model_key, family="hybrid")
+    weights_size_mb = metrics["weights_size_mb"]
+    parameters_m = metrics["parameters_m"]
 
     return {
         "Model":            model_label,
-        "Model Size (MB)":  size_mb,
+        "Model Size (MB)":  weights_size_mb,
+        "Parameters (M)":   parameters_m,
         "mAP50-95(Box)":    mAP50_95_box,
+        "mAP50(Box)":        mAP50_box,
         "mAP50-95(Mask)":   mAP50_95_mask,
+        "mAP50(Mask)":       mAP50_mask,
+        "Precision(Box)":    prec_box,
+        "Recall(Box)":       rec_box,
+        "Precision(Mask)":   prec_mask,
+        "Recall(Mask)":      rec_mask,
         "Preprocess (ms)":  avg_pre_ms,
         "Inference (ms)":   avg_inf_ms,
         "Postprocess (ms)": avg_post_ms,
@@ -1455,12 +1658,14 @@ def evaluate_hybrid_segmentation(
 
 # Definisi kolom CSV untuk masing-masing tipe tugas
 _DET_FIELDS = [
-    "Model", "Model Size (MB)", "mAP50-95", "mAP50",
+    "Model", "Model Size (MB)", "Parameters (M)", "mAP50-95", "mAP50",
     "Precision", "Recall", "Preprocess (ms)", "Inference (ms)",
     "Postprocess (ms)", "Latency (ms)", "FPS", "GPUs", "Evaluator"
 ]
 _SEG_FIELDS = [
-    "Model", "Model Size (MB)", "mAP50-95(Box)", "mAP50-95(Mask)",
+    "Model", "Model Size (MB)", "Parameters (M)",
+    "mAP50-95(Box)", "mAP50(Box)", "mAP50-95(Mask)", "mAP50(Mask)",
+    "Precision(Box)", "Recall(Box)", "Precision(Mask)", "Recall(Mask)",
     "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)",
     "Latency (ms)", "FPS", "GPUs", "Evaluator"
 ]
@@ -1535,6 +1740,84 @@ def compile_all_csv(
         path = os.path.join(csv_base, "kompilasi_ALL_segmentation.csv")
         _write_csv(path, _SEG_FIELDS, global_seg_rows, mode="w")
         print(f"  🗂️  Kompilasi ALL SEG: {path}")
+
+
+# Definisi kolom CSV gabungan (single model) — field unified detection + segmentation
+_SINGLE_MODEL_FIELDS = CSV_REPORT_FIELDS
+
+
+def compile_all_single_model_csv(
+    global_det_rows: list[dict],
+    global_seg_rows: list[dict],
+) -> None:
+    """
+    Gabungkan kompilasi_ALL_detection.csv dan kompilasi_ALL_segmentation.csv
+    ke dalam satu file kompilasi_ALL_single_model.csv dengan field unified.
+
+    Field mapping:
+      - Detection: mAP50-95 -> mAP50-95 (Box), mAP50 -> mAP50 (Box), Mask fields N/A
+      - Segmentation: mAP50-95(Box) -> mAP50-95 (Box), mAP50-95(Mask) -> mAP50-95 (Mask)
+        mAP50 (Box) dan mAP50 (Mask) diisi N/A (karena pipeline seg tidak menghitung mAP50)
+      - Weights Size (MB) dan Parameters (M) diambil dari "Model Size (MB)" bila tersedia
+      Output: reports/pipeline/csv/kompilasi_ALL_single_model.csv
+    """
+    csv_base = os.path.join(REPORTS_DIR, "csv")
+    os.makedirs(csv_base, exist_ok=True)
+
+    unified_rows: list[dict] = []
+
+    # --- Mapping baris Detection ---
+    for row in global_det_rows:
+        unified_rows.append({
+            "Model":             row.get("Model", "N/A"),
+            "Weights Size (MB)": row.get("Model Size (MB)", "N/A"),
+            "Parameters (M)":    row.get("Parameters (M)", "N/A"),
+            "mAP50-95(Box)":     row.get("mAP50-95", "N/A"),
+            "mAP50(Box)":        row.get("mAP50", "N/A"),
+            "mAP50-95(Mask)":    "N/A",
+            "mAP50(Mask)":       "N/A",
+            "Precision(Box)":    row.get("Precision", "N/A"),
+            "Recall(Box)":       row.get("Recall", "N/A"),
+            "Precision(Mask)":   "N/A",
+            "Recall(Mask)":      "N/A",
+            "Preprocess (ms)":   row.get("Preprocess (ms)", "N/A"),
+            "Inference (ms)":    row.get("Inference (ms)", "N/A"),
+            "Postprocess (ms)":  row.get("Postprocess (ms)", "N/A"),
+            "Latency (ms)":      row.get("Latency (ms)", "N/A"),
+            "FPS":               row.get("FPS", "N/A"),
+            "GPUs":              row.get("GPUs", "N/A"),
+            "Evaluator":         row.get("Evaluator", "N/A"),
+        })
+
+    # --- Mapping baris Segmentation ---
+    for row in global_seg_rows:
+        unified_rows.append({
+            "Model":             row.get("Model", "N/A"),
+            "Weights Size (MB)": row.get("Model Size (MB)", "N/A"),
+            "Parameters (M)":    row.get("Parameters (M)", "N/A"),
+            "mAP50-95(Box)":     row.get("mAP50-95(Box)", "N/A"),
+            "mAP50(Box)":        row.get("mAP50(Box)", "N/A"),
+            "mAP50-95(Mask)":    row.get("mAP50-95(Mask)", "N/A"),
+            "mAP50(Mask)":       row.get("mAP50(Mask)", "N/A"),
+            "Precision(Box)":    row.get("Precision(Box)", "N/A"),
+            "Recall(Box)":       row.get("Recall(Box)", "N/A"),
+            "Precision(Mask)":   row.get("Precision(Mask)", "N/A"),
+            "Recall(Mask)":      row.get("Recall(Mask)", "N/A"),
+            "Preprocess (ms)":   row.get("Preprocess (ms)", "N/A"),
+            "Inference (ms)":    row.get("Inference (ms)", "N/A"),
+            "Postprocess (ms)":  row.get("Postprocess (ms)", "N/A"),
+            "Latency (ms)":      row.get("Latency (ms)", "N/A"),
+            "FPS":               row.get("FPS", "N/A"),
+            "GPUs":              row.get("GPUs", "N/A"),
+            "Evaluator":         row.get("Evaluator", "N/A"),
+        })
+
+    if unified_rows:
+        path = os.path.join(csv_base, "kompilasi_ALL_single_model.csv")
+        _write_csv(path, _SINGLE_MODEL_FIELDS, unified_rows, mode="w")
+        print(f"  🗂️  Kompilasi ALL Single Model: {path}")
+    else:
+        print("  ⚠️  Tidak ada data untuk kompilasi_ALL_single_model.csv (det & seg kosong).")
 
 
 # ==============================================================================
@@ -1756,6 +2039,7 @@ def main() -> None:
     # ── Kompilasi ALL ─────────────────────────────────────────────────────────
     if not args.skip_eval:
         compile_all_csv(global_det_rows, global_seg_rows)
+        compile_all_single_model_csv(global_det_rows, global_seg_rows)
 
     total_elapsed = round(time.perf_counter() - t_start, 1)
 
