@@ -10,7 +10,7 @@ model end-to-end ketika dihadapkan dengan ground truth absolut.
 
 Cara pakai:
   # Mode default (otomatis memuat golden_dataset_det & golden_dataset_seg)
-  tmux new-session -d -s golden_eval "cd Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/golden_evaluation.py 2>&1 | tee utils/golden_evaluation.log"
+  tmux new-session -d -s golden_evaluation "cd Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/golden_evaluation.py 2>&1 | tee utils/golden_evaluation.log"
 
   # Manual override
   python3 utils/golden_evaluation.py --dataset /path/to/dataset --coco
@@ -90,7 +90,7 @@ def _resolve_img_dir(yaml_path: str) -> str:
         if os.path.isdir(d): return d
     raise FileNotFoundError(f"Tidak ditemukan valid/ atau test/images di {base}")
 
-def _get_model_metrics(model_cfg: dict) -> dict:
+def _get_model_metrics(model_cfg: dict, is_seg: bool = False) -> dict:
     """Mengembalikan dict berisi weights_size_mb dan parameters_m."""
     result = {"weights_size_mb": "N/A", "parameters_m": "N/A"}
     try:
@@ -122,7 +122,10 @@ def _get_model_metrics(model_cfg: dict) -> dict:
             result["parameters_m"] = round(total_params / 1e6, 2)
         elif mtype == "hybrid":
             from ultralytics import YOLO, SAM
-            y_m = YOLO(os.path.join(get_output_dir("yolo11l"), "weights", "best.pt"))
+            if is_seg:
+                y_m = YOLO(os.path.join(get_output_dir("yolo11l_seg"), "weights", "best.pt"))
+            else:
+                y_m = YOLO(os.path.join(get_output_dir("yolo11l"), "weights", "best.pt"))
             s_m = SAM(SAM_MODEL_PATH)
             y_params = sum(p.nelement() for p in y_m.model.parameters())
             s_params = sum(p.nelement() for p in s_m.model.parameters())
@@ -165,7 +168,11 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
             model_obj.to(device_str).eval()
         elif mtype == "hybrid":
             from ultralytics import YOLO, SAM
-            model_obj = YOLO(os.path.join(get_output_dir("yolo11l"), "weights", "best.pt"))
+            is_seg_infer = "seg" in img_dir.lower()
+            if is_seg_infer:
+                model_obj = YOLO(os.path.join(get_output_dir("yolo11l_seg"), "weights", "best.pt"))
+            else:
+                model_obj = YOLO(os.path.join(get_output_dir("yolo11l"), "weights", "best.pt"))
             sam_model = SAM(SAM_MODEL_PATH)
     except Exception as e:
         print(f"  [GPU:{gpu}] ❌ Gagal load {label}: {e}", flush=True)
@@ -311,7 +318,8 @@ def eval_model_distributed(model_cfg: dict, gpu_ids: list, coco_gt_dict: dict, i
     print("="*65)
 
     world_size = len(gpu_ids)
-    model_metrics = _get_model_metrics(model_cfg)
+    is_seg = "seg" in img_dir.lower()
+    model_metrics = _get_model_metrics(model_cfg, is_seg)
     weights_mb = model_metrics["weights_size_mb"]
     params_m = model_metrics["parameters_m"]
     print(f"  [Model] Weights: {weights_mb} MB | Parameters: {params_m} M")

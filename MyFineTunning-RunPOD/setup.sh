@@ -1,33 +1,31 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# setup.sh — Setup environment untuk MyFineTunning (RunPOD)
+# setup.sh — Setup environment untuk MyFineTunning (RunPOD / GPU Server)
 # ==============================================================================
 #
 # Cara pakai:
 #
-# 1. Background Execution (TMUX):
-#    tmux new-session -d -s setup_session "cd /root/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh 2>&1 | tee SetupReport.log"
-#    atau
-#    tmux new-session -d -s setup_session "cd C:\Users\Server\Documents\~S3\Tunning\MyFineTunning-20260502_134510-RunPOD && bash setup.sh 2>&1 | tee SetupReport.log"
+# 1. Background Execution via TMUX (Sangat Direkomendasikan untuk Cloud):
+#    tmux new-session -d -s setup_session "cd /root/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh 2>&1 | tee setup_session.log"
 #
 # 2. Direct Execution:
-#    cd /home/my/Trainning-Models/MyFineTunning-dev && bash setup.sh
-#    atau
-#    cd /mnt/c/Users/Server/Documents/~S3/Tunning/MyFineTunning-20260502_134510-RunPOD && bash setup.sh
-# 3. Mode Options:
-#    bash setup.sh            ← Standard (New .venv)
-#    bash setup.sh --reuse    ← Reuse MyTrainEngine .venv
+#    cd /home/my/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh
 #
-# Setelah setup:
+# 3. Mode Options:
+#    bash setup.sh            ← Standar (Membuat/memperbarui .venv lokal terisolasi)
+#    bash setup.sh --reuse    ← Menggunakan ulang .venv dari MyFineTunning-dev
+#    tmux new-session -d -s setup_session "cd /home/my/Trainning-Models/MyFineTunning-RunPOD && bash setup.sh --reuse 2>&1 | tee setup_session.log"
+#
+# Setelah setup sukses:
 #   source .venv/bin/activate
-#   python main.py           ← Jalankan root setup
+#   python run_pipeline_parallel.py              ← Menjalankan Multi-GPU Parallel Pipeline Scheduler (Cerdas)
 # ==============================================================================
 
 set -e  # Exit langsung jika ada error
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/.venv"
-REUSE_PATH="/root/MyTrainEngine/.venv"
+REUSE_PATH="/home/my/Trainning-Models/MyFineTunning-dev/.venv"
 
 echo "============================================================"
 echo "  MyFineTunning — Setup Environment"
@@ -35,7 +33,7 @@ echo "  Dir: $SCRIPT_DIR"
 echo "============================================================"
 
 # ------------------------------------------------------------------------------
-# Opsi --reuse: symlink ke .venv MyTrainEngine yang sudah lengkap
+# Opsi --reuse: symlink ke .venv MyFineTunning-dev yang sudah lengkap
 # ------------------------------------------------------------------------------
 if [[ "$1" == "--reuse" ]]; then
     if [[ -d "$REUSE_PATH" ]]; then
@@ -81,55 +79,58 @@ print(1)
 " 2>/dev/null || echo 0
 }
 
-# 1. Cek cu versi terinstal di environment saat ini (sebelum aktifkan venv)
-echo "[Setup] Mengecek versi PyTorch CUDA di environment saat ini..."
+# ------------------------------------------------------------------------------
+# Menjamin Tersedianya Virtual Environment (.venv) - Terisolasi & Dinamis
+# ------------------------------------------------------------------------------
+echo "[Setup] Mencari virtual environment lokal (.venv) di: $VENV_DIR"
+
+if [[ ! -d "$VENV_DIR" ]]; then
+    echo "[Setup] .venv belum ada. Membuat virtual environment baru di: $VENV_DIR"
+    python3 -m venv "$VENV_DIR"
+else
+    echo "[Setup] .venv lokal sudah ada: $VENV_DIR"
+fi
+
+echo "[Setup] Mengaktifkan virtual environment lokal..."
+source "$VENV_DIR/bin/activate"
+echo "[Setup] Python aktif: $(which python3) — $(python3 --version)"
+
+# Upgrade pip
+pip install --upgrade pip --quiet
+
+# Fungsi Cek Kompatibilitas Torch CUDA (dalam venv)
+check_torch_cuda() {
+    python3 -c "
+import torch
+import sys
+if not torch.cuda.is_available():
+    print(0)
+    sys.exit(0)
+print(1)
+" 2>/dev/null || echo 0
+}
+
+# Cek cu versi terinstal setelah venv aktif
+echo "[Setup] Mengecek versi PyTorch CUDA di dalam .venv..."
 TORCH_OK=$(check_torch_cuda)
 
 if [ "$TORCH_OK" -eq 1 ]; then
-    echo "[Setup] ✅ PyTorch dengan dukungan CUDA yang sesuai (Host: $CUDA_VER) sudah tersedia di environment aktif."
-    echo "[Setup] Menggunakan environment saat ini: $(which python3)"
+    echo "[Setup] ✅ PyTorch dengan dukungan CUDA yang sesuai (Host: $CUDA_VER) sudah aktif di dalam .venv."
 else
-    echo "[Setup] ⚠️ PyTorch CUDA belum sesuai di environment saat ini."
-    echo "[Setup] Mencari virtual environment lokal (.venv) di: $VENV_DIR"
-    
-    # ------------------------------------------------------------------------------
-    # Buat .venv baru jika belum ada
-    # ------------------------------------------------------------------------------
-    if [[ ! -d "$VENV_DIR" ]]; then
-        echo "[Setup] Membuat virtual environment di: $VENV_DIR"
-        python3 -m venv "$VENV_DIR"
+    # Install / Download jika belum sesuai di dalam .venv
+    echo "[Setup] ⚠️ PyTorch CUDA belum sesuai di dalam .venv. Memulai instalasi..."
+    if [ "$USE_CU130" -eq 1 ] || [ "$USE_CU128" -eq 1 ]; then
+        echo "[Setup] CUDA >= 12.8 terdeteksi (Host: $CUDA_VER). Arsitektur Blackwell membutuhkan cu128..."
+        pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128 --force-reinstall --quiet
+    elif [ "$USE_CU126" -eq 1 ]; then
+        echo "[Setup] CUDA >= 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu126)..."
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126 --force-reinstall --quiet
     else
-        echo "[Setup] .venv lokal sudah ada: $VENV_DIR"
-    fi
-
-    echo "[Setup] Mengaktifkan virtual environment lokal..."
-    source "$VENV_DIR/bin/activate"
-    echo "[Setup] Python: $(which python3) — $(python3 --version)"
-
-    # Upgrade pip
-    pip install --upgrade pip --quiet
-
-    # 3. Cek lagi cu versi terinstal setelah venv aktif
-    echo "[Setup] Mengecek ulang versi PyTorch CUDA di dalam .venv..."
-    TORCH_OK=$(check_torch_cuda)
-    
-    if [ "$TORCH_OK" -eq 1 ]; then
-        echo "[Setup] ✅ PyTorch dengan dukungan CUDA yang sesuai (Host: $CUDA_VER) sudah tersedia di dalam .venv."
-    else
-        # 4. Install / Download jika masih belum sesuai
-        echo "[Setup] ⚠️ PyTorch CUDA belum sesuai di dalam .venv. Memulai instalasi..."
-        if [ "$USE_CU130" -eq 1 ] || [ "$USE_CU128" -eq 1 ]; then
-            echo "[Setup] CUDA >= 12.8 terdeteksi (Host: $CUDA_VER). Arsitektur Blackwell membutuhkan cu128..."
-            pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128 --force-reinstall --quiet
-        elif [ "$USE_CU126" -eq 1 ]; then
-            echo "[Setup] CUDA >= 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu126)..."
-            pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126 --force-reinstall --quiet
-        else
-            echo "[Setup] CUDA < 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu121)..."
-            pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
-        fi
+        echo "[Setup] CUDA < 12.6 terdeteksi (Host: $CUDA_VER) — install versi kompatibel (cu121)..."
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 --force-reinstall --quiet
     fi
 fi
+
 
 # ------------------------------------------------------------------------------
 # Install requirements
@@ -203,4 +204,4 @@ echo ""
 echo "============================================================"
 echo "  🚀 Menjalankan main.py (setup workspace & dataset)..."
 echo "============================================================"
-python3 "$SCRIPT_DIR/main.py"
+"$VENV_DIR/bin/python" "$SCRIPT_DIR/main.py"

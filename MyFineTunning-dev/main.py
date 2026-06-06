@@ -83,7 +83,7 @@ try:
     print(f"[Setup] ✅ Golden Det: {golden_det}")
     print(f"[Setup] ✅ Standard Det: {std_det}")
     print(f"[Setup] ✅ Standard Seg: {std_seg}")
-    print("[Setup] ⚠️ Fine-tuning datasets (ku3-8 & unu3-7) sedang di-bypass.")
+    print("[Setup] ✅ Fine-tuning datasets dimuat dengan sukses.")
 except RuntimeError as _e:
     print(f"\n❌ Dataset gagal disiapkan: {_e}")
     send_telegram_msg(f"❌ <b>Setup Gagal</b>\nDataset tidak tersedia:\n<code>{_e}</code>")

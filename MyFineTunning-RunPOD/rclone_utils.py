@@ -157,45 +157,68 @@ def _run_rclone(args: list[str], label: str = "",
     if not cmd_bin: return False
 
     cmd = [cmd_bin] + args
-    print(f"[RClone] ▶ {label or ' '.join(cmd[:4])}")
-    print(f"         {' '.join(cmd)}")
+    max_attempts = 5
+    base_backoff = 60  # Jeda awal 1 menit (60 detik)
 
-    try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True)
+    for attempt in range(1, max_attempts + 1):
+        print(f"[RClone] ▶ {label or ' '.join(cmd[:4])} (Attempt {attempt}/{max_attempts})")
+        print(f"         {' '.join(cmd)}")
 
-        stop_event = threading.Event()
-        def _heartbeat():
-            start = time.time()
-            while not stop_event.is_set():
-                time.sleep(_PROGRESS_INTERVAL)
-                if stop_event.is_set(): break
-                elapsed = int(time.time() - start)
-                m, s = divmod(elapsed, 60)
-                msg = progress_msg_fn(m, s) if progress_msg_fn else \
-                      f"⏳ <b>RClone Berjalan...</b>\nTask: {label}\nElapsed: {m}m {s}s"
-                _tg(msg)
+        has_rate_limit = False
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True)
 
-        if progress_msg_fn:
-            t = threading.Thread(target=_heartbeat, daemon=True)
-            t.start()
+            stop_event = threading.Event()
+            def _heartbeat():
+                start = time.time()
+                while not stop_event.is_set():
+                    time.sleep(_PROGRESS_INTERVAL)
+                    if stop_event.is_set(): break
+                    elapsed = int(time.time() - start)
+                    m, s = divmod(elapsed, 60)
+                    msg = progress_msg_fn(m, s) if progress_msg_fn else \
+                          f"⏳ <b>RClone Berjalan...</b>\nTask: {label}\nElapsed: {m}m {s}s"
+                    _tg(msg)
 
-        for line in proc.stdout:
-            print(line, end="")
+            if progress_msg_fn:
+                t = threading.Thread(target=_heartbeat, daemon=True)
+                t.start()
 
-        proc.wait()
-        stop_event.set()
+            for line in proc.stdout:
+                print(line, end="")
+                # Deteksi error 403 / rate limit
+                line_lower = line.lower()
+                if "403" in line or "ratelimit" in line_lower or "limit" in line_lower or "quota" in line_lower or "forbidden" in line_lower:
+                    has_rate_limit = True
 
-        if proc.returncode == 0:
-            print(f"[RClone] ✅ Selesai: {label}")
-            return True
-        else:
-            print(f"[RClone] ❌ Gagal (exit {proc.returncode}): {label}")
-            if proc.returncode == -9: print("         (Proses dihentikan paksa/SIGKILL)")
-            return False
-    except Exception as e:
-        print(f"[RClone] ❌ Exception: {e}")
-        return False
+            proc.wait()
+            stop_event.set()
+
+            if proc.returncode == 0:
+                print(f"[RClone] ✅ Selesai: {label}")
+                return True
+            
+            # Jika gagal, jalankan Exponential Backoff
+            if attempt < max_attempts:
+                # Exponential backoff formula: base_backoff * (2 ** (attempt - 1))
+                backoff_time = base_backoff * (2 ** (attempt - 1))
+                err_reason = "Rate Limit (403)" if has_rate_limit else "Temporary Failure"
+                print(f"[RClone] ⚠️ Attempt {attempt} gagal ({err_reason}). Menjalankan Exponential Backoff...")
+                _apply_smart_delay(backoff_time, reason=f"Exponential Backoff - {err_reason} (Attempt {attempt}/{max_attempts})")
+            else:
+                print(f"[RClone] ❌ Gagal permanen setelah {max_attempts} percobaan: {label}")
+                if proc.returncode == -9: print("         (Proses dihentikan paksa/SIGKILL)")
+                return False
+                
+        except Exception as e:
+            print(f"[RClone] ❌ Exception: {e}")
+            if attempt < max_attempts:
+                backoff_time = base_backoff * (2 ** (attempt - 1))
+                _apply_smart_delay(backoff_time, reason=f"Backoff Exception (Attempt {attempt}/{max_attempts})")
+            else:
+                return False
+    return False
 
 
 # ==============================================================================
@@ -280,7 +303,7 @@ def upload_results(verbose: bool = True) -> bool:
         if ok:
             archive_path.unlink(missing_ok=True)
             if file_size_gb > 1.0:
-                _apply_smart_delay(180, reason=f"Post-Upload Cooldown ({file_size_gb:.1f}GB file)")
+                _apply_smart_delay(60, reason=f"Post-Upload Cooldown ({file_size_gb:.1f}GB file)")
         else:
             overall_success = False
 

@@ -9,18 +9,18 @@ Strategi Evaluasi Terdistribusi:
   - Setiap GPU memproses subset gambar yang berbeda (data parallelism)
   - Hasil prediksi dikumpulkan dan dievaluasi via COCOeval di proses utama
 
-python hybrid/eval_multigpu.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/me-bottle-isempty-ku3-h61lr-2-yolov11/data.yaml
+python hybrid/eval_multigpu.py --dataset /home/my/Trainning-Models/MyFineTunning-RunPOD/datasets/me-bottle-isempty-ku3-h61lr-2-yolov11/data.yaml
 
-tmux new-session -d -s standar_evaluation "cd Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/me-bottle-isempty-unu3-sem-seg-1-coco/valid/_annotations.coco.json 2>&1 | tee utils/standar_evaluation.log"
+tmux new-session -d -s standar_evaluation "cd /root/Trainning-Models/MyFineTunning-RunPOD && python3 -u utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-RunPOD/datasets/me-bottle-isempty-unu3-sem-seg-1-coco/valid/_annotations.coco.json 2>&1 | tee utils/standar_evaluation.log"
 
 # Evaluasi khusus Deteksi
-tmux new-session -d -s standard_datasets_det "cd Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/standard_datasets_det --coco 2>&1 | tee utils/standard_datasets_det.log"
+tmux new-session -d -s standard_datasets_det "cd Trainning-Models/MyFineTunning-RunPOD && source .venv/bin/activate && python3 utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-RunPOD/datasets/standard_datasets_det --coco 2>&1 | tee utils/standard_datasets_det.log"
 
 # Evaluasi khusus Segmentasi
-tmux new-session -d -s standard_datasets_seg "cd Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-dev/datasets/standard_datasets_seg --coco 2>&1 | tee utils/standard_datasets_seg.log"
+tmux new-session -d -s standard_datasets_seg "cd Trainning-Models/MyFineTunning-RunPOD && source .venv/bin/activate && python3 utils/standar_evaluation.py --dataset /home/my/Trainning-Models/MyFineTunning-RunPOD/datasets/standard_datasets_seg --coco 2>&1 | tee utils/standard_datasets_seg.log"
 
 # Default dari path manapun
-tmux new-session -d -s standar_evaluation "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/standar_evaluation.py 2>&1 | tee utils/standar_evaluation.log"
+tmux new-session -d -s standar_evaluation "cd /root/Trainning-Models/MyFineTunning-RunPOD && python3 -u utils/standar_evaluation.py 2>&1 | tee utils/standar_evaluation.log"
 
 """
 
@@ -259,7 +259,7 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
                 torch.cuda.synchronize()
                 sam_inf_st = time.perf_counter()
                 try:
-                    sam_res = sam_model.predict(res.orig_img, bboxes=res.boxes.xyxy, verbose=False)
+                    sam_res = sam_model.predict(res.orig_img, bboxes=res.boxes.xyxy, device=device_str, verbose=False)
                     torch.cuda.synchronize()
                     sam_inf_et = time.perf_counter()
                     sam_inf_time = (sam_inf_et - sam_inf_st) * 1000
@@ -440,7 +440,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     GPU_IDS = list(range(torch.cuda.device_count())) if args.gpus.strip().lower() == "all" else [int(g.strip()) for g in args.gpus.split(",") if g.strip()]
-    if not torch.cuda.is_available() or not GPU_IDS: print("❌ CUDA tidak tersedia."); sys.exit(1)
+    if not torch.cuda.is_available() or not GPU_IDS: 
+        print("❌ CUDA tidak tersedia atau tidak ada GPU."); sys.exit(1)
+
+    n_avail = torch.cuda.device_count()
+    for g in GPU_IDS:
+        if g >= n_avail:
+            print(f"❌ GPU {g} tidak tersedia (sistem punya {n_avail} GPU)."); sys.exit(1)
+
+    print("=" * 65)
+    print("  Distributed Multi-GPU Evaluation (RunPOD)")
+    print("=" * 65)
+    print(f"  GPU yang digunakan : {GPU_IDS}")
+    print(f"  World size         : {len(GPU_IDS)}\n")
 
     def _prepare_dataset(raw_path, force_coco, force_yolo):
         ep = raw_path

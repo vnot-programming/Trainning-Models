@@ -21,7 +21,7 @@ Cara menjalankan:
 
     # tmux background:
     tmux new-session -d -s maskeval "source ../.venv/bin/activate && \\
-      cd /home/my/Trainning-Models/MyFineTunning-dev/mask-r-cnn && \\
+      cd /home/my/Trainning-Models/MyFineTunning-RunPOD/mask-r-cnn && \\
       python -u eval_multigpu.py 2>&1 | tee eval_multigpu.log"
 
 Output:

@@ -1,7 +1,6 @@
 """
-tmux kill-session -t gen_visuals; 
-tmux new-session -d -s gen_visuals "source .venv/bin/activate && 
-cd /home/my/Trainning-Models/MyFineTunning-dev && python3 -u utils/generate_paper_visuals.py 2>&1 | tee utils/visuals.log"
+tmux kill-session -t generate_paper_visuals; 
+tmux new-session -d -s generate_paper_visuals "cd /root/Trainning-Models/MyFineTunning-RunPOD && python3 -u utils/generate_paper_visuals.py 2>&1 | tee utils/generate_paper_visuals.log"
 
 """
 # -*- coding: utf-8 -*-
@@ -21,19 +20,20 @@ from datetime import datetime
 _UTILS_DIR = os.path.abspath(os.path.dirname(__file__))
 ROOT = os.path.abspath(os.path.join(_UTILS_DIR, ".."))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, _UTILS_DIR)
 
 from ultralytics import YOLO, SAM
-from config_shared import DATASETS_DIR, get_output_dir, NUM_CLASSES, IMAGE_SIZE
+from config_shared import DATASETS_DIR, get_output_dir, NUM_CLASSES, IMAGE_SIZE, WORKSPACE_DIR
 from eval_unu_helpers import flush_gpu
 from eval_paper import load_maskrcnn
 
 # ====================================================================
 # Konfigurasi Direktori
 # ====================================================================
-P2_DET_DIR = os.path.join(DATASETS_DIR, "me-bottle-isempty-unu3-det-1-coco", "valid")
-P2_SEG_DIR = os.path.join(DATASETS_DIR, "me-bottle-isempty-unu3-sem-seg-1-coco", "valid")
+P2_DET_DIR = os.path.join(DATASETS_DIR, "standard_datasets_det", "valid")
+P2_SEG_DIR = os.path.join(DATASETS_DIR, "standard_datasets_seg", "valid")
 
-RUN_DIR = "/home/my/Trainning-Models/MyFineTunning-dev/data-files/MyFineTunning-20260505_034341"
+RUN_DIR = WORKSPACE_DIR
 BASE_VIS_DIR = os.path.join(RUN_DIR, "visuals", "new_methods", "paper")
 
 IMG_SAMPLE_DIR = os.path.join(BASE_VIS_DIR, "images_sample")

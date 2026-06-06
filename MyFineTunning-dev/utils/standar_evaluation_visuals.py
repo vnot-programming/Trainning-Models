@@ -9,11 +9,12 @@ Menggunakan dataset yang sama persis dengan standar_evaluation.py:
   - SEG_DATASET_LOCATION (standard_datasets_seg)
 
 Cara pakai:
-  tmux new-session -d -s std_visuals "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/standar_evaluation_visuals.py 2>&1 | tee utils/standar_evaluation_visuals.log"
+  tmux new-session -d -s standar_evaluation_visuals "cd /home/my/Trainning-Models/MyFineTunning-dev && source .venv/bin/activate && python3 -u utils/standar_evaluation_visuals.py 2>&1 | tee utils/standar_evaluation_visuals.log"
 
 """
 import os
 import sys
+import argparse
 import json
 import shutil
 import cv2
@@ -195,14 +196,30 @@ def plot_grid(images, titles, save_path):
 # Main Execution
 # ====================================================================
 def main():
-    print(f"\n{'='*65}")
-    print(f"  Standard Evaluation Visuals")
+    parser = argparse.ArgumentParser(description="Multi-GPU Evaluation Visuals")
+    parser.add_argument("--gpus", type=str, default="all", help="Contoh: '0,1' atau 'all'.")
+    args = parser.parse_args()
+
+    GPU_IDS = list(range(torch.cuda.device_count())) if args.gpus.strip().lower() == "all" else [int(g.strip()) for g in args.gpus.split(",") if g.strip()]
+    if not torch.cuda.is_available() or not GPU_IDS: 
+        print("❌ CUDA tidak tersedia atau tidak ada GPU."); sys.exit(1)
+
+    n_avail = torch.cuda.device_count()
+    for g in GPU_IDS:
+        if g >= n_avail:
+            print(f"❌ GPU {g} tidak tersedia (sistem punya {n_avail} GPU)."); sys.exit(1)
+
+    print("=" * 65)
+    print("  Distributed Multi-GPU Evaluation Visuals")
+    print("=" * 65)
+    print(f"  GPU yang digunakan : {GPU_IDS}")
+    print(f"  World size         : {len(GPU_IDS)}")
     print(f"  Det Dataset: {STD_DET_DIR}")
     print(f"  Seg Dataset: {STD_SEG_DIR}")
-    print(f"  Output Dir : {STD_VIS_DIR}")
-    print(f"{'='*65}\n")
+    print(f"  Output Dir : {STD_VIS_DIR}\n")
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device(f"cuda:{GPU_IDS[0]}" if GPU_IDS else "cpu")
+    device_str = ",".join(map(str, GPU_IDS))
 
     # Inisialisasi Class Names secara dinamis
     init_classes_from_coco(STD_SEG_DIR)
@@ -239,7 +256,7 @@ def main():
 
         # --- TAHAP 1: DETECTION ---
         # 1. YOLOv8m
-        res8_det = yolo8_det.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device="cuda:0", verbose=False)[0]
+        res8_det = yolo8_det.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b8  = res8_det.boxes.xyxy.cpu().numpy() if res8_det.boxes else []
         c8  = res8_det.boxes.conf.cpu().numpy() if res8_det.boxes else []
         cls8 = res8_det.boxes.cls.cpu().numpy() if res8_det.boxes else []
@@ -247,7 +264,7 @@ def main():
         if img8_det is not None: cv2.imwrite(os.path.join(DET_OUT_DIR, f"yolov8m_{img_name}"), img8_det)
 
         # 2. YOLOv9m
-        res9_det = yolo9_det.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device="cuda:0", verbose=False)[0]
+        res9_det = yolo9_det.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b9  = res9_det.boxes.xyxy.cpu().numpy() if res9_det.boxes else []
         c9  = res9_det.boxes.conf.cpu().numpy() if res9_det.boxes else []
         cls9 = res9_det.boxes.cls.cpu().numpy() if res9_det.boxes else []
@@ -255,7 +272,7 @@ def main():
         if img9_det is not None: cv2.imwrite(os.path.join(DET_OUT_DIR, f"yolov9m_{img_name}"), img9_det)
 
         # 3. YOLO11l
-        res11_det = yolo11_det.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device="cuda:0", verbose=False)[0]
+        res11_det = yolo11_det.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b11  = res11_det.boxes.xyxy.cpu().numpy() if res11_det.boxes else []
         c11  = res11_det.boxes.conf.cpu().numpy() if res11_det.boxes else []
         cls11 = res11_det.boxes.cls.cpu().numpy() if res11_det.boxes else []
@@ -296,7 +313,7 @@ def main():
 
         # --- TAHAP 2: SEGMENTATION ---
         # 1. YOLOv8m-Seg
-        res8_seg = yolo8_seg.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device="cuda:0", verbose=False)[0]
+        res8_seg = yolo8_seg.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b8s  = res8_seg.boxes.xyxy.cpu().numpy() if res8_seg.boxes else []
         c8s  = res8_seg.boxes.conf.cpu().numpy() if res8_seg.boxes else []
         cls8s = res8_seg.boxes.cls.cpu().numpy() if res8_seg.boxes else []
@@ -309,7 +326,7 @@ def main():
         if img8_seg is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"yolov8m_seg_{img_name}"), img8_seg)
 
         # 2. YOLOv9c-Seg
-        res9_seg = yolo9_seg.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device="cuda:0", verbose=False)[0]
+        res9_seg = yolo9_seg.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b9s  = res9_seg.boxes.xyxy.cpu().numpy() if res9_seg.boxes else []
         c9s  = res9_seg.boxes.conf.cpu().numpy() if res9_seg.boxes else []
         cls9s = res9_seg.boxes.cls.cpu().numpy() if res9_seg.boxes else []
@@ -322,7 +339,7 @@ def main():
         if img9_seg is not None: cv2.imwrite(os.path.join(SEG_OUT_DIR, f"yolov9c_seg_{img_name}"), img9_seg)
 
         # 3. YOLO11l-Seg
-        res11_seg = yolo11_seg.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device="cuda:0", verbose=False)[0]
+        res11_seg = yolo11_seg.predict(img_path, conf=0.001, iou=0.6, imgsz=IMAGE_SIZE, device=device_str, verbose=False)[0]
         b11s  = res11_seg.boxes.xyxy.cpu().numpy() if res11_seg.boxes else []
         c11s  = res11_seg.boxes.conf.cpu().numpy() if res11_seg.boxes else []
         cls11s = res11_seg.boxes.cls.cpu().numpy() if res11_seg.boxes else []
@@ -345,7 +362,7 @@ def main():
         # 5. Hybrid Seg (YOLO11l + SAM2)
         sam_m = None
         if len(b11) > 0:
-            sam_res = sam2_model.predict(img_path, bboxes=b11, verbose=False)[0]
+            sam_res = sam2_model.predict(img_path, bboxes=b11, device=device_str, verbose=False)[0]
             if sam_res.masks is not None:
                 sam_m = sam_res.masks.data.cpu().numpy()
                 h, w = sam_res.orig_img.shape[:2]

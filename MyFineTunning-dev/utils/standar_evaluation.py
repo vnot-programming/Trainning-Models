@@ -72,7 +72,7 @@ def _flush_gpu(gpu_id: int, label: str):
     if torch.cuda.is_available():
         torch.cuda.synchronize(gpu_id)
         free, total = torch.cuda.mem_get_info(gpu_id)
-        print(f"  [GPU:{gpu_id}][MemFlush] {label} — VRAM bebas: {free/1e9:.2f}/{total/1e9:.2f} GB", flush=True)
+        # print(f"  [GPU:{gpu_id}][MemFlush] {label} — VRAM bebas: {free/1e9:.2f}/{total/1e9:.2f} GB", flush=True)
 
 def _gpu_report_str(gpu_ids: list) -> str:
     from collections import Counter
@@ -94,7 +94,7 @@ def _resolve_img_dir(yaml_path: str) -> str:
         if os.path.isdir(d): return d
     raise FileNotFoundError(f"Tidak ditemukan valid/ atau test/images di {base}")
 
-def _get_model_metrics(model_cfg: dict) -> dict:
+def _get_model_metrics(model_cfg: dict, is_seg: bool = False) -> dict:
     """Mengembalikan dict berisi weights_size_mb dan parameters_m."""
     result = {"weights_size_mb": "N/A", "parameters_m": "N/A"}
     try:
@@ -126,7 +126,10 @@ def _get_model_metrics(model_cfg: dict) -> dict:
             result["parameters_m"] = round(total_params / 1e6, 2)
         elif mtype == "hybrid":
             from ultralytics import YOLO, SAM
-            y_m = YOLO(os.path.join(get_output_dir("yolo11l"), "weights", "best.pt"))
+            if is_seg:
+                y_m = YOLO(os.path.join(get_output_dir("yolo11l_seg"), "weights", "best.pt"))
+            else:
+                y_m = YOLO(os.path.join(get_output_dir("yolo11l"), "weights", "best.pt"))
             s_m = SAM(SAM_MODEL_PATH)
             y_params = sum(p.nelement() for p in y_m.model.parameters())
             s_params = sum(p.nelement() for p in s_m.model.parameters())
@@ -169,7 +172,11 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
             model_obj.to(device_str).eval()
         elif mtype == "hybrid":
             from ultralytics import YOLO, SAM
-            model_obj = YOLO(os.path.join(get_output_dir("yolo11l"), "weights", "best.pt"))
+            is_seg_infer = "seg" in img_dir.lower()
+            if is_seg_infer:
+                model_obj = YOLO(os.path.join(get_output_dir("yolo11l_seg"), "weights", "best.pt"))
+            else:
+                model_obj = YOLO(os.path.join(get_output_dir("yolo11l"), "weights", "best.pt"))
             sam_model = SAM(SAM_MODEL_PATH)
     except Exception as e:
         print(f"  [GPU:{gpu}] ❌ Gagal load {label}: {e}", flush=True)
@@ -259,7 +266,7 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
                 torch.cuda.synchronize()
                 sam_inf_st = time.perf_counter()
                 try:
-                    sam_res = sam_model.predict(res.orig_img, bboxes=res.boxes.xyxy, verbose=False)
+                    sam_res = sam_model.predict(res.orig_img, bboxes=res.boxes.xyxy, device=device_str, verbose=False)
                     torch.cuda.synchronize()
                     sam_inf_et = time.perf_counter()
                     sam_inf_time = (sam_inf_et - sam_inf_st) * 1000
@@ -315,7 +322,8 @@ def eval_model_distributed(model_cfg: dict, gpu_ids: list, coco_gt_dict: dict, i
     print("="*65)
 
     world_size = len(gpu_ids)
-    model_metrics = _get_model_metrics(model_cfg)
+    is_seg = "seg" in img_dir.lower()
+    model_metrics = _get_model_metrics(model_cfg, is_seg)
     weights_mb = model_metrics["weights_size_mb"]
     params_m = model_metrics["parameters_m"]
     print(f"  [Model] Weights: {weights_mb} MB | Parameters: {params_m} M")
@@ -440,7 +448,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     GPU_IDS = list(range(torch.cuda.device_count())) if args.gpus.strip().lower() == "all" else [int(g.strip()) for g in args.gpus.split(",") if g.strip()]
-    if not torch.cuda.is_available() or not GPU_IDS: print("❌ CUDA tidak tersedia."); sys.exit(1)
+    if not torch.cuda.is_available() or not GPU_IDS: 
+        print("❌ CUDA tidak tersedia atau tidak ada GPU."); sys.exit(1)
+
+    n_avail = torch.cuda.device_count()
+    for g in GPU_IDS:
+        if g >= n_avail:
+            print(f"❌ GPU {g} tidak tersedia (sistem punya {n_avail} GPU)."); sys.exit(1)
+
+    print("=" * 65)
+    print("  Distributed Multi-GPU Evaluation")
+    print("=" * 65)
+    print(f"  GPU yang digunakan : {GPU_IDS}")
+    print(f"  World size         : {len(GPU_IDS)}\n")
 
     def _prepare_dataset(raw_path, force_coco, force_yolo):
         ep = raw_path

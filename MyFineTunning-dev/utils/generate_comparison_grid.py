@@ -47,7 +47,7 @@ def _get_training_dataset_valid_dir():
             valid_path = os.path.join(DATASETS_DIR, d, "valid")
             if os.path.isdir(valid_path):
                 return valid_path
-    return os.path.join(DATASETS_DIR, "segpoligon-me-bottle-isempty3-7", "valid")
+    return os.path.join(DATASETS_DIR, "train_seg", "valid")
 
 TRAIN_VALID_DIR  = _get_training_dataset_valid_dir()
 TRAIN_ANNOTATIONS = os.path.join(TRAIN_VALID_DIR, "_annotations.coco.json")

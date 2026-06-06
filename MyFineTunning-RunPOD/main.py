@@ -8,14 +8,14 @@ Jalankan ini SEKALI sebelum menjalankan sub-modul fine-tuning per model.
 Cara pakai:
     python main.py
 atau
-    source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate
-    python3 /home/my/Trainning-Models/MyFineTunning-dev/main.py
-tmux new-session -d -s main_session "cd /home/my/Trainning-Models/MyFineTunning-dev && python3 main.py 2>&1 | tee MainReport.log"
+    source /home/my/Trainning-Models/MyFineTunning-RunPOD/.venv/bin/activate
+    python3 /home/my/Trainning-Models/MyFineTunning-RunPOD/main.py
+tmux new-session -d -s main_session "cd /home/my/Trainning-Models/MyFineTunning-RunPOD && python3 main.py 2>&1 | tee MainReport.log"
 
-YOLO8 = tmux new-session -d -s yolo8training "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev/yolo/yolo8 && python -u main.py 2>&1 | tee yolo8training.log"
-YOLO9 = tmux new-session -d -s yolo9training "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev/yolo/yolo9 && python -u main.py 2>&1 | tee yolo9training.log"
-YOLO11 = tmux new-session -d -s yolo11training "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev/yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log"
-MaskRCNN = tmux new-session -d -s masktraining "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev/mask-r-cnn && python -u train_multigpu.py 2>&1 | tee masktraining.log"
+YOLO8 = tmux new-session -d -s yolo8training "source /home/my/Trainning-Models/MyFineTunning-RunPOD/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-RunPOD/yolo/yolo8 && python -u main.py 2>&1 | tee yolo8training.log"
+YOLO9 = tmux new-session -d -s yolo9training "source /home/my/Trainning-Models/MyFineTunning-RunPOD/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-RunPOD/yolo/yolo9 && python -u main.py 2>&1 | tee yolo9training.log"
+YOLO11 = tmux new-session -d -s yolo11training "source /home/my/Trainning-Models/MyFineTunning-RunPOD/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-RunPOD/yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log"
+MaskRCNN = tmux new-session -d -s masktraining "source /home/my/Trainning-Models/MyFineTunning-RunPOD/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-RunPOD/mask-r-cnn && python -u train_multigpu.py 2>&1 | tee masktraining.log"
 
 """
 
@@ -83,7 +83,7 @@ try:
     print(f"[Setup] ✅ Golden Det: {golden_det}")
     print(f"[Setup] ✅ Standard Det: {std_det}")
     print(f"[Setup] ✅ Standard Seg: {std_seg}")
-    print("[Setup] ⚠️ Fine-tuning datasets (ku3-8 & unu3-7) sedang di-bypass.")
+    print("[Setup] ✅ Fine-tuning datasets dimuat dengan sukses.")
 except RuntimeError as _e:
     print(f"\n❌ Dataset gagal disiapkan: {_e}")
     send_telegram_msg(f"❌ <b>Setup Gagal</b>\nDataset tidak tersedia:\n<code>{_e}</code>")
@@ -112,7 +112,10 @@ for folder in workspace_folders:
     os.makedirs(full, exist_ok=True)
     print(f"  📁 {full}")
 
-global_folders = [DATASETS_DIR, MODELS_DIR, REPORTS_DIR, PAPER1_CSV_DIR, VISUALS_DIR, IMAGE_SAMPLES_DIR]
+_PIPELINE_VISUALS_DIR = os.path.join(REPORTS_DIR, "visuals")
+_PIPELINE_COMPARISON_DIR = os.path.join(_PIPELINE_VISUALS_DIR, "comparison")
+global_folders = [DATASETS_DIR, MODELS_DIR, REPORTS_DIR, PAPER1_CSV_DIR, VISUALS_DIR, IMAGE_SAMPLES_DIR,
+                  _PIPELINE_VISUALS_DIR, _PIPELINE_COMPARISON_DIR]
 for folder in global_folders:
     os.makedirs(folder, exist_ok=True)
     print(f"  📁 {folder}")

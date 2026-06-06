@@ -34,5 +34,18 @@ rclone.conf
 .env
 .workspace_id
 
+MyFineTunning-dev/utils/__pycache__/
+MyFineTunning-dev/yolo/yolo8/__pycache__/
+MyFineTunning-dev/yolo/yolo9/__pycache__/
+MyFineTunning-dev/yolo/yolo11/__pycache__/
+
 # === Hanya kirim MyFineTunning-RunPOD (dan file root) ===
 # File besar di dalam MyFineTunning-RunPOD diatur oleh .gitignore di dalam folder tersebut
+MyFineTunning-RunPOD/.venv
+MyFineTunning-dev/.workspace_id1
+
+# === NFS Temporary Files ===
+.nfs*
+
+# === Temp Attach Config ===
+MyFineTunning-SlurmMaster/utils/.attach_rc

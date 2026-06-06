@@ -61,11 +61,11 @@ IMAGE_SAMPLES_DIR = os.path.join(WORKSPACE_DIR, "image_samples")
 # ==============================================================================
 DET_DATASET_LOCATION = os.environ.get(
     "DET_DATASET",
-    os.path.join(DATASETS_DIR, "me-bottle-isempty-ku3-8")
+    os.path.join(DATASETS_DIR, "train_det")
 )
 SEG_DATASET_LOCATION = os.environ.get(
     "SEG_DATASET",
-    os.path.join(DATASETS_DIR, "segpoligon-me-bottle-isempty3-7")
+    os.path.join(DATASETS_DIR, "train_seg")
 )
 
 DET_YAML = os.path.join(DET_DATASET_LOCATION, "data.yaml")
@@ -136,12 +136,12 @@ GPU_COOLDOWN_SEC       = 15     # Jeda (detik) setelah training selesai
 # ==============================================================================
 # HYPERPARAMETER Test
 # ==============================================================================
-# EPOCHS              = 2 # 100
+# EPOCHS              = 1
 # IMAGE_SIZE          = 640
 # NUM_CLASSES         = 7
-# YOLO_BATCH_SIZE     = 80    # 160 menyebabkan OOM pada YOLO11l (Large) di VRAM 20GB. 80 / 5 = 16 per GPU.
-# MASKRCNN_BATCH_SIZE = 8     # Diturunkan ke 8 agar lebih aman (menghindari OOM).
-# NUM_WORKERS         = 10    # 16
+# YOLO_BATCH_SIZE     = 16
+# MASKRCNN_BATCH_SIZE = 8
+# NUM_WORKERS         = 10
 
 # ==============================================================================
 # HYPERPARAMETER RunPOD
@@ -149,9 +149,9 @@ GPU_COOLDOWN_SEC       = 15     # Jeda (detik) setelah training selesai
 # EPOCHS              = 100
 # IMAGE_SIZE          = 640
 # NUM_CLASSES         = 7
-# YOLO_BATCH_SIZE     = 160   # DDP total (dibagi ke semua GPU oleh Ultralytics)
-# MASKRCNN_BATCH_SIZE = 16    # 4
-# NUM_WORKERS         = 32    # 16
+# YOLO_BATCH_SIZE     = 96   # DDP total (dibagi ke semua GPU oleh Ultralytics)
+# MASKRCNN_BATCH_SIZE = 10    # 4
+# NUM_WORKERS         = 14    # 16
 
 # ==============================================================================
 # HYPERPARAMETER RunPOD - Opsi Lain
@@ -159,15 +159,30 @@ GPU_COOLDOWN_SEC       = 15     # Jeda (detik) setelah training selesai
 EPOCHS              = 100
 IMAGE_SIZE          = 640
 NUM_CLASSES         = 7
-YOLO_BATCH_SIZE     = 80    # Sangat aman dan optimal
-MASKRCNN_BATCH_SIZE = 12    # Titik tengah yang paling aman untuk VRAM 20GB
-NUM_WORKERS         = 10    # Jangan dinaikkan, CPU Core Anda 48
+YOLO_BATCH_SIZE     = 26
+MASKRCNN_BATCH_SIZE = 8
+NUM_WORKERS         = 32
+
+# ==============================================================================
+# HYPERPARAMETER PARALEL & EARLY STOPPING (Standard 2026)
+# ==============================================================================
+PARALLEL_TRAINING        = True  # Skenario 1 GPU = 1 Model
+EARLY_STOPPING_PATIENCE  = 20    # Patience untuk YOLO dan Mask R-CNN
+# Secara cerdas mendeteksi seluruh GPU CUDA yang tersedia di instance RunPOD/Server secara dinamis
+import torch as _torch
+if _torch.cuda.is_available():
+    _num_gpus = _torch.cuda.device_count()
+    PARALLEL_GPUS = ",".join(str(i) for i in range(_num_gpus))
+else:
+    PARALLEL_GPUS = "0"
+
+
+
 
 # Cara menghitung manualnya didasarkan pada **kapasitas VRAM GPU** dan **jumlah CPU Core** yang tersedia. Berikut adalah panduan hitungan manual untuk meningkatkan performa di RunPod Anda:
 
 # ### 1. Menghitung `YOLO_BATCH_SIZE` (Total Batch)
 # YOLO menggunakan DDP (Distributed Data Parallel), jadi angkanya adalah total untuk 4 GPU.
-
 # *   **Rumus:** `(Target VRAM per GPU / VRAM saat ini) * Batch per GPU saat ini * Jumlah GPU`
 # *   **Logika Manual:**
 #     *   Saat ini: Batch total **80** (artinya **20 per GPU**) menggunakan **10-15GB**.
