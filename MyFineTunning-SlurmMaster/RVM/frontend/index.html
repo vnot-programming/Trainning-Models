@@ -27,26 +27,68 @@
             </div>
         </header>
 
-        <!-- Upload Section -->
-        <section class="card" style="margin-bottom: var(--space-xl);">
-            <h2 class="card__title">📸 Upload Image</h2>
-            <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="Click or drag to upload image">
-                <div class="upload-zone__icon">📁</div>
-                <p class="upload-zone__text">
-                    Drag & drop image here, or <strong>click to browse</strong>
-                </p>
-                <p class="upload-zone__hint">Supports: JPG, JPEG, PNG, BMP, WEBP • Max 16 MB</p>
-                <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.bmp,.webp">
-            </div>
-            <div class="preview-container" id="previewContainer">
-                <img id="previewImage" alt="Preview of uploaded image">
-                <button class="preview-container__remove" id="removeImage" aria-label="Remove image" title="Remove image">✕</button>
-            </div>
-        </section>
+        <!-- Upload + Result Split Panel -->
+        <div class="split-panel" id="splitPanel">
+            <!-- Left: Upload Image -->
+            <section class="card split-panel__left">
+                <div class="card__title-row">
+                    <h2 class="card__title">📸 Upload Image</h2>
+                    <!-- Image Comparison Checkbox -->
+                    <label class="comparison-toggle" for="imageComparisonCheckbox" title="Aktifkan mode perbandingan antar model (maks. 5 model)">
+                        <input type="checkbox" id="imageComparisonCheckbox">
+                        <span class="comparison-toggle__track">
+                            <span class="comparison-toggle__thumb"></span>
+                        </span>
+                        <span class="comparison-toggle__label">Image Comparison</span>
+                    </label>
+                </div>
+                <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="Click or drag to upload image">
+                    <div class="upload-zone__icon">📁</div>
+                    <p class="upload-zone__text">
+                        Drag &amp; drop image here, or <strong>click to browse</strong>
+                    </p>
+                    <p class="upload-zone__hint">Supports: JPG, JPEG, PNG, BMP, WEBP • Max 16 MB</p>
+                    <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.bmp,.webp">
+                </div>
+                <div class="preview-container" id="previewContainer">
+                    <img id="previewImage" alt="Preview of uploaded image">
+                    <button class="preview-container__remove" id="removeImage" aria-label="Remove image" title="Remove image">✕</button>
+                </div>
+            </section>
+
+            <!-- Right: Result Panel -->
+            <section class="card split-panel__right" id="resultPanel">
+                <div class="card__title-row">
+                    <h2 class="card__title">📸 Result</h2>
+                    <button class="btn-download-grid" id="btnDownloadGrid" style="display:none;" title="Download grid perbandingan sebagai satu gambar PNG">
+                        📥 Download Grid
+                    </button>
+                </div>
+                <div class="result-panel-placeholder" id="resultPanelPlaceholder">
+                    <div class="result-panel-placeholder__icon">🔒</div>
+                    <p class="result-panel-placeholder__text">Aktifkan <strong>Image Comparison</strong> untuk melihat visualisasi di sini.</p>
+                </div>
+                <!-- Comparison Grid: Ground Truth + 5 Models (3x2) -->
+                <div class="comparison-grid" id="comparisonGrid" style="display:none;">
+                    <!-- Diisi secara dinamis oleh JavaScript -->
+                </div>
+            </section>
+        </div>
 
         <!-- Model Selection -->
         <section class="card" style="margin-bottom: var(--space-xl);">
             <h2 class="card__title">🤖 Select Models</h2>
+
+            <!-- Info Banner: Image Comparison Mode (hidden by default, shown when checkbox aktif) -->
+            <div class="comparison-mode-banner" id="comparisonModeBanner" style="display:none;">
+                <span class="comparison-mode-banner__icon">🔀</span>
+                <div class="comparison-mode-banner__text">
+                    <strong>Image Comparison Mode Aktif</strong>
+                    <span>Pilih maksimal <strong>5 Model</strong> untuk visualisasi perbandingan Grid 3×2 (Ground Truth + 5 Model).</span>
+                </div>
+                <span class="comparison-mode-banner__badge" id="comparisonModelCount">0/5</span>
+            </div>
+
             <!-- Cascading Dropdown Controls -->
             <div class="dropdown-selector-group">
                 <div class="dropdown-field">
@@ -90,6 +132,7 @@
             <div class="selected-models-container" style="margin-top: var(--space-lg);">
                 <div class="selected-models-header">
                     <span>Selected Models (<strong id="selectedCount">0</strong>)</span>
+                    <span class="comparison-limit-hint" id="comparisonLimitHint" style="display:none;">Maks. 5 model dalam Comparison Mode</span>
                 </div>
                 <div id="selectedModelChips" class="selected-model-chips">
                     <span class="no-selection-placeholder">No models selected. Use the dropdown or quick select above.</span>

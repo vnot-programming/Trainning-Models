@@ -345,10 +345,13 @@ MODEL_COLORS = {
 }
 
 # Kolom Spesifikasi Laporan CSV Terpadu (Unified)
+# Boundary IoU & Boundary AP ditambahkan sebagai metrik kualitas batas kontur
+# (hanya relevan untuk model yang menghasilkan instance mask segmentation)
 CSV_REPORT_FIELDS = [
     "Model", "Weights Size (MB)", "Parameters (M)",
     "mAP50-95(Box)", "mAP50(Box)", "mAP50-95(Mask)", "mAP50(Mask)",
     "Precision(Box)", "Recall(Box)", "Precision(Mask)", "Recall(Mask)",
+    "Boundary IoU", "Boundary AP",
     "Preprocess (ms)", "Inference (ms)", "Postprocess (ms)",
     "Latency (ms)", "FPS", "GPUs", "Evaluator"
 ]

@@ -45,15 +45,74 @@ start_frontend() {
     "$TMUX_BIN" new-session -d -s "$SESSION_FRONTEND"
     "$TMUX_BIN" send-keys -t "$SESSION_FRONTEND" "source $CONDA_ACTIVATE $CONDA_ENV && cd $ROOT_DIR && python RVM/serve_frontend.py 2>&1 | tee RVM/backend/logs/frontend.log" C-m
 
-    echo -e "  ${GREEN}✅ Sesi tmux '$SESSION_FRONTEND' berhasil dibuat di background.${NC}"
-    echo -e "  ${CYAN}➔ Gunakan perintah berikut untuk melihat log frontend:${NC}"
-    echo -e "     tmux attach -t $SESSION_FRONTEND"
-    echo -e "  ${YELLOW}➔ Tekan Ctrl+B lalu D untuk keluar (detach) dari sesi tersebut.${NC}\n"
+    echo -e "  ${YELLOW}➔ Menunggu Frontend berjalan di port 8501 (timeout 15s)...${NC}"
+    local timeout=15
+    local elapsed=0
+    while ! ss -tln 2>/dev/null | grep -q ":8501 " && [ $elapsed -lt $timeout ]; do
+        echo -ne "  ${CYAN}⏳ Loading... ($elapsed s)\r${NC}"
+        sleep 1
+        elapsed=$((elapsed+1))
+    done
+    echo ""
+
+    if [ $elapsed -ge $timeout ]; then
+        echo -e "  ${RED}⚠️  Timeout! Frontend (Port 8501) mungkin gagal berjalan.${NC}"
+        echo -e "  ${YELLOW}➔ Cek log dengan: tmux attach -t $SESSION_FRONTEND${NC}"
+    else
+        echo -e "  ${GREEN}✅ Frontend berhasil berjalan dan listening di port 8501!${NC}"
+        echo -e "  ${CYAN}➔ Gunakan perintah berikut untuk melihat log frontend:${NC}"
+        echo -e "     tmux attach -t $SESSION_FRONTEND"
+        echo -e "  ${YELLOW}➔ Tekan Ctrl+B lalu D untuk keluar (detach) dari sesi tersebut.${NC}\n"
+    fi
+}
+
+update_class_mapping_json() {
+    echo -e "  ${CYAN}🔄 Menyinkronkan class_mapping.json dengan data.yaml...${NC}"
+    local yaml_file="${ROOT_DIR}/datasets/training_seg/data.yaml"
+    local json_file="${ROOT_DIR}/RVM/backend/class_mapping.json"
+    
+    if [ ! -f "$yaml_file" ]; then
+        echo -e "  ${RED}⚠️  File '$yaml_file' tidak ditemukan. Gagal memperbarui class_mapping.json.${NC}"
+        return
+    fi
+    
+    # Jalankan inline python dengan mengaktifkan conda environment yolo_env di subshell
+    if ( source "$CONDA_ACTIVATE" "$CONDA_ENV" && python -c "
+import yaml
+import json
+import os
+
+yaml_path = '$yaml_file'
+json_path = '$json_file'
+
+try:
+    with open(yaml_path, 'r') as f:
+        data = yaml.safe_load(f)
+    names = data.get('names', [])
+    if names:
+        mapping = {'0': 'background'}
+        for idx, name in enumerate(names):
+            mapping[str(idx + 1)] = name
+        with open(json_path, 'w') as f:
+            json.dump(mapping, f, indent=2)
+        print('SUCCESS')
+    else:
+        print('EMPTY_NAMES')
+except Exception as e:
+    print(f'ERROR: {e}')
+" ) 2>&1 | grep -q "SUCCESS"; then
+        echo -e "  ${GREEN}✅ class_mapping.json berhasil disinkronkan dengan data.yaml.${NC}"
+    else
+        echo -e "  ${RED}⚠️  Gagal menyinkronkan class_mapping.json. Silakan cek format data.yaml.${NC}"
+    fi
 }
 
 start_backend() {
     print_header
     echo -e "  ${CYAN}⚙️  Memulai Backend API (Compute Node + GPU)${NC}"
+
+    # Sinkronisasi class_mapping.json sebelum meluncurkan backend
+    update_class_mapping_json
 
     HOSTNAME=$(hostname)
     SESSION_BACKEND="rvm_backend"
@@ -88,15 +147,30 @@ start_backend() {
         # Kirim perintah kelima: jalankan Flask API dengan tee ke backend.log
         "$TMUX_BIN" send-keys -t "$SESSION_BACKEND" "python -u RVM/backend/visual_eval_api.py 2>&1 | tee RVM/backend/logs/backend.log" C-m
         
-        echo -e "  ${GREEN}✅ Sesi tmux '$SESSION_BACKEND' berhasil dibuat di background.${NC}"
-        echo -e "  ${CYAN}➔ Gunakan perintah berikut untuk masuk dan memantau log backend:${NC}"
-        echo -e "     tmux attach -t $SESSION_BACKEND"
-        echo -e "  ${YELLOW}➔ Tekan Ctrl+B lalu D untuk keluar (detach) dari sesi tersebut.${NC}\n"
+        echo -e "  ${YELLOW}➔ Menunggu Backend berjalan di port ${BACKEND_PORT} (timeout 15s)...${NC}"
+        local timeout=15
+        local elapsed=0
+        while ! ss -tln 2>/dev/null | grep -q ":${BACKEND_PORT} " && [ $elapsed -lt $timeout ]; do
+            echo -ne "  ${CYAN}⏳ Loading... ($elapsed s)\r${NC}"
+            sleep 1
+            elapsed=$((elapsed+1))
+        done
+        echo ""
+
+        if [ $elapsed -ge $timeout ]; then
+            echo -e "  ${RED}⚠️  Timeout! Backend (Port ${BACKEND_PORT}) mungkin gagal berjalan.${NC}"
+            echo -e "  ${YELLOW}➔ Cek log dengan: tmux attach -t $SESSION_BACKEND${NC}"
+        else
+            echo -e "  ${GREEN}✅ Backend berhasil berjalan dan listening di port ${BACKEND_PORT}!${NC}"
+            echo -e "  ${CYAN}➔ Gunakan perintah berikut untuk masuk dan memantau log backend:${NC}"
+            echo -e "     tmux attach -t $SESSION_BACKEND"
+            echo -e "  ${YELLOW}➔ Tekan Ctrl+B lalu D untuk keluar (detach) dari sesi tersebut.${NC}\n"
+        fi
     else
         # Jika dipanggil langsung di dalam compute node (jarang digunakan langsung, namun disediakan)
         echo -e "  ${GREEN}✅ Menjalankan Backend API langsung di Compute Node...${NC}"
         
-        if pgrep -f "ssh -N.*-R ${BACKEND_PORT}" > /dev/null 2>&1; then
+        if pgrep -u $USER -f "ssh -N.*-R ${BACKEND_PORT}" > /dev/null 2>&1; then
             echo -e "  ${YELLOW}⚠️  SSH tunnel ke port ${BACKEND_PORT} sudah aktif.${NC}"
         else
             ssh -N -f -R ${BACKEND_PORT}:localhost:${BACKEND_PORT} slurmmaster
@@ -130,7 +204,28 @@ stop_services() {
     echo -e "  ${GREEN}✅ Semua proses local dihentikan.${NC}\n"
 }
 
+stop_backend() {
+    print_header
+    echo -e "  ${CYAN}■ Menghentikan backend service...${NC}\n"
+    if "$TMUX_BIN" has-session -t "rvm_backend" 2>/dev/null; then
+        "$TMUX_BIN" kill-session -t "rvm_backend"
+        echo -e "  ${GREEN}✅ Sesi tmux 'rvm_backend' dihentikan.${NC}"
+    fi
+    pkill -f "ssh -N.*-R ${BACKEND_PORT}" || true
+    echo -e "  ${GREEN}✅ Layanan backend Flask & SSH tunnel dihentikan.${NC}\n"
+}
+
+stop_frontend() {
+    print_header
+    echo -e "  ${CYAN}■ Menghentikan frontend service...${NC}\n"
+    if "$TMUX_BIN" has-session -t "rvm_frontend" 2>/dev/null; then
+        "$TMUX_BIN" kill-session -t "rvm_frontend"
+        echo -e "  ${GREEN}✅ Sesi tmux 'rvm_frontend' dihentikan.${NC}"
+    fi
+}
+
 check_status() {
+    set +e # Nonaktifkan sementara errexit agar skrip tidak crash jika service/port tidak aktif
     print_header
     echo -e "  ${CYAN}📊 Status Ports & Sesi Tmux:${NC}\n"
 
@@ -144,7 +239,7 @@ check_status() {
     done
 
     # Cek Cloudflared
-    if pgrep -f "cloudflared" > /dev/null 2>&1; then
+    if pgrep -u $USER cloudflared > /dev/null 2>&1; then
         echo -e "  Cloudflared      : ${GREEN}● RUNNING${NC}"
     else
         echo -e "  Cloudflared      : ${RED}○ STOPPED${NC}"
@@ -160,6 +255,7 @@ check_status() {
         fi
     done
     echo ""
+    set -e # Aktifkan kembali errexit
 }
 
 show_help() {
@@ -168,10 +264,12 @@ show_help() {
     echo "  Usage: bash RVM/start_rvm.sh <command>"
     echo ""
     echo "  Commands:"
-    echo "    frontend   Mulai frontend server (di tmux 'rvm_frontend' Login Node)"
-    echo "    backend    Mulai backend API (di tmux 'rvm_backend' + otomatis attach GPU)"
-    echo "    stop       Hentikan semua sesi tmux frontend dan backend"
-    echo "    status     Cek status port & sesi tmux"
+    echo "    frontend       Mulai frontend server (di tmux 'rvm_frontend' Login Node)"
+    echo "    backend        Mulai backend API (di tmux 'rvm_backend' + otomatis attach GPU)"
+    echo "    stop           Hentikan semua sesi tmux frontend dan backend"
+    echo "    stop_backend   Hentikan backend saja"
+    echo "    stop_frontend  Hentikan frontend saja"
+    echo "    status         Cek status port & sesi tmux"
     echo ""
 }
 
@@ -179,6 +277,8 @@ case "${1:-help}" in
     frontend) start_frontend ;;
     backend)  start_backend ;;
     stop)     stop_services ;;
+    stop_backend) stop_backend ;;
+    stop_frontend) stop_frontend ;;
     status)   check_status ;;
     *)  show_help ;;
 esac

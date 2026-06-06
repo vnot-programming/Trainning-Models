@@ -66,6 +66,58 @@ else:
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = EVAL_API_MAX_UPLOAD_MB * 1024 * 1024
 
+def _update_class_mapping():
+    """
+    Sinkronisasi otomatis mapping kelas (class_mapping.json) dari data.yaml segmentasi.
+    MENGAPA: Menjamin Mask R-CNN selalu sinkron dengan dataset latih terbaru tanpa hardcoding.
+    """
+    yaml_path = os.path.join(ROOT, "datasets", "training_seg", "data.yaml")
+    json_path = os.path.join(ROOT, "RVM", "backend", "class_mapping.json")
+    
+    default_mapping = {
+        "0": "background",
+        "1": "dishwasher",
+        "2": "milk",
+        "3": "mineral",
+        "4": "non_mineral",
+        "5": "not_empty",
+        "6": "soda",
+        "7": "yogurt"
+    }
+    
+    try:
+        import yaml
+        import json
+        if os.path.exists(yaml_path):
+            with open(yaml_path, 'r') as f:
+                data = yaml.safe_load(f)
+            names = data.get("names", [])
+            if names:
+                mapping = {0: "background"}
+                for idx, name in enumerate(names):
+                    mapping[idx + 1] = name
+                with open(json_path, 'w') as f:
+                    json.dump(mapping, f, indent=2)
+                print(f"[Mapping] ✅ class_mapping.json terupdate dari {yaml_path}", flush=True)
+                return
+        
+        if os.path.exists(json_path):
+            print(f"[Mapping] ℹ️ class_mapping.json sudah ada (menggunakan file yang ada)", flush=True)
+            return
+            
+        with open(json_path, 'w') as f:
+            json.dump(default_mapping, f, indent=2)
+        print("[Mapping] ⚠️ data.yaml tidak ditemukan, menulis default class_mapping.json", flush=True)
+    except Exception as e:
+        print(f"[Mapping] ❌ Gagal mengupdate class mapping: {e}", flush=True)
+        if not os.path.exists(json_path):
+            import json
+            with open(json_path, 'w') as f:
+                json.dump(default_mapping, f, indent=2)
+
+# Jalankan update mapping otomatis saat startup
+_update_class_mapping()
+
 # Direktori sementara untuk upload
 _UPLOAD_DIR = os.path.join(ROOT, "RVM", "backend", "_uploads")
 os.makedirs(_UPLOAD_DIR, exist_ok=True)
@@ -452,6 +504,8 @@ def _infer_yolo(model_info, img_path, conf, iou):
                 if r.masks is not None and i < len(r.masks.data):
                     mask_np = r.masks.data[i].cpu().numpy()
                     det["mask_area"] = int((mask_np > 0.5).sum())
+                    if r.masks.xy is not None and i < len(r.masks.xy):
+                        det["segment"] = [[float(pt[0]), float(pt[1])] for pt in r.masks.xy[i]]
                 detections.append(det)
 
     return {
@@ -495,10 +549,21 @@ def _infer_maskrcnn(model_info, img_path, conf):
 
     pred = predictions[0]
     detections = []
-    class_names = {
-        0: "background", 1: "Aluminium", 2: "Carton", 3: "Glass",
-        4: "HDPE", 5: "PET", 6: "PP", 7: "PS",
-    }
+    
+    # Baca mapping secara dinamis dari class_mapping.json
+    json_path = os.path.join(ROOT, "RVM", "backend", "class_mapping.json")
+    class_names = {}
+    try:
+        import json
+        with open(json_path, 'r') as f:
+            mapping_data = json.load(f)
+            class_names = {int(k): v for k, v in mapping_data.items()}
+    except Exception as e:
+        print(f"[Inference] ⚠️ Gagal memuat class_mapping.json: {e}, menggunakan fallback", flush=True)
+        class_names = {
+            0: "background", 1: "dishwasher", 2: "milk", 3: "mineral",
+            4: "non_mineral", 5: "not_empty", 6: "soda", 7: "yogurt",
+        }
 
     scores = pred.get("scores", torch.tensor([]))
     for i in range(len(scores)):
@@ -508,14 +573,22 @@ def _infer_maskrcnn(model_info, img_path, conf):
         label_id = int(pred["labels"][i])
         bbox = [round(float(v), 1) for v in pred["boxes"][i].tolist()]
         mask_area = None
+        segment = None
         if "masks" in pred and i < len(pred["masks"]):
+            import numpy as np
             mask_np = pred["masks"][i, 0].cpu().numpy()
             mask_area = int((mask_np > 0.5).sum())
+            binary_mask = (mask_np > 0.5).astype(np.uint8) * 255
+            contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if contours:
+                largest_contour = max(contours, key=cv2.contourArea)
+                segment = [[float(pt[0][0]), float(pt[0][1])] for pt in largest_contour]
         detections.append({
             "class": class_names.get(label_id, f"class_{label_id}"),
             "confidence": round(score, 4),
             "bbox": bbox,
             "mask_area": mask_area,
+            "segment": segment,
         })
 
     return {
@@ -561,6 +634,7 @@ def _infer_hybrid(model_info, img_path, conf, iou):
     detections = []
     for i in range(len(bboxes)):
         mask_area = None
+        segment = None
         if (
             sam_results and len(sam_results) > 0
             and sam_results[0].masks is not None
@@ -568,11 +642,14 @@ def _infer_hybrid(model_info, img_path, conf, iou):
         ):
             mask_np = sam_results[0].masks.data[i].cpu().numpy()
             mask_area = int((mask_np > 0.5).sum())
+            if sam_results[0].masks.xy is not None and i < len(sam_results[0].masks.xy):
+                segment = [[float(pt[0]), float(pt[1])] for pt in sam_results[0].masks.xy[i]]
         detections.append({
             "class": names.get(int(classes[i]), "unknown"),
             "confidence": round(float(confs[i]), 4),
             "bbox": [round(float(v), 1) for v in bboxes[i].tolist()],
             "mask_area": mask_area,
+            "segment": segment,
         })
 
     t_ms = round((time.perf_counter() - t0) * 1000, 2)

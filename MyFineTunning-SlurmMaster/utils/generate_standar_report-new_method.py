@@ -232,6 +232,206 @@ def _get_model_metrics(model_cfg: dict, is_seg: bool = False) -> dict:
     return result
 
 # ==============================================================================
+# BOUNDARY IoU & BOUNDARY AP HELPERS
+# ==============================================================================
+def _mask_to_boundary(binary_mask: np.ndarray, dilation_ratio: float = 0.02) -> np.ndarray:
+    """
+    Mengubah instance mask biner menjadi boundary mask menggunakan erosi morfologi.
+    Boundary = mask asli XOR (mask setelah erosi).
+
+    Args:
+        binary_mask  : np.ndarray uint8 (H, W), nilai 0 atau 1
+        dilation_ratio: rasio ukuran kernel erosi terhadap diagonal gambar (default 0.02)
+    Returns:
+        boundary_mask: np.ndarray uint8 (H, W)
+    """
+    h, w = binary_mask.shape[:2]
+    # Ukuran kernel adaptif berdasarkan ukuran gambar (minimal 1 piksel)
+    kernel_size = max(1, int(round(dilation_ratio * np.sqrt(h * h + w * w))))
+    kernel = np.ones((kernel_size, kernel_size), dtype=np.uint8)
+    eroded = cv2.erode(binary_mask.astype(np.uint8), kernel, iterations=1)
+    boundary = np.logical_xor(binary_mask.astype(bool), eroded.astype(bool)).astype(np.uint8)
+    return boundary
+
+
+def compute_boundary_iou(pred_mask: np.ndarray, gt_mask: np.ndarray,
+                         dilation_ratio: float = 0.02) -> float:
+    """
+    Menghitung Boundary IoU antara satu predicted mask dan satu GT mask.
+    Boundary IoU = |pred_boundary ∩ gt_boundary| / |pred_boundary ∪ gt_boundary|
+
+    Args:
+        pred_mask    : np.ndarray bool/uint8 (H, W) — prediksi model
+        gt_mask      : np.ndarray bool/uint8 (H, W) — ground truth
+        dilation_ratio: rasio kernel erosi (default 0.02)
+    Returns:
+        float Boundary IoU [0.0, 1.0], atau 0.0 jika union = 0
+    """
+    pred_b = _mask_to_boundary(pred_mask.astype(np.uint8), dilation_ratio)
+    gt_b   = _mask_to_boundary(gt_mask.astype(np.uint8), dilation_ratio)
+    intersection = np.logical_and(pred_b, gt_b).sum()
+    union        = np.logical_or(pred_b, gt_b).sum()
+    if union == 0:
+        return 0.0
+    return float(intersection) / float(union)
+
+
+def compute_boundary_metrics_from_coco(
+    dt_segm: list,
+    coco_gt_dict: dict,
+    iou_thresh: float = 0.5,
+    dilation_ratio: float = 0.02
+) -> dict:
+    """
+    Menghitung Boundary IoU rata-rata dan Boundary AP (Average Precision) dari
+    seluruh prediksi segmentasi dalam format COCO-RLE.
+
+    Alur:
+    1. Decode setiap GT mask menggunakan pycocotools.
+    2. Decode setiap prediksi mask.
+    3. Untuk setiap prediksi, temukan GT terbaik berdasarkan standard IoU (bbox).
+    4. Hitung Boundary IoU antara prediksi dan GT yang cocok.
+    5. Hitung Boundary AP menggunakan kurva precision-recall pada threshold Boundary IoU.
+
+    Args:
+        dt_segm      : list dict COCO-format predictions (segmentation RLE)
+        coco_gt_dict : dict COCO ground-truth JSON (keys: images, annotations, categories)
+        iou_thresh   : threshold Boundary IoU untuk TP (default 0.5)
+        dilation_ratio: rasio kernel erosi untuk boundary extraction
+    Returns:
+        dict {"boundary_iou": float | "N/A", "boundary_ap": float | "N/A"}
+    """
+    try:
+        from pycocotools import mask as maskUtils
+        from pycocotools.coco import COCO
+
+        if not dt_segm:
+            return {"boundary_iou": "N/A", "boundary_ap": "N/A"}
+
+        # Build GT lookup: image_id -> list of (gt_mask_np, category_id)
+        coco_obj = COCO()
+        coco_obj.dataset = coco_gt_dict
+        coco_obj.createIndex()
+
+        gt_lookup: dict = {}  # image_id -> list of (binary_mask, category_id, ann_id)
+        for ann in coco_gt_dict.get("annotations", []):
+            seg = ann.get("segmentation")
+            if not seg:
+                continue
+            img_id = ann["image_id"]
+            try:
+                if isinstance(seg, list):
+                    # Polygon format → konversi ke RLE terlebih dahulu
+                    img_info = coco_obj.loadImgs(img_id)[0]
+                    rle = maskUtils.frPyObjects(seg, img_info["height"], img_info["width"])
+                    rle = maskUtils.merge(rle)
+                elif isinstance(seg, dict):
+                    rle = seg
+                else:
+                    continue
+                gt_mask = maskUtils.decode(rle).astype(bool)
+            except Exception:
+                continue
+            if img_id not in gt_lookup:
+                gt_lookup[img_id] = []
+            gt_lookup[img_id].append((gt_mask, ann["category_id"], ann["id"]))
+
+        # Decode semua prediksi: list of (img_id, category_id, score, pred_mask)
+        preds_decoded = []
+        for dt in dt_segm:
+            try:
+                seg = dt["segmentation"]
+                if isinstance(seg, str):
+                    # counts dalam string bytes
+                    seg = {"counts": seg.encode("utf-8") if isinstance(seg, str) else seg["counts"],
+                           "size": seg.get("size", [0, 0])} if isinstance(seg, dict) else seg
+                if isinstance(seg, dict):
+                    if isinstance(seg.get("counts"), str):
+                        seg["counts"] = seg["counts"].encode("utf-8")
+                    pred_mask = maskUtils.decode(seg).astype(bool)
+                else:
+                    continue
+                preds_decoded.append({
+                    "image_id": dt["image_id"],
+                    "category_id": dt["category_id"],
+                    "score": dt["score"],
+                    "mask": pred_mask
+                })
+            except Exception:
+                continue
+
+        if not preds_decoded:
+            return {"boundary_iou": "N/A", "boundary_ap": "N/A"}
+
+        # Hitung Boundary IoU per prediksi (greedy matching terhadap GT terbaik)
+        used_gt: dict = {}  # ann_id yang sudah di-match
+        biou_scores = []  # list (score, is_tp: bool, biou_val)
+
+        # Urutkan prediksi dari skor tertinggi (penting untuk AP kalkulasi)
+        preds_sorted = sorted(preds_decoded, key=lambda x: -x["score"])
+
+        for pd in preds_sorted:
+            img_id   = pd["image_id"]
+            cat_id   = pd["category_id"]
+            pred_msk = pd["mask"]
+
+            gt_list  = [g for g in gt_lookup.get(img_id, []) if g[1] == cat_id]
+
+            best_biou  = 0.0
+            best_ann_id = None
+
+            for gt_msk, _, ann_id in gt_list:
+                if ann_id in used_gt:
+                    continue
+                # Resize jika dimensi berbeda
+                if pred_msk.shape != gt_msk.shape:
+                    H, W = gt_msk.shape[:2]
+                    pred_msk_r = cv2.resize(pred_msk.astype(np.float32), (W, H),
+                                            interpolation=cv2.INTER_NEAREST).astype(bool)
+                else:
+                    pred_msk_r = pred_msk
+                biou = compute_boundary_iou(pred_msk_r, gt_msk, dilation_ratio)
+                if biou > best_biou:
+                    best_biou   = biou
+                    best_ann_id = ann_id
+
+            is_tp = best_biou >= iou_thresh and best_ann_id is not None
+            if is_tp and best_ann_id not in used_gt:
+                used_gt[best_ann_id] = True
+            biou_scores.append((pd["score"], is_tp, best_biou))
+
+        # Rata-rata Boundary IoU (hanya prediksi yang berhasil match)
+        matched_bious = [b for _, tp, b in biou_scores if tp]
+        avg_biou = round(float(np.mean(matched_bious)), 4) if matched_bious else "N/A"
+
+        # Boundary AP: hitung precision-recall curve
+        n_total_gt = sum(len(v) for v in gt_lookup.values())
+        if n_total_gt == 0:
+            return {"boundary_iou": avg_biou, "boundary_ap": "N/A"}
+
+        tps  = np.array([1 if tp else 0 for _, tp, _ in biou_scores], dtype=float)
+        fps  = 1.0 - tps
+        cum_tp = np.cumsum(tps)
+        cum_fp = np.cumsum(fps)
+
+        recalls    = cum_tp / n_total_gt
+        precisions = cum_tp / (cum_tp + cum_fp + 1e-9)
+
+        # Interpolasi 101 titik (standar COCO AP)
+        recall_thresholds = np.linspace(0.0, 1.0, 101)
+        interp_prec = np.zeros(len(recall_thresholds))
+        for i, rt in enumerate(recall_thresholds):
+            prec_at_recall = precisions[recalls >= rt]
+            interp_prec[i] = prec_at_recall.max() if len(prec_at_recall) > 0 else 0.0
+
+        boundary_ap = round(float(np.mean(interp_prec)), 4)
+        return {"boundary_iou": avg_biou, "boundary_ap": boundary_ap}
+
+    except Exception as e:
+        print(f"  [Boundary-Error] Gagal hitung Boundary IoU/AP: {e}")
+        return {"boundary_iou": "N/A", "boundary_ap": "N/A"}
+
+# ==============================================================================
 # WORKER INFERENCE PARALEL (KUANTITATIF)
 # ==============================================================================
 def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image_ids: dict, tmp_dir: str):
@@ -421,7 +621,7 @@ def _infer_worker(rank: int, gpu_ids: list, model_cfg: dict, img_dir: str, image
             "dt_bbox": dt_bbox, "dt_segm": dt_segm, "n_imgs": len(subset),
             "pre": t_pre, "inf": t_inf, "post": t_post
         }, f)
-        
+
     del model_obj, sam_model
     flush_gpu(gpu, f"{mkey}_rank{rank}")
 
@@ -720,13 +920,38 @@ def main():
                     except Exception as ev_err:
                         print(f"  [Eval-Error] Gagal hitung mAP Mask: {ev_err}")
                         
-                # Hitung Rata-rata Latensi Kecepatan
                 avg_pre = round(np.mean(all_pre), 2) if all_pre else 0.0
                 avg_inf = round(np.mean(all_inf), 2) if all_inf else 0.0
                 avg_post = round(np.mean(all_post), 2) if all_post else 0.0
                 lat = round(elapsed * 1000 / n_imgs, 2) if n_imgs > 0 else "N/A"
                 fps = round(n_imgs / elapsed, 2) if elapsed > 0 else "N/A"
                 
+                # ── Hitung Boundary IoU & Boundary AP ─────────────────────────
+                # Boundary metrics hanya bermakna untuk model yang menghasilkan
+                # instance segmentation masks (bukan pure detection)
+                b_metrics = {"boundary_iou": "N/A", "boundary_ap": "N/A"}
+                if len(dt_segm) > 0 and mtype in [
+                    "yolo_seg", "maskrcnn",
+                    "hybrid_seg", "hybrid_seg_mobile",
+                    "hybrid_det", "hybrid_det_mobile"
+                ]:
+                    try:
+                        import copy
+                        coco_gt_filtered_b = copy.deepcopy(coco_gt)
+                        valid_anns_b = [
+                            ann for ann in coco_gt_filtered_b.get("annotations", [])
+                            if ann.get("segmentation") and (
+                                isinstance(ann["segmentation"], dict) or
+                                (isinstance(ann["segmentation"], list) and len(ann["segmentation"]) > 0)
+                            )
+                        ]
+                        coco_gt_filtered_b["annotations"] = valid_anns_b
+                        b_metrics = compute_boundary_metrics_from_coco(
+                            dt_segm, coco_gt_filtered_b
+                        )
+                    except Exception as be:
+                        print(f"  [Boundary-Error] Gagal panggil boundary metrics: {be}")
+
                 rows.append({
                     "Model": label,
                     "Weights Size (MB)": metrics["weights_size_mb"],
@@ -739,6 +964,8 @@ def main():
                     "Recall(Box)": recall_box,
                     "Precision(Mask)": precision_mask,
                     "Recall(Mask)": recall_mask,
+                    "Boundary IoU": b_metrics["boundary_iou"],
+                    "Boundary AP": b_metrics["boundary_ap"],
                     "Preprocess (ms)": avg_pre,
                     "Inference (ms)": avg_inf,
                     "Postprocess (ms)": avg_post,
@@ -773,11 +1000,13 @@ def main():
                         "mAP50(Mask)": mAP50_mask,
                         "Precision(Mask)": precision_mask,
                         "Recall(Mask)": recall_mask,
+                        "Boundary IoU": b_metrics["boundary_iou"],
+                        "Boundary AP": b_metrics["boundary_ap"],
                         "Preprocess (ms)": avg_pre, "Inference (ms)": avg_inf, "Postprocess (ms)": avg_post,
                         "Latency (ms)": lat, "FPS": fps, "GPUs": gpu_report, "Evaluator": "COCOeval (pycocotools)"
                     })
                 
-                print(f"  [Hasil] {label} -> mAP50(Box): {mAP50_box} | mAP50(Mask): {mAP50_mask}")
+                print(f"  [Hasil] {label} -> mAP50(Box): {mAP50_box} | mAP50(Mask): {mAP50_mask} | Boundary IoU: {b_metrics['boundary_iou']} | Boundary AP: {b_metrics['boundary_ap']}")
             except Exception as e:
                 print(f"  [Hasil] ❌ Gagal evaluasi {label}: {e}")
             finally:
@@ -819,6 +1048,51 @@ def main():
             f"Output: <code>{os.path.basename(csv_path)}</code>\n"
             f"Total Evaluasi: {len(rows)} model."
         )
+
+        # ── SNIPPED BOUNDARY IoU & BOUNDARY AP ────────────────────────────────
+        # Ringkasan snippet perhitungan Boundary IoU dan Boundary AP
+        # ditampilkan di akhir Fase 1 sebagai referensi cepat untuk paper
+        print("\n" + "="*80)
+        print("  SNIPPED: CARA MENGHITUNG BOUNDARY IoU & BOUNDARY AP")
+        print("="*80)
+        print("""
+Definisi:
+  • Boundary IoU = |boundary_pred ∩ boundary_gt| / |boundary_pred ∪ boundary_gt|
+    Boundary diekstrak via erosi morfologi: boundary = mask XOR erode(mask)
+    Kernel erosi: ceil(dilation_ratio × sqrt(H²+W²)), default dilation_ratio=0.02
+
+  • Boundary AP = Average Precision dari kurva precision-recall menggunakan
+    Boundary IoU ≥ 0.5 sebagai threshold TP, diinterpolasi pada 101 recall thresholds
+    (standar COCO AP @ Boundary IoU 0.5)
+
+Satu baris pseudocode:
+  1. boundary = mask XOR cv2.erode(mask, kernel_size=ceil(0.02*sqrt(H²+W²)))
+  2. B_IoU    = (pred_b AND gt_b).sum() / (pred_b OR gt_b).sum()
+  3. B_AP     = mean(precision[recall >= t] for t in linspace(0,1,101))
+     dengan TP = B_IoU >= 0.5, diurutkan descending berdasarkan confidence score
+
+Fungsi Python (lihat: compute_boundary_iou dan compute_boundary_metrics_from_coco):
+  boundary_iou = compute_boundary_iou(pred_mask, gt_mask, dilation_ratio=0.02)
+  results      = compute_boundary_metrics_from_coco(dt_segm, coco_gt_dict)
+  # -> {"boundary_iou": 0.xxxx, "boundary_ap": 0.xxxx}
+""")
+        print("="*80)
+
+        # Cetak tabel ringkas Boundary IoU & AP per model (hanya model segmentasi)
+        seg_rows_with_boundary = [
+            r for r in rows_seg
+            if r.get("Boundary IoU") != "N/A" and r.get("Boundary AP") != "N/A"
+        ]
+        if seg_rows_with_boundary:
+            print("\n  Ringkasan Boundary Metrics (Model Segmentasi):")
+            print(f"  {'Model':<50} {'Boundary IoU':>13} {'Boundary AP':>12}")
+            print("  " + "-" * 77)
+            for r in seg_rows_with_boundary:
+                print(f"  {r['Model']:<50} {str(r.get('Boundary IoU', 'N/A')):>13} {str(r.get('Boundary AP', 'N/A')):>12}")
+            print("  " + "-" * 77)
+        else:
+            print("  [INFO] Tidak ada model segmentasi dengan Boundary metrics berhasil dihitung.")
+        print()
 
     # --------------------------------------------------------------------------
     # FASE 2: EVALUASI KUALITATIF (PENGHASIL GRID VISUALISASI)

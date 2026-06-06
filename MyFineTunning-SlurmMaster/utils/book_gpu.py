@@ -49,7 +49,16 @@ def scan_slurm_nodes():
         if line.startswith("NodeName="):
             parts = line.split()
             current_node = parts[0].split('=')[1]
-            nodes[current_node] = {'name': current_node, 'state': '', 'gres': '', 'alloc_gpu': 0}
+            nodes[current_node] = {
+                'name': current_node, 
+                'state': '', 
+                'gres': '', 
+                'alloc_gpu': 0,
+                'cpu_tot': 1,
+                'cpu_load': 0.0,
+                'real_mem': 1,
+                'free_mem': 1
+            }
         
         if current_node:
             if "State=" in line:
@@ -64,6 +73,22 @@ def scan_slurm_nodes():
                 match = re.search(r'gres/gpu=(\d+)', line)
                 if match:
                     nodes[current_node]['alloc_gpu'] = int(match.group(1))
+            if "CPUTot=" in line:
+                match = re.search(r'CPUTot=(\d+)', line)
+                if match:
+                    nodes[current_node]['cpu_tot'] = max(1, int(match.group(1)))
+            if "CPULoad=" in line:
+                match = re.search(r'CPULoad=([0-9\.]+)', line)
+                if match:
+                    nodes[current_node]['cpu_load'] = float(match.group(1))
+            if "RealMemory=" in line:
+                match = re.search(r'RealMemory=(\d+)', line)
+                if match:
+                    nodes[current_node]['real_mem'] = max(1, int(match.group(1)))
+            if "FreeMem=" in line:
+                match = re.search(r'FreeMem=(\d+)', line)
+                if match:
+                    nodes[current_node]['free_mem'] = int(match.group(1))
 
     healthy_nodes = []
     draining_nodes = []
@@ -76,6 +101,9 @@ def scan_slurm_nodes():
             total = int(data['gres']) if data['gres'].isdigit() else 0
             alloc = data['alloc_gpu']
             data['free_gpu'] = total - alloc
+            # Set default free_mem jika tidak ditemukan
+            if data['free_mem'] == 1 and data['real_mem'] > 1:
+                data['free_mem'] = data['real_mem']
             healthy_nodes.append(data)
             
     return healthy_nodes, draining_nodes
@@ -204,6 +232,47 @@ def monitor_job(job_id, target_desc):
             
         time.sleep(15)
 
+def get_realtime_gpu_utility(node_name, total_gpus, allocated_gpus):
+    """Mendapatkan utilitas GPU riil via SSH nvidia-smi atau estimasi fallback Slurm."""
+    # Mencoba SSH dengan timeout singkat agar tidak hang
+    cmd = (
+        f'ssh -o ConnectTimeout=3 -o BatchMode=yes {node_name} '
+        f'"nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits" 2>/dev/null'
+    )
+    res = get_cmd_output(cmd, timeout=5)
+    
+    if res:
+        try:
+            lines = res.strip().split('\n')
+            total_gpu_util = 0.0
+            total_vram_ratio = 0.0
+            gpu_count = 0
+            
+            for line in lines:
+                parts = [p.strip() for p in line.split(',') if p.strip()]
+                if len(parts) >= 3:
+                    gpu_util = float(parts[0]) / 100.0
+                    vram_used = float(parts[1])
+                    vram_tot = float(parts[2]) if float(parts[2]) > 0 else 32768.0
+                    vram_ratio = vram_used / vram_tot
+                    
+                    total_gpu_util += gpu_util
+                    total_vram_ratio += vram_ratio
+                    gpu_count += 1
+            
+            if gpu_count > 0:
+                avg_gpu_util = total_gpu_util / gpu_count
+                avg_vram_ratio = total_vram_ratio / gpu_count
+                real_gpu_load = (0.5 * avg_gpu_util) + (0.5 * avg_vram_ratio)
+                return real_gpu_load, f"SSH OK (Avg Util: {avg_gpu_util*100:.1f}%, VRAM: {avg_vram_ratio*100:.1f}%)"
+        except Exception:
+            pass
+            
+    # Fallback menggunakan rasio alokasi administratif Slurm
+    total_gpus = max(1, total_gpus)
+    fallback_load = allocated_gpus / total_gpus
+    return fallback_load, f"Fallback Slurm (Alloc Ratio: {allocated_gpus}/{total_gpus})"
+
 def main():
     print("✧ SMART SLURM GPU BOOKING ✧")
     
@@ -242,10 +311,45 @@ def main():
         exclude_list = draining.copy()
         
         idle_nodes = [n for n in healthy if n['free_gpu'] > 0]
+        best_node = None
+        min_load_score = float('inf')
+        desc = ""
+        
         if idle_nodes:
-            best_node = max(idle_nodes, key=lambda x: x['free_gpu'])
-            target_node = best_node['name']
-            desc = f"Di-dispatch langsung ke Node <b>{target_node}</b> (Memiliki {best_node['free_gpu']} GPU Kosong)"
+            print("\n--- Telemetri Beban Node ---")
+            for node in idle_nodes:
+                name = node['name']
+                total_gpu = int(node['gres']) if node['gres'].isdigit() else 2
+                allocated_gpu = node['alloc_gpu']
+                
+                # 1. GPU Load (riil via SSH atau fallback Slurm)
+                gpu_load, gpu_info = get_realtime_gpu_utility(name, total_gpu, allocated_gpu)
+                
+                # 2. CPU Load (relatif terhadap core)
+                cpu_ratio = node['cpu_load'] / node['cpu_tot']
+                cpu_info = f"Load: {node['cpu_load']:.2f}/{node['cpu_tot']} Cores ({cpu_ratio*100:.1f}%)"
+                
+                # 3. RAM Load (memori terpakai)
+                ram_ratio = 1.0 - (node['free_mem'] / node['real_mem'])
+                ram_info = f"Used: {(node['real_mem'] - node['free_mem'])/1024:.1f}G/{node['real_mem']/1024:.1f}G ({ram_ratio*100:.1f}%)"
+                
+                # Hitung Load Score terbobot (semakin rendah = semakin santai)
+                # Bobot: GPU = 0.5, CPU = 0.25, RAM = 0.25
+                load_score = (0.5 * gpu_load) + (0.25 * cpu_ratio) + (0.25 * ram_ratio)
+                
+                print(f"Node: {name} | GPU: {gpu_info} | CPU: {cpu_info} | RAM: {ram_info} | SCORE: {load_score:.4f}")
+                
+                if load_score < min_load_score:
+                    min_load_score = load_score
+                    best_node = node
+                    desc = (
+                        f"Di-dispatch langsung ke Node <b>{name}</b> "
+                        f"(Load Score terendah: <code>{load_score:.4f}</code> | "
+                        f"GPU: {gpu_info} | CPU: {cpu_ratio*100:.1f}% | RAM: {ram_ratio*100:.1f}%)"
+                    )
+            print("----------------------------\n")
+            if best_node:
+                target_node = best_node['name']
         else:
             desc = f"Antrean Global (Menggunakan Node Sehat, Mengecualikan Node DRAIN: {', '.join(exclude_list) if exclude_list else 'None'})"
 

@@ -1,12 +1,21 @@
 #!/bin/bash
 # Interactive GPU Booking Menu
 
-# Navigasi ke direktori utils
-cd "$(dirname "$0")"
+# Selesaikan lokasi asli script (mengatasi symlink)
+SOURCE=${BASH_SOURCE[0]}
+while [ -L "$SOURCE" ]; do
+  DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+  SOURCE=$(readlink "$SOURCE")
+  [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
+done
+SCRIPT_DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+
+# Navigasi ke direktori asli utils
+cd "$SCRIPT_DIR" || exit 1
 
 # Function to display squeue in a human‑readable table
 pretty_squeue() {
-    python3 "$(dirname "$0")/slurm/pretty_squeue.py"
+    python3 "$SCRIPT_DIR/slurm/pretty_squeue.py"
 }
 
 # Function to display tmux sessions nicely with numbers
@@ -80,8 +89,8 @@ generate_gpu_session_name() {
 # Function to manage Cloudflare Tunnel on Master Node
 manage_cloudflare_tunnel() {
     # Ambil konfigurasi dari config_shared.py
-    local cf_bin=$(grep -E "^CLOUDFLARE_BIN\s*=" ../config_shared.py | head -n 1 | cut -d'"' -f2)
-    local cf_token=$(grep -E "^CLOUDFLARE_TUNNEL_TOKEN\s*=" ../config_shared.py | head -n 1 | cut -d'"' -f2)
+    local cf_bin=$(grep -E "^CLOUDFLARE_BIN\s*=" "${SCRIPT_DIR}/../config_shared.py" | head -n 1 | cut -d'"' -f2)
+    local cf_token=$(grep -E "^CLOUDFLARE_TUNNEL_TOKEN\s*=" "${SCRIPT_DIR}/../config_shared.py" | head -n 1 | cut -d'"' -f2)
 
     # Fallback jika tidak ditemukan
     if [ -z "$cf_bin" ]; then
@@ -90,6 +99,9 @@ manage_cloudflare_tunnel() {
     if [ -z "$cf_token" ]; then
         cf_token="eyJhIjoiNDgzMWNmYzhiMDgxODc0NDNiZTI3YmI4OGMxNWQ4ZjIiLCJ0IjoiMDI3MDBjMGUtYTBlYS00NjhiLThhYmQtMTk2MTlhZmZlNThlIiwicyI6IlltRm1NbVprT1RVdFlqUTFaUzAwTUdFMExXSmlZakF0WmpGallXTTRNREZsTm1RdyJ9"
     fi
+
+    # Definisikan path log dinamis berbasis binary path
+    local cf_log="${cf_bin}.log"
 
     # Pastikan file binary dapat dieksekusi
     if [ -f "$cf_bin" ] && [ ! -x "$cf_bin" ]; then
@@ -108,7 +120,7 @@ manage_cloudflare_tunnel() {
         if tmux has-session -t cloudflare_tunnel 2>/dev/null; then
             session_active=1
         fi
-        if pgrep -f "cloudflared.*tunnel.*run" >/dev/null; then
+        if pgrep -u $USER cloudflared >/dev/null; then
             process_active=1
         fi
         
@@ -144,10 +156,12 @@ manage_cloudflare_tunnel() {
                     echo "⚠️ Terowongan Cloudflare sudah berjalan dalam sesi tmux 'cloudflare_tunnel'."
                 else
                     echo "Memulai Cloudflare Tunnel di background (Sesi TMUX: cloudflare_tunnel)..."
-                    tmux new-session -d -s cloudflare_tunnel "$cf_bin tunnel --protocol http2 --no-autoupdate run --token $cf_token"
+                    # Menggunakan parameter optimasi konektivitas --edge-ip-version dan --retries serta pipe tee ke berkas log
+                    tmux new-session -d -s cloudflare_tunnel "$cf_bin tunnel --protocol http2 --edge-ip-version 4 --retries 10 --no-autoupdate run --token $cf_token 2>&1 | tee -a \"$cf_log\""
                     sleep 2
                     if tmux has-session -t cloudflare_tunnel 2>/dev/null; then
                         echo "✅ Sesi tmux 'cloudflare_tunnel' berhasil dibuat."
+                        echo "💡 Log dialihkan ke berkas: $cf_log"
                     else
                         echo "❌ Gagal membuat sesi tmux 'cloudflare_tunnel'. Pastikan path binary valid."
                     fi
@@ -164,8 +178,8 @@ manage_cloudflare_tunnel() {
                 fi
                 
                 # Pembersihan proses sisa
-                if pgrep -f "cloudflared.*tunnel.*run" >/dev/null; then
-                    pkill -f "cloudflared.*tunnel.*run"
+                if pgrep -u $USER cloudflared >/dev/null; then
+                    pkill -u $USER cloudflared
                     echo "✅ Proses cloudflared sisa berhasil dihentikan."
                 fi
                 read -p "Tekan Enter untuk melanjutkan..."
@@ -178,6 +192,8 @@ manage_cloudflare_tunnel() {
                     echo "Mengambil 20 baris log terakhir dari sesi tmux:"
                     echo "---------------------------------------------"
                     tmux capture-pane -t cloudflare_tunnel -p -S -20 2>/dev/null || echo "⚠️ Tidak dapat mengambil output log tmux pane."
+                    echo "---------------------------------------------"
+                    echo "💡 Log lengkap tersimpan di: $cf_log"
                 else
                     echo "⚠️ Sesi tmux 'cloudflare_tunnel' tidak aktif. Tidak ada log untuk ditampilkan."
                 fi
@@ -220,14 +236,18 @@ manage_web_rvm() {
         
         echo "============================================="
         echo "Sub Menu Web RVM:"
-        echo "1. 🚀 Start All Services (Stop -> Start Frontend & Backend)"
+        echo "1. 🚀 Start All Services (Frontend & Backend)"
         echo "2. 🛑 Stop All Services (Matikan Frontend & Backend)"
         echo "3. 🔄 Restart All Services"
         echo "4. 📱 Start Frontend Only"
-        echo "5. ⚙️ Start Backend Only"
+        echo "5. 🛑 Stop Frontend Only"
+        echo "6. 🚀 Start Layanan backend Flask"
+        echo "7. 🛑 Stop Layanan backend Flask"
+        echo "8. 🔄 Restart Layanan backend Flask"
+        echo "9. 📋 Lihat Layanan Berjalan (Refresh Status)"
         echo "0. 🔙 Kembali ke Menu Utama"
         echo "============================================="
-        read -p "Pilih aksi [0-5]: " rvm_choice
+        read -p "Pilih aksi [0-9]: " rvm_choice
 
         if [ -z "$rvm_choice" ] || [ "$rvm_choice" == "0" ]; then
             break
@@ -262,8 +282,30 @@ manage_web_rvm() {
                 read -p "Tekan Enter untuk melanjutkan..."
                 ;;
             5)
-                echo "Memulai Backend..."
+                echo "Menghentikan Frontend..."
+                bash "$start_rvm_script" stop_frontend
+                read -p "Tekan Enter untuk melanjutkan..."
+                ;;
+            6)
+                echo "Memulai Layanan backend Flask..."
                 bash "$start_rvm_script" backend
+                read -p "Tekan Enter untuk melanjutkan..."
+                ;;
+            7)
+                echo "Menghentikan Layanan backend Flask..."
+                bash "$start_rvm_script" stop_backend
+                read -p "Tekan Enter untuk melanjutkan..."
+                ;;
+            8)
+                echo "Melakukan restart Layanan backend Flask..."
+                bash "$start_rvm_script" stop_backend
+                sleep 1
+                bash "$start_rvm_script" backend
+                read -p "Tekan Enter untuk melanjutkan..."
+                ;;
+            9)
+                echo "Mengecek/Lihat status Layanan Berjalan..."
+                bash "$start_rvm_script" status
                 read -p "Tekan Enter untuk melanjutkan..."
                 ;;
             *)
@@ -292,7 +334,16 @@ while true; do
 
     case $pilihan in
         1)
-            if pgrep -f "book_gpu.py" >/dev/null; then
+            # Memastikan daemon python book_gpu.py benar-benar berjalan (bukan proses tmux yatim yang memuat string book_gpu.py)
+            daemon_running=0
+            for pid in $(pgrep -u $USER -f "book_gpu.py" 2>/dev/null); do
+                if [ -f "/proc/$pid/exe" ] && [[ "$(readlink "/proc/$pid/exe" 2>/dev/null)" == *"python"* ]]; then
+                    daemon_running=1
+                    break
+                fi
+            done
+
+            if [ $daemon_running -eq 1 ]; then
                 echo "=================================================================="
                 echo "⚠️  DAEMON SUDAH BERJALAN!"
                 echo "   Sistem mendeteksi bahwa daemon booking GPU (book_gpu.py) sudah aktif."

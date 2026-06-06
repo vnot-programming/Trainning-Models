@@ -1920,6 +1920,226 @@
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - Layanan `cloudflared` berjalan aktif di latar belakang (tmux session `cloudflare_tunnel`). Log terpantau di `/data/users/g6717500336/singularity/cloudflared.log`. Jika koneksi SSH dari client masih sering putus setelah idle, pastikan user mengonfigurasi SSH keepalive (`ServerAliveInterval 15`, `ServerAliveCountMax 5`) di sisi client (Laptop/PC).
 
+---
+
+### [Entri — Redireksi Log Cloudflare Tunnel & Optimasi myslurm.sh] — 2026-06-06 08:40 WIB
+
+- **Tanggal/Waktu:** 2026-06-06 08:40 WIB
+- **Tugas yang diselesaikan:**
+  1. **Redireksi Output Log**: Mengonfigurasi `myslurm.sh` agar mengalihkan stderr/stdout dari biner `cloudflared` ke `/data/users/g6717500336/singularity/cloudflared.log` menggunakan utilitas `tee -a` di dalam sesi TMUX `cloudflare_tunnel`. Hal ini menjamin log tersimpan ke disk secara dinamis sekaligus mempertahankan tampilan log di tmux pane buffer.
+  2. **Integrasi Parameter Optimasi Jaringan**: Memasukkan parameter optimal (`--edge-ip-version 4` dan `--retries 10`) langsung ke perintah eksekusi tunnel di `myslurm.sh` agar stabil saat dijalankan via menu CLI.
+  3. **Penyajian Lokasi Log**: Menambahkan informasi penunjuk lokasi file `/data/users/g6717500336/singularity/cloudflared.log` pada menu Status & Log (Pilihan 3) agar user mengetahui lokasi file log lengkap.
+- **File yang diubah/dibuat:**
+  - `utils/myslurm.sh` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - File log cloudflared saat ini dialihkan secara realtime ke `${CLOUDFLARE_BIN}.log` (default: `/data/users/g6717500336/singularity/cloudflared.log`). Sesi tmux `cloudflare_tunnel` dapat dimatikan dan dihidupkan ulang dari menu `myslurm.sh` (pilihan 6) untuk menguji penulisan log baru.
+
+---
+
+### [Entri — Konfigurasi Perintah Global slurm untuk myslurm.sh] — 2026-06-06 08:55 WIB
+
+- **Tanggal/Waktu:** 2026-06-06 08:55 WIB
+- **Tugas yang diselesaikan:**
+  1. **Konfigurasi Perintah Global**: Menambahkan alias `slurm` untuk merujuk langsung ke absolute path `/data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/myslurm.sh`.
+  2. **Penyelarasan Shell**: Menuliskan alias tersebut pada konfigurasi shell `.bashrc` dan `.zshrc` agar perintah `slurm` dapat dipanggil secara global dari shell Bash maupun Zsh dari direktori mana pun.
+- **File yang diubah/dibuat:**
+  - `~/.bashrc` [DIMODIFIKASI]
+  - `~/.zshrc` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Perintah global ini dapat diuji oleh pengguna dengan menjalankan `source ~/.bashrc` (atau membuka sesi shell baru) lalu mengetikkan `slurm` di terminal.
+
+---
+
+### [Entri — Aturan Keamanan Cloudflare Tunnel & Bugfix Deteksi Daemon] — 2026-06-06 09:00 WIB
+
+- **Tanggal/Waktu:** 2026-06-06 09:00 WIB
+- **Tugas yang diselesaikan:**
+  1. **Integrasi Aturan Keamanan Cloudflare Tunnel**: Menambahkan poin aturan baru pada `.gemini/GEMINI.md` yang melarang keras AI agent untuk mematikan (kill) sesi tmux `cloudflare_tunnel` karena merupakan jalur koneksi luar utama Master Node, kecuali jika ada instruksi tertulis langsung dari pengguna.
+  2. **Bugfix Deteksi Daemon di myslurm.sh**: Memperbaiki logika deteksi daemon pada file `utils/myslurm.sh`. Sebelumnya, `pgrep -f "book_gpu.py"` secara keliru menangkap proses `tmux` induk yang yatim (zombie) karena parameter pemanggilannya mengandung string target pencarian, yang memicu status palsu "⚠️ DAEMON SUDAH BERJALAN!". Logika baru mengecek secara presisi file `/proc/PID/exe` untuk memastikan proses tersebut benar-benar di-drive oleh interpreter Python.
+- **File yang diubah/dibuat:**
+  - `.gemini/GEMINI.md` [DIMODIFIKASI]
+  - `utils/myslurm.sh` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan setiap ada verifikasi status proses background, filter jenis executable program agar terhindar dari false-positive pembungkus sesi (wrapper) seperti tmux atau bash. Sesi tmux `cloudflare_tunnel` sekarang dilindungi oleh aturan global.
+
+---
+
+### [Entri — Bugfix Resolusi Path Symlink myslurm.sh] — 2026-06-06 09:10 WIB
+
+- **Tanggal/Waktu:** 2026-06-06 09:10 WIB
+- **Tugas yang diselesaikan:**
+  1. **Integrasi Aturan Keamanan Cloudflare Tunnel**: Menambahkan poin aturan baru pada `.gemini/GEMINI.md` yang melarang keras AI agent untuk mematikan (kill) sesi tmux `cloudflare_tunnel` karena merupakan jalur koneksi luar utama Master Node, kecuali jika ada instruksi tertulis langsung dari pengguna.
+  2. **Bugfix Deteksi Daemon di myslurm.sh**: Memperbaiki logika deteksi daemon pada file `utils/myslurm.sh`. Sebelumnya, `pgrep -f "book_gpu.py"` secara keliru menangkap proses `tmux` induk yang yatim (zombie) karena parameter pemanggilannya mengandung string target pencarian, yang memicu status palsu "⚠️ DAEMON SUDAH BERJALAN!". Logika baru mengecek secara presisi file `/proc/PID/exe` untuk memastikan proses tersebut benar-benar di-drive oleh interpreter Python.
+- **File yang diubah/dibuat:**
+  - `.gemini/GEMINI.md` [DIMODIFIKASI]
+  - `utils/myslurm.sh` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan setiap ada verifikasi status proses background, filter jenis executable program agar terhindar dari false-positive pembungkus sesi (wrapper) seperti tmux atau bash. Sesi tmux `cloudflare_tunnel` sekarang dilindungi oleh aturan global.
+
+---
+
+### [Entri — Penambahan Metrik Boundary IoU & Boundary AP] — 2026-06-06 11:12 WIB
+
+- **Tanggal/Waktu:** 2026-06-06 11:12 WIB
+- **Tugas yang diselesaikan:**
+  1. **Penambahan Fungsi `_mask_to_boundary` & `compute_boundary_iou`**: Fungsi mengekstrak boundary mask via erosi morfologi (kernel adaptif = `ceil(0.02 × sqrt(H²+W²))`), lalu menghitung Boundary IoU = `|boundary_pred ∩ boundary_gt| / |boundary_pred ∪ boundary_gt|`.
+  2. **Penambahan Fungsi `compute_boundary_metrics_from_coco`**: Fungsi mendecode prediksi & GT mask dari format COCO-RLE, melakukan greedy matching berdasarkan confidence score tertinggi, lalu menghitung:
+     - **Boundary IoU**: rata-rata B-IoU dari prediksi yang berhasil match (TP)
+     - **Boundary AP**: kurva precision-recall diinterpolasi pada 101 recall thresholds (standar COCO AP @ B-IoU ≥ 0.5)
+  3. **Integrasi di Blok Evaluasi Utama**: Boundary metrics dihitung setelah COCOeval selesai, hanya untuk model yang menghasilkan instance segmentation (`yolo_seg`, `maskrcnn`, `hybrid_seg`, `hybrid_seg_mobile`, `hybrid_det`, `hybrid_det_mobile`). Model pure detection mendapatkan nilai `"N/A"`.
+  4. **Update `CSV_REPORT_FIELDS` di `config_shared.py`**: Menambahkan kolom `"Boundary IoU"` dan `"Boundary AP"` setelah `"Recall(Mask)"`.
+  5. **Update dict `rows`, `rows_seg`**: Kedua skrip kini menyertakan `"Boundary IoU"` dan `"Boundary AP"` di setiap baris laporan.
+  6. **Snipped Ringkasan di Akhir Fase 1**: Setelah Fase 1 selesai, skrip mencetak definisi lengkap Boundary IoU & AP, pseudocode satu baris, dan tabel ringkas per model segmentasi.
+- **File yang diubah/dibuat:**
+  - `config_shared.py` [DIMODIFIKASI — CSV_REPORT_FIELDS +2 kolom baru]
+  - `utils/generate_standar_report-new_method.py` [DIMODIFIKASI — +3 fungsi boundary, integrasi evaluasi, update rows, snipped]
+  - `utils/generate_golden_report-new_method.py` [DIMODIFIKASI — +3 fungsi boundary, integrasi evaluasi, update rows, snipped]
+  - `docs/SDP.md` [DIMODIFIKASI — Penambahan log ini]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Boundary IoU & AP hanya diisi untuk model dengan segmentation masks. Pure detection (`yolo_det`) mendapat `"N/A"`.
+  - Parameter kunci: `dilation_ratio=0.02` (kernel boundary) dan `iou_thresh=0.5` (threshold TP untuk AP). Keduanya tidak hardcode — dapat diubah saat pemanggilan fungsi.
+  - Jika ingin menambah threshold B-IoU lain (misal AP@0.75), cukup panggil `compute_boundary_metrics_from_coco(dt_segm, coco_gt, iou_thresh=0.75)` secara terpisah.
+  - Seluruh CSV kompilasi (`kompilasi_ALL_new_method_standar.csv`, `kompilasi_ALL_new_method_golden.csv`) sekarang memiliki 20 kolom (dari 18 sebelumnya).
+
+---
+
+### [Entri — Implementasi Image Comparison Mode & Update Aturan Global Slurm] — 2026-06-06 17:30 WIB
+
+- **Tanggal/Waktu:** 2026-06-06 17:30 WIB
+- **Tugas yang diselesaikan:**
+  1. **Modifikasi Frontend Evaluasi RVM (index.html, app.js, & style.css)**: 
+     - Membagi bagian "📸 Upload Image" menjadi panel split kiri dan kanan (📸 Upload Image | 📸 Result).
+     - Menambahkan checkbox "Image Comparison" pada kolom kiri. Kolom hasil (📸 Result) diaktifkan hanya jika checkbox dicentang.
+     - Membatasi jumlah model yang dapat dipilih maksimal 5 model saat mode perbandingan aktif.
+     - Menambahkan banner informatif pada antarmuka "Select Models" untuk menunjukkan status "Image Comparison Mode Aktif".
+     - Merender grid 3x2 (Ground Truth + hingga 5 model) di panel hasil menggunakan elemen HTML Canvas untuk menampilkan bounding box hasil inferensi model di atas gambar asli.
+  2. **Update Aturan Global (.gemini/GEMINI.md)**: 
+     - Menambahkan instruksi pengujian cepat menggunakan perintah `slurm` dan opsi `2` untuk berpindah ke Node Cluster GPU aktif (`ai3`/`ai2`) dengan environment Conda `yolo_env` yang aktif.
+- **File yang diubah/dibuat:**
+  - `RVM/frontend/index.html` [DIMODIFIKASI]
+  - `RVM/frontend/js/app.js` [DIMODIFIKASI]
+  - `RVM/frontend/css/style.css` [DIMODIFIKASI]
+  - `.gemini/GEMINI.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan backend `visual_eval_api.py` berjalan di Node GPU yang aktif agar frontend dapat berkomunikasi secara normal dengan backend.
+---
+
+### [Entri — Integrasi Rendering Mask Poligon & Fitur Download Grid di RVM] — 2026-06-06 17:40 WIB
+
+- **Tanggal/Waktu:** 2026-06-06 17:40 WIB
+- **Tugas yang diselesaikan:**
+  1. **Render Segmentasi Mask pada Canvas**:
+     - Memodifikasi `visual_eval_api.py` (`_infer_yolo`, `_infer_maskrcnn`, `_infer_hybrid`) untuk melampirkan data poligon koordinat mask di bawah key `"segment"`.
+     - Memodifikasi fungsi `_drawBoundingBoxes` di `RVM/frontend/js/app.js` untuk secara dinamis menggambar poligon mask di atas canvas dengan isian transparan (`hsla`) dan outline sebelum menggambar bounding box serta label kelas.
+  2. **Fitur Download Grid Perbandingan**:
+     - Menambahkan tombol "📥 Download Grid" di dalam header kolom `📸 Result` pada `index.html`.
+     - Menambahkan styling premium untuk `.btn-download-grid` di `style.css` (termasuk micro-animation, glow effect, dan light-mode support).
+     - Mengimplementasikan fungsi `setupGridDownload()` di `app.js` untuk menyatukan seluruh sub-canvas perbandingan ke dalam satu canvas gabungan berdimensi besar dengan label banner nama model semi-transparan, lalu mengunduhnya secara otomatis sebagai gambar PNG beresolusi tinggi.
+  3. **Peningkatan Kontras Teks Light Mode**:
+     - Mengubah warna teks primer toska muda (`var(--c-primary-light)`) menjadi warna yang lebih dinamis dan kontras (`var(--c-primary-text)`) yang menyesuaikan tema (dark/light) di `style.css` untuk selected chips, placeholder, range sliders, export buttons, dan detail tables.
+- **File yang diubah/dibuat:**
+  - `RVM/backend/visual_eval_api.py` [DIMODIFIKASI]
+  - `RVM/frontend/index.html` [DIMODIFIKASI]
+  - `RVM/frontend/js/app.js` [DIMODIFIKASI]
+  - `RVM/frontend/css/style.css` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+---
+
+### [Entri — Penambahan Kontrol Modular Backend Flask pada myslurm.sh] — 2026-06-06 17:55 WIB
+
+- **Tanggal/Waktu:** 2026-06-06 17:55 WIB
+- **Tugas yang diselesaikan:**
+  1. **Update launcher start_rvm.sh**:
+     - Menambahkan fungsi modular `stop_backend` untuk menghentikan sesi tmux `rvm_backend` dan SSH tunnel port 8502 saja.
+     - Menambahkan fungsi modular `stop_frontend` untuk menghentikan sesi tmux `rvm_frontend` saja.
+     - Menghubungkan argumen `stop_backend` dan `stop_frontend` ke dalam case switcher CLI di `start_rvm.sh`.
+  2. **Update submenu Manajemen Web RVM di myslurm.sh**:
+     - Memperluas menu "7. Web RVM" untuk menyertakan opsi manajemen Flask backend secara eksplisit.
+     - Menambahkan pilihan: "Start Layanan backend Flask" (menu 6), "Stop Layanan backend Flask" (menu 7), "Restart Layanan backend Flask" (menu 8), dan "Lihat Layanan Berjalan" (menu 9).
+     - Memetakan setiap pilihan ke launcher `start_rvm.sh` dengan argumen backend/frontend modular yang baru.
+- **File yang diubah/dibuat:**
+  - `RVM/start_rvm.sh` [DIMODIFIKASI]
+  - `utils/myslurm.sh` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Seluruh menu manajemen RVM telah terhubung secara modular ke start_rvm.sh. Kontrol backend/frontend kini bisa dilakukan secara terpisah tanpa mematikan sesi global lainnya.
+---
+
+### [Entri — Bugfix Errexit crash pada check_status start_rvm.sh] — 2026-06-06 17:58 WIB
+
+- **Tanggal/Waktu:** 2026-06-06 17:58 WIB
+- **Tugas yang diselesaikan:**
+  1. **Bugfix Errexit Crash**:
+     - Mengatasi masalah terpotongnya tampilan status saat mengecek ports/services pada menu "7. Web RVM".
+     - Masalah disebabkan oleh `set -euo pipefail` di bagian atas `start_rvm.sh` yang langsung mematikan (exit) skrip ketika mendeteksi command `pgrep` (saat Cloudflared stopped) atau pipeline `ss | grep` mengembalikan status non-zero (gagal/inactive).
+     - Solusi: Menambahkan `set +e` di awal fungsi `check_status` dan mengaktifkannya kembali dengan `set -e` di akhir fungsi agar proses pengecekan status berjalan lancar hingga selesai tanpa menghentikan skrip.
+- **File yang diubah/dibuat:**
+  - `RVM/start_rvm.sh` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan pengujian status dilakukan kembali oleh pengguna. Output menu status sekarang akan menampilkan secara lengkap port 8501, 8502, dan status cloudflared tanpa terhenti di tengah jalan.
+
+---
+
+### [Entri — Sinkronisasi Otomatis Class Mapping Mask R-CNN] — 2026-06-06 18:40 WIB
+
+- **Tanggal/Waktu:** 2026-06-06 18:40 WIB
+- **Tugas yang diselesaikan:**
+  1. **Modifikasi start_rvm.sh**:
+     - Menambahkan fungsi helper `update_class_mapping_json` untuk mengekrak nama kelas dari `datasets/training_seg/data.yaml` dan menulisnya ke `RVM/backend/class_mapping.json` secara otomatis.
+     - Memanggil `update_class_mapping_json` di awal fungsi `start_backend()`.
+  2. **Verifikasi Keandalan Mapping**:
+     - Memastikan `class_mapping.json` disinkronkan menggunakan environment conda `yolo_env` di subshell pada login node sebelum backend Flask dijalankan.
+     - Mask R-CNN kini berhasil memetakan indeks prediksi `3` ke kelas `"mineral"` secara dinamis.
+- **File yang diubah/dibuat:**
+  - `RVM/start_rvm.sh` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pembaruan class_mapping.json dilakukan secara redundan baik pada level launcher bash (`start_rvm.sh`) maupun level server Flask (`visual_eval_api.py`) demi keandalan tinggi.
+
+---
+
+### [Entri — Bugfix Menu Tunnel Hang Akibat Global pgrep Scan & Path Resolution] — 2026-06-06 18:45 WIB
+
+- **Tanggal/Waktu:** 2026-06-06 18:45 WIB
+- **Tugas yang diselesaikan:**
+  1. **Bugfix UI Tunnel Freezing / Blank**:
+     - Mengidentifikasi root cause hang pada menu "Manajemen Cloudflare Tunnel" (Pilihan 6 di `myslurm.sh`). Masalah dipicu oleh pencarian proses berbasis `-f` (cmdline lookup) yang memicu deadlock I/O blocking apabila terdapat proses (terutama `cloudflared` yang menulis ke NFS share secara intensif) dalam status disk sleep (D state).
+     - Menghapus flag pencarian cmdline `-f` pada deteksi status `cloudflared` di `myslurm.sh` dan `start_rvm.sh` sehingga pencarian murni mencocokkan nama executable (`pgrep -u $USER cloudflared`) yang tidak memblokir dan ribuan kali lebih cepat.
+     - Menyematkan parameter pembatas user aktif (`-u $USER`) ke seluruh perintah `pgrep` dan `pkill`.
+  2. **Resolusi Path Konfigurasi Absolut**:
+     - Mengubah lookup parameter `CLOUDFLARE_` di `utils/myslurm.sh` dari path relatif `../config_shared.py` menjadi absolute `"${SCRIPT_DIR}/../config_shared.py"` agar skrip tetap valid ketika dipanggil dari direktori kerja luar manapun.
+- **File yang diubah/dibuat:**
+  - `utils/myslurm.sh` [DIMODIFIKASI]
+  - `RVM/start_rvm.sh` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan semua pemanggilan `pgrep` atau `pkill` yang memeriksa cmdline (`-f`) selalu dibatasi dengan `-u $USER` untuk mencegah hang akibat I/O blocking proses milik user lain pada multi-user HPC cluster. Jika memungkinkan, hindari penggunaan `-f` pada deteksi program berkegiatan I/O tinggi (seperti cloudflared) dengan mencari nama program executable biasa.
 
 
 
+
+---
+
+### [Entri — Menambahkan Loading Indicator Port RVM Services] — 2026-07-06 19:35 WIB
+
+- **Tanggal/Waktu:** 2026-07-06 19:35 WIB
+- **Tugas yang diselesaikan:**
+  1. **Update launcher start_rvm.sh**:
+     - Menambahkan indikator loading dan looping dengan timeout 15 detik pada saat mengeksekusi frontend dan backend.
+     - Pengecekan aktifnya port 8501 dan port 8502 (listening status via `ss`) sebelum pesan keberhasilan ditampilkan ke user.
+     - Hal ini mencegah status yang membingungkan bagi user ("FREE" di port status karena proses boot up script Python / server berjalan agak lambat).
+- **File yang diubah/dibuat:**
+  - `RVM/start_rvm.sh` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Kini start script lebih reliable. Apabila service Python gagal untuk hidup (misalnya environment error), proses startup bash script akan menampilkan notifikasi timeout warning daripada pesan sukses semu.
