@@ -2161,3 +2161,21 @@
 - **Status saat ini:** Selesai ✅
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - Repositori kini memiliki dokumentasi utama yang akurat dan lengkap sesuai dengan arsitektur SlurmMaster terbaru. Pastikan jika ada perubahan parameter batch RT-DETR atau port RVM di masa mendatang, sesuaikan dokumentasi README agar tetap sinkron.
+
+---
+
+### [Entri — Pembersihan Berkas Sampah pada Branch Main] — 2026-06-07 01:35 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 01:35 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan pembersihan file yang tidak diperlukan di branch `main`.
+  - Berpindah ke branch `main`, menghapus pelacakan (*untrack*) dan menghapus file `skills-antigravity.zip`, `.gitattributes`, dan `.gitignore` menggunakan `git rm`.
+  - Melakukan komit dan *push* perubahan pembersihan ke origin branch `main`.
+  - Kembali ke branch utama pengembangan (`dev`).
+- **File yang diubah/dibuat:**
+  - `skills-antigravity.zip` [DIHAPUS di main]
+  - `.gitattributes` [DIHAPUS di main]
+  - `.gitignore` [DIHAPUS di main]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pembersihan di branch `main` selesai. File-file tersebut tetap ada di branch `dev` karena memang dibutuhkan untuk pengembangan aktif (seperti `.gitignore`). Jangan satukan (*merge*) perubahan ini secara terbalik ke branch `dev`.
