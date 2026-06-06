@@ -88,16 +88,16 @@ generate_gpu_session_name() {
 
 # Function to manage Cloudflare Tunnel on Master Node
 manage_cloudflare_tunnel() {
-    # Ambil konfigurasi dari config_shared.py
+    # Ambil konfigurasi dari config_shared.py dan .env
     local cf_bin=$(grep -E "^CLOUDFLARE_BIN\s*=" "${SCRIPT_DIR}/../config_shared.py" | head -n 1 | cut -d'"' -f2)
-    local cf_token=$(grep -E "^CLOUDFLARE_TUNNEL_TOKEN\s*=" "${SCRIPT_DIR}/../config_shared.py" | head -n 1 | cut -d'"' -f2)
+    local cf_token=$(grep -E "^CLOUDFLARE_TUNNEL_TOKEN\s*=" "${SCRIPT_DIR}/../.env" | head -n 1 | cut -d'=' -f2)
 
     # Fallback jika tidak ditemukan
     if [ -z "$cf_bin" ]; then
         cf_bin="/data/users/g6717500336/singularity/cloudflared"
     fi
     if [ -z "$cf_token" ]; then
-        cf_token="eyJhIjoiNDgzMWNmYzhiMDgxODc0NDNiZTI3YmI4OGMxNWQ4ZjIiLCJ0IjoiMDI3MDBjMGUtYTBlYS00NjhiLThhYmQtMTk2MTlhZmZlNThlIiwicyI6IlltRm1NbVprT1RVdFlqUTFaUzAwTUdFMExXSmlZakF0WmpGallXTTRNREZsTm1RdyJ9"
+        cf_token=""
     fi
 
     # Definisikan path log dinamis berbasis binary path

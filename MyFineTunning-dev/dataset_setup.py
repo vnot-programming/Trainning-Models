@@ -19,7 +19,7 @@ Fungsi publik:
 # Object Detection
 !pip install roboflow
 from roboflow import Roboflow
-rf = Roboflow(api_key="F0VtV8b5YBdJHZbasy0w")
+rf = Roboflow(api_key="<ROBOFLOW_KU_KEY1_FROM_ENV>")
 project = rf.workspace("wbc-laboratory").project("me-bottle-isempty-ku3")
 version = project.version(12)
 dataset = version.download("coco")
@@ -27,7 +27,7 @@ dataset = version.download("coco")
 # Instance Segmentation
 !pip install roboflow
 from roboflow import Roboflow
-rf = Roboflow(api_key="F0VtV8b5YBdJHZbasy0w")
+rf = Roboflow(api_key="<ROBOFLOW_KU_KEY1_FROM_ENV>")
 project = rf.workspace("wbc-laboratory").project("segpoligon-me-bottle-isempty3")
 version = project.version(10)
 dataset = version.download("coco-segmentation")
@@ -35,14 +35,14 @@ dataset = version.download("coco-segmentation")
 # Golden Dataset Segmentation - For Evaluation
 !pip install roboflow
 from roboflow import Roboflow
-rf = Roboflow(api_key="tjeBcHkWc1oOc0oOv9kI")
+rf = Roboflow(api_key="<ROBOFLOW_UNU_KEY1_FROM_ENV>")
 project = rf.workspace("vnot").project("me-bottle-isempty-unu3-sem-seg")
 dataset = project.version(1).download("coco-segmentation")
 
 # Golden Dataset Detection - For Evaluation
 !pip install roboflow
 from roboflow import Roboflow
-rf = Roboflow(api_key="tjeBcHkWc1oOc0oOv9kI")
+rf = Roboflow(api_key="<ROBOFLOW_UNU_KEY1_FROM_ENV>")
 project = rf.workspace("vnot").project("me-bottle-isempty-unu3-det")
 version = project.version(7)
 dataset = version.download("coco-segmentation")
@@ -50,7 +50,7 @@ dataset = version.download("coco-segmentation")
 # Standar Dataset Detection - For Evaluation
 !pip install roboflow
 from roboflow import Roboflow
-rf = Roboflow(api_key="tjeBcHkWc1oOc0oOv9kI")
+rf = Roboflow(api_key="<ROBOFLOW_UNU_KEY1_FROM_ENV>")
 project = rf.workspace("vnot").project("me-bottle-isempty-ku3-h61lr")
 version = project.version(2)
 dataset = version.download("coco")
@@ -58,7 +58,7 @@ dataset = version.download("coco")
 # Standar Dataset Segmentation - For Evaluation
 !pip install roboflow
 from roboflow import Roboflow
-rf = Roboflow(api_key="tjeBcHkWc1oOc0oOv9kI")
+rf = Roboflow(api_key="<ROBOFLOW_UNU_KEY1_FROM_ENV>")
 project = rf.workspace("vnot").project("me-bottle-isempty-ku3-h61lr-seg")
 version = project.version(1)
 dataset = version.download("coco-segmentation")

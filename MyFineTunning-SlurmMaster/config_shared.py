@@ -45,6 +45,26 @@ _BASE_DIR     = os.environ.get(
 WORKSPACE_DIR = os.path.join(_BASE_DIR, f"MyFineTunning-{_TIMESTAMP}")
 
 # ==============================================================================
+# LOAD DOTENV
+# ==============================================================================
+def _load_dotenv():
+    env_path = os.path.join(ROOT, ".env")
+    if not os.path.exists(env_path):
+        return
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(dotenv_path=env_path, override=False)
+    except ImportError:
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip())
+
+_load_dotenv()
+
+# ==============================================================================
 # PATHS — Project Structure
 # ==============================================================================
 DATASETS_DIR      = os.path.join(ROOT, "datasets")
@@ -737,7 +757,7 @@ def flush_gpu(gpu_id_or_label=0, label: str = ""):
 # CLOUDFLARE TUNNEL CONFIGURATION
 # ==============================================================================
 CLOUDFLARE_BIN = "/data/users/g6717500336/singularity/cloudflared"
-CLOUDFLARE_TUNNEL_TOKEN = "eyJhIjoiNDgzMWNmYzhiMDgxODc0NDNiZTI3YmI4OGMxNWQ4ZjIiLCJ0IjoiMDI3MDBjMGUtYTBlYS00NjhiLThhYmQtMTk2MTlhZmZlNThlIiwicyI6IlltRm1NbVprT1RVdFlqUTFaUzAwTUdFMExXSmlZakF0WmpGallXTTRNREZsTm1RdyJ9"
+CLOUDFLARE_TUNNEL_TOKEN = os.environ.get("CLOUDFLARE_TUNNEL_TOKEN", "")
 
 # ==============================================================================
 # VISUAL EVALUATION API CONFIGURATION

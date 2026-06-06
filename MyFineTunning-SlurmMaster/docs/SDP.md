@@ -2179,3 +2179,90 @@
 - **Status saat ini:** Selesai ✅
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - Pembersihan di branch `main` selesai. File-file tersebut tetap ada di branch `dev` karena memang dibutuhkan untuk pengembangan aktif (seperti `.gitignore`). Jangan satukan (*merge*) perubahan ini secara terbalik ke branch `dev`.
+
+---
+
+### [Entri — Pemindahan Kredensial CLOUDFLARE_TUNNEL_TOKEN ke .env] — 2026-06-06 18:41 WIB
+
+- **Tanggal/Waktu:** 2026-06-06 18:41 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan migrasi kredensial `CLOUDFLARE_TUNNEL_TOKEN` dari file `config_shared.py` ke file `.env` untuk keamanan dan mencegah eksposur kredensial secara statis.
+  - Memodifikasi `config_shared.py` dengan fungsi `_load_dotenv()` dan mengganti assignment `CLOUDFLARE_TUNNEL_TOKEN` menggunakan `os.environ.get()`.
+  - Melakukan update pada `utils/myslurm.sh` agar perintah `grep` untuk token mengarah ke `.env` daripada `config_shared.py` dan menghapus string fallback hardcode.
+  - Melakukan review silang (*cross-reference*) terhadap `/data/users/g6717500336/singularity` dan memverifikasi bahwa skrip-skrip di dalamnya (seperti `sbatch_llm_service.sh` dan `sbatch_lms.sh`) menggunakan Quick Tunnels sehingga tidak terdampak migrasi token ini.
+- **File yang diubah/dibuat:**
+  - `.env` [DIMODIFIKASI]
+  - `config_shared.py` [DIMODIFIKASI]
+  - `utils/myslurm.sh` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Akses `CLOUDFLARE_TUNNEL_TOKEN` kini bersumber dari `.env`. Untuk integrasi komponen baru, selalu panggil via `os.environ.get("CLOUDFLARE_TUNNEL_TOKEN")` setelah import/loading `config_shared.py`.
+
+---
+
+### [Entri — Pembuatan Template Lingkungan (.example.env)] — 2026-06-07 01:43 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 01:43 WIB
+- **Tugas yang diselesaikan:**
+  - Membuat berkas `.example.env` sebagai template (blueprint) bagi *developer* atau *agent* lain untuk mengetahui variabel lingkungan apa saja yang dibutuhkan oleh proyek tanpa mengekspos kunci (*keys*) atau token asli.
+  - Memasukkan *placeholder* (`your_..._here`) untuk nilai kredensial seperti API Key Roboflow, Token Bot Telegram, Chat ID, dan Token Cloudflare Tunnel, sambil tetap mempertahankan nilai *default* non-sensitif (seperti `RCLONE_REMOTE`).
+- **File yang diubah/dibuat:**
+  - `.example.env` [DIBUAT BARU]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Berkas template `.example.env` sudah siap. Jika di kemudian hari ada variabel lingkungan (environment variable) baru yang ditambahkan ke skrip, pastikan Anda menambahkannya juga ke dalam `.example.env`.
+
+---
+
+### [Entri — Sanitasi Hardcoded Token Roboflow di Branch dev & RunPOD] — 2026-06-07 01:45 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 01:45 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan investigasi (*grep search*) terkait kredensial yang terexpose di direktori `MyFineTunning-dev` dan `MyFineTunning-RunPOD`.
+  - Menemukan bahwa token API Roboflow (`ROBOFLOW_KU_KEY1` dan `ROBOFLOW_UNU_KEY1`) ditulis secara eksplisit (hardcoded) di dalam *docstring* dokumentasi awal pada file `dataset_setup.py` di kedua folder tersebut.
+  - Melakukan sanitasi keamanan dengan mengganti token asli di dalam komentar dokumentasi dengan placeholder generik (`<ROBOFLOW_KU_KEY1_FROM_ENV>` dan `<ROBOFLOW_UNU_KEY1_FROM_ENV>`) melalui fungsi edit di kedua file tersebut.
+  - Memverifikasi ulang bahwa token Cloudflare dan Telegram tidak bocor/terexpose di dalam dua lingkungan kerja tersebut.
+- **File yang diubah/dibuat:**
+  - `MyFineTunning-dev/dataset_setup.py` [DIMODIFIKASI]
+  - `MyFineTunning-RunPOD/dataset_setup.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Saat membuat dokumentasi berupa blok *docstring* (terutama contoh instalasi atau inisiasi script python), **DILARANG** meletakkan token rahasia secara aktual meskipun itu hanyalah komentar. Gunakan selalu penanda *placeholder* untuk mencegah kebocoran informasi.
+
+---
+
+### [Entri — Sinkronisasi Global File `.env` dan `.example.env`] — 2026-06-07 01:48 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 01:48 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan penduplikasian file `.env` dan `.example.env` dari sumber utama di `MyFineTunning-SlurmMaster` ke cabang direktori `MyFineTunning-dev` dan `MyFineTunning-RunPOD`.
+  - Hal ini dilakukan agar kredensial API Key Roboflow, Token Telegram, dan Token Cloudflare Tunnel dapat dimuat dengan sempurna saat menjalankan skrip-skrip pelatihan (`run_pipeline.py`) atau pengunduhan dataset (`dataset_setup.py`) pada ketiga direktori proyek tersebut.
+- **File yang diubah/dibuat:**
+  - `MyFineTunning-dev/.env` [DIBUAT/DI-OVERWRITE]
+  - `MyFineTunning-dev/.example.env` [DIBUAT BARU]
+  - `MyFineTunning-RunPOD/.env` [DIBUAT/DI-OVERWRITE]
+  - `MyFineTunning-RunPOD/.example.env` [DIBUAT BARU]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Kini ketiga lingkungan (*environment*) telah disinkronkan dan menggunakan satu format referensi variabel (*Single Source of Truth*) untuk urusan otentikasi. Semua agen harap merujuk ke file `.env` di masing-masing sub-proyek untuk memanggil variabel rahasia.
+
+---
+
+### [Entri — Sanitasi Hardcoded Token Roboflow di SlurmMaster] — 2026-06-07 01:50 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 01:50 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan audit keamanan mendalam ulang ke seluruh repositori (`MyFineTunning-dev`, `MyFineTunning-RunPOD`, dan `MyFineTunning-SlurmMaster`).
+  - Menemukan bahwa API Key Roboflow (`ROBOFLOW_KU_KEY1` dan `ROBOFLOW_UNU_KEY1`) juga masih terexpose di blok komentar docstring pada `MyFineTunning-SlurmMaster/dataset_setup.py`.
+  - Melakukan penggantian (sanitasi) API Key tersebut dengan placeholder generik `<ROBOFLOW_KU_KEY1_FROM_ENV>` dan `<ROBOFLOW_UNU_KEY1_FROM_ENV>` di `MyFineTunning-SlurmMaster/dataset_setup.py`.
+  - Memverifikasi ulang bahwa seluruh kunci otentikasi, token bot Telegram, detail Cloudflare, dan password SSH tidak lagi terekspos dalam kode di seluruh 3 direktori.
+- **File yang diubah/dibuat:**
+  - `MyFineTunning-SlurmMaster/dataset_setup.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Semua file `dataset_setup.py` di ketiga folder sekarang sudah tersanitasi dari hardcoded key di bagian docstring. Jangan menulis ulang key asli di file mana pun yang terdaftar dalam tracking git.
