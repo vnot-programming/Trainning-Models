@@ -1,130 +1,133 @@
-# 🤖 Computer Vision Training Models
+# 🤖 Computer Vision Research & Training Models (Multi-Environment)
 
-[![Version](https://img.shields.io/badge/version-v0.2.0-blue?style=for-the-badge)](https://github.com/vnot-programming/Trainning-Models/releases)
-[![Status](https://img.shields.io/badge/Status-Release-green?style=for-the-badge)](https://github.com/vnot-programming/Trainning-Models/releases)
+[![Version](https://img.shields.io/badge/version-v0.3.0-blue?style=for-the-badge)](https://github.com/vnot-programming/Trainning-Models/releases)
+[![Status](https://img.shields.io/badge/Status-Active_Development-orange?style=for-the-badge)](https://github.com/vnot-programming/Trainning-Models)
 [![Python](https://img.shields.io/badge/Python-3.11-yellow?style=for-the-badge&logo=python)](https://www.python.org/)
 [![Framework](https://img.shields.io/badge/Framework-PyTorch-orange?style=for-the-badge&logo=pytorch)](https://pytorch.org/)
 
-Repository for Fine-Tuning models and Computer Vision experiments — targeting **Scopus Q1/Q2** publication.
+Repositori pusat untuk proses *Fine-Tuning* model, evaluasi komparatif SOTA (State of the Art), dan eksperimen *Computer Vision* berskala besar — secara khusus ditargetkan untuk publikasi ilmiah internasional standar **Scopus Q1/Q2**.
+
+Repositori ini telah diarsiteki ulang untuk mendukung berbagai lingkungan komputasi (*Multi-Environment*) dan diintegrasikan dengan aplikasi evaluasi visual interaktif **RVM (Reverse Vending Machine)**.
 
 ---
 
-## 🚀 Current Release
-- **Version Tag:** `v0.2.0`
-- **Date:** May 9, 2026
-- **Type:** Release (Stable)
-- **Release Notes:** [`release_notes.md`](./release_notes.md)
-
-## 📦 Downloads & Assets
-> [!TIP]
-> You can download the latest model weights and assets from the release page below.
-
-🔗 **[Download Latest Release Assets](https://github.com/vnot-programming/Trainning-Models/releases)**
+## 🚀 Rilis & Status Saat Ini
+- **Versi Rilis Aktif:** `v0.3.0-dev`
+- **Fokus Utama:** Evaluasi komparatif berskala besar pada infrastruktur HPC (High-Performance Computing) Slurm, optimalisasi arsitektur *hybrid* segmentasi, serta visualisasi web berbasis Cloudflare Tunnel.
+- **Rilis Log:** Detail riwayat perubahan tercatat pada [`release_notes.md`](./release_notes.md).
 
 ---
 
-## 🧠 Models
+## 🖥️ Pembagian Lingkungan Kerja (Multi-Environment)
+Repositori dibagi menjadi 3 sub-workspace utama untuk menyesuaikan target infrastruktur:
 
-| Model | Task | Architecture | Evaluator |
-|---|---|---|---|
-| **YOLOv8m** | Detection + Segmentation | YOLO v8 | COCOeval / Ultralytics |
-| **YOLOv9m / YOLOv9c-Seg** | Detection + Segmentation | YOLO v9 | COCOeval / Ultralytics |
-| **YOLO11m / YOLO11m-Seg** | Detection + Segmentation | YOLO v11 | COCOeval / Ultralytics |
-| **Mask R-CNN ResNet-50 FPN-v2** | Detection + Segmentation | Mask R-CNN | COCOeval (DDP) |
-| **Hybrid (YOLO11m + SAM2)** | Detection + Segmentation | YOLO11m + SAM2.1-B | COCOeval (MultiGPU) |
-
----
-
-## 🏃 Pipeline Evaluasi (Multi-GPU)
-
-Jalankan evaluasi semua model secara **sekuensial** menggunakan satu script orchestrator:
-
-```bash
-# Background via tmux (recommended):
-tmux new-session -d -s run_pipeline_multi \
-  "cd /root/Trainning-Models/MyFineTunning-dev && \
-   python3 run_pipeline_multi.py 2>&1 | tee run_pipeline_multi.log"
-
-# Skip model tertentu:
-python3 run_pipeline_multi.py --skip yolo8,yolo9
-
-# Pilih GPU spesifik:
-python3 run_pipeline_multi.py --gpus 0,1
-```
-
-### Pipeline Training (Single):
-```bash
-tmux new-session -d -s run_pipeline \
-  "source /root/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && \
-   cd /root/Trainning-Models/MyFineTunning-dev && \
-   python3 run_pipeline.py 2>&1 | tee run_pipeline.log"
-```
+1. **`MyFineTunning-SlurmMaster/` (Workspace Aktif Utama)**
+   - Dioptimalkan sepenuhnya untuk sistem kluster HPC Slurm (contoh: Tesla V100 32GB GPU nodes `ai2` dan `ai3` di lingkungan kampus KU).
+   - Dilengkapi biner Cloudflare Tunnel untuk akses eksternal, sistem *Auto-Booking Daemon* GPU, pemantauan *queue* berbasis terminal, serta aplikasi web RVM.
+2. **`MyFineTunning-RunPOD/`**
+   - Konfigurasi khusus yang dioptimalkan untuk GPU *cloud instance* RunPOD (misal multi-GPU RTX A5000 / A6000) dengan kapasitas throughput tinggi.
+3. **`MyFineTunning-dev/`**
+   - Lingkungan *sandbox* pengembangan lokal untuk modifikasi kode cepat, pembuatan unit test, dan verifikasi alur data dasar.
 
 ---
 
-## 🛠️ Folder Structure
+## 🧠 Evaluasi Komparatif 49 Model (Scopus Q1/Q2 Target)
+Pipeline riset ini mengevaluasi secara paralel dan head-to-head total **49 model** yang dibagi ke dalam empat kategori arsitektural:
 
+| Kategori Model | Jumlah Model | Deskripsi Teknis |
+| :--- | :---: | :--- |
+| **YOLO Dasar (Deteksi & Segmentasi)** | 16 Model | Varian YOLOv8 (m, x, m-seg, x-seg), YOLOv9 (m, e, c-seg, e-seg), YOLOv10 (m, x), dan YOLO11 (n, l, x, n-seg, l-seg, x-seg) sebagai pembanding dasar (*baseline*). |
+| **Mask R-CNN** | 1 Model | Representasi arsitektur Two-Stage klasik berbasis **ResNet-50 FPN V2** (TorchVision) dengan DDP (Distributed Data Parallel) evaluator. |
+| **Hybrid SAM2** | 16 Model | Kombinasi 16 model YOLO di atas (sebagai generator kotak pembatas/*prompt generator*) dengan **SAM 2.1 Tiny (`sam2.1_t.pt`)** untuk segmentasi presisi tingkat piksel. |
+| **Hybrid Mobile SAM** | 16 Model | Kombinasi 16 model YOLO dengan **Mobile SAM (`mobile_sam.pt`)** untuk segmentasi presisi tingkat piksel dengan beban VRAM yang sangat ringan. |
+
+*Metrik Tambahan:* Skrip latihan mandiri terintegrasi penuh untuk **RT-DETR-L** dengan batas memori adaptif (`RTDETR_BATCH_SIZE = 12/14`) guna mencegah CUDA OOM pada arsitektur Transformer.
+
+---
+
+## 📊 Metrik Geometri Lanjutan (Standard Baru)
+Selain metrik COCO standar (mAP50, mAP50-95 untuk Box dan Mask), sistem ini menyuntikkan kalkulasi metrik kontur tepi (*boundary*) secara dinamis untuk model segmentasi instansi:
+- **Boundary IoU:** Mengukur kualitas presisi garis luar (*contour*) antara prediksi mask dan ground-truth dengan kernel adaptif `0.02 * sqrt(H² + W²)`.
+- **Boundary AP:** Rata-rata presisi pada ambang batas Boundary IoU ≥ 0.5 (Standard publikasi SOTA).
+
+---
+
+## 📱 Aplikasi Web RVM (Reverse Vending Machine)
+Berada di dalam `MyFineTunning-SlurmMaster/RVM`, aplikasi ini menyajikan evaluasi kualitatif interaktif yang ramah pengguna:
+- **Backend (Flask API - Port 8502):** Dilengkapi **GPU Inference Queue (FIFO)**. Menjamin hanya 1 proses inferensi berjalan di GPU pada satu waktu untuk menghindari CUDA OOM saat diakses banyak pengguna eksternal.
+- **Frontend (Port 8501):** Antarmuka premium berbasis *Bio-Digital Minimalism 2026* dengan dukungan Dual-Theme (Dark/Light), kompatibilitas buta warna (*Color Blind Safety*), mode perbandingan visual (hingga 5 model vs Ground Truth secara berdampingan), serta fitur ekspor gambar grid berkualitas tinggi.
+- **Akses Publik (Cloudflare Tunnel):**
+  - **Frontend:** [https://front-rvm.penelitian.my.id](https://front-rvm.penelitian.my.id)
+  - **Backend API:** [https://backend-rvm.penelitian.my.id](https://backend-rvm.penelitian.my.id)
+
+---
+
+## 🛠️ Struktur Direktori Proyek
 ```
 Trainning-Models/
-├── MyFineTunning-dev/
-│   ├── .venv/                     # Virtual environment
-│   ├── datasets/                  # Roboflow / HuggingFace datasets
-│   ├── models/                    # Base model weights (.pt)
-│   ├── data-files/
-│   │   ├── reports/               # CSV evaluation reports
-│   │   └── visuals/               # Visualisasi prediksi per model
-│   ├── yolo/
-│   │   ├── yolo8/                 # YOLOv8m training & eval
-│   │   ├── yolo9/                 # YOLOv9m training & eval
-│   │   └── yolo11/                # YOLO11m training & eval
-│   ├── mask-r-cnn/                # Mask R-CNN DDP training & eval
-│   ├── hybrid/                    # YOLO11m + SAM2 hybrid pipeline
-│   ├── config_shared.py           # Shared config (paths, hyperparams)
-│   ├── coco_eval_utils.py         # COCOeval utilities
-│   ├── run_pipeline.py            # Single-model training orchestrator
-│   └── run_pipeline_multi.py      # Multi-model evaluation orchestrator
-└── backups/                       # Dataset/model backups
+├── MyFineTunning-SlurmMaster/     # Workspace aktif kluster Slurm (KU-Slurm)
+│   ├── RVM/                       # Aplikasi Web Reverse Vending Machine
+│   │   ├── backend/               # Flask API Server & Inference Queue
+│   │   └── frontend/              # Web Interface (HTML, CSS, JS)
+│   ├── docs/                      # Rencana pengembangan (SDP.md) & rencana publikasi
+│   ├── utils/                     # Skrip pembantu, evaluasi baru, & auto-booking
+│   │   └── slurm/                 # Pemantauan status antrean (pretty_squeue.py)
+│   ├── yolo/                      # Varian kode training YOLO (v8, v9, v10, v11)
+│   ├── mask-r-cnn/                # Kode training & evaluasi Mask R-CNN
+│   ├── rtdetr/                    # Kode training & evaluasi RT-DETR-L
+│   ├── datasets/                  # Lokasi dataset lokal (training, standard, golden, coco)
+│   ├── models/                    # Penyimpanan bobot dasar (.pt)
+│   ├── config_shared.py           # Konfigurasi Bersama (Single Source of Truth)
+│   └── start_rvm.sh               # Launcher otomatis layanan RVM & Cloudflared
+├── MyFineTunning-RunPOD/          # Workspace teroptimasi untuk cloud RunPOD
+├── MyFineTunning-dev/             # Workspace pengembangan sandbox lokal
+├── README.md                      # Dokumentasi utama repositori (File ini)
+└── release_notes.md               # Catatan rilis versi repositori
 ```
-
-**Report Files (per model):**
-| File | Deskripsi |
-|---|---|
-| `report_*_det_*.csv` | Detection: mAP50-95, mAP50, Precision, Recall, Latency, FPS, GPUs |
-| `report_*_seg_*.csv` | Segmentation: mAP50-95(Box), mAP50-95(Mask), Latency, FPS |
 
 ---
 
-## 🔄 Development Workflow
+## 🏃 Panduan Penggunaan di Kluster Slurm (KU-Slurm)
 
+### 1. Perintah CLI Global `slurm`
+Untuk mempermudah manajemen, utilitas `myslurm.sh` dapat dipanggil secara global melalui terminal di login node dengan mengetikkan:
+```bash
+slurm
 ```
-feature branch → dev → main
+Perintah ini akan menampilkan menu interaktif:
+- Melakukan booking GPU baru ke antrean Slurm.
+- Memantau antrean global cluster & antrean pribadi secara realtime.
+- Melakukan attach/kill pada sesi tmux komputasi.
+- Mengaktifkan, mematikan, atau memantau status RVM Web Services (Frontend, Backend, dan Cloudflare Tunnel).
+
+### 2. Cara Booking GPU & Masuk Compute Node
+Untuk melakukan pemesanan GPU secara aman dan tahan terhadap terputusnya sesi SSH:
+```bash
+# Inisialisasi Booking melalui daemon latar belakang (tmux session: gpu_booking)
+slurm -> Pilih Menu 1 (Booking GPU Baru)
+
+# Setelah booking aktif (Notifikasi Telegram dikirim), masuk ke compute node:
+slurm -> Pilih Menu 2 (Masuk / Attach ke Node GPU)
+# Otomatis berpindah ke shell compute node (@ai2/@ai3) dengan conda environment 'yolo_env' aktif.
 ```
 
-Semua perubahan kode wajib di-push ke branch `dev` sebelum dilakukan sinkronisasi ke `main`.
+### 3. Eksekusi Pipeline Training & Evaluasi
+Di dalam compute node GPU:
+```bash
+# Jalankan seluruh pipeline training & evaluasi secara paralel/sekuensial terkelola:
+cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster
+python3 run_pipeline_parallel.py 2>&1 | tee run_pipeline_parallel.log
+
+# Menjalankan evaluasi saja tanpa melatih ulang model (sangat berguna untuk analisis cepat):
+python3 run_pipeline_parallel.py --eval-only --gpus 0
+```
 
 ---
 
-## 🤖 AI Agents & Instructions
-
-Workspace ini dilengkapi dengan **AI Agents** dan **Instructions** untuk membantu pengembangan:
-
-### Available Agents
-1. **CV Research Collaborator — Scopus Q1/Q2** (`.agents/cv-research-collaborator.agent.md`)
-   - Fokus: Computer Vision research untuk jurnal Scopus Q1/Q2
-   - Gaya: Brutal honesty, tantang asumsi, bahasa Indonesia akademik
-
-2. **Bio-Digital Design Reviewer** (`.agents/pro-design-review.agent.md`)
-   - Fokus: Review UI/UX untuk kepatuhan Bio-Digital Minimalism 2026
-   - Cek: Typography, 60fps animations, WCAG 2.2+, glassmorphism
-
-### Rules (`.agents/rules/`)
-- `coding-standards.md` — Clean Code, DRY, KISS, Early Returns
-- `network-topology.md` — Topologi jaringan infrastruktur
-- `ui-ux-biodigital.md` — Bio-Digital UI/UX principles
-
-### File Protection
-Baca file `.agentignore` untuk daftar file yang **DILARANG** diakses oleh agents.
+## 🔄 Alur Pengembangan Git (STRICT)
+- **Branch Kerja:** `dev` (Semua agen AI dan pengembang wajib bekerja di branch ini).
+- **Prosedur Push:** Perubahan diunggah ke branch `dev`. Sinkronisasi ke branch `main` atau `master` hanya boleh dilakukan atas perintah/konfirmasi tertulis langsung dari pengguna.
 
 ---
 
-*Generated by Antigravity | Updated: May 2026*
+*Dikelola oleh Antigravity Agent | Diperbarui secara dinamis: Juni 2026*

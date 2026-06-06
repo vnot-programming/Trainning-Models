@@ -2140,6 +2140,24 @@
      - Hal ini mencegah status yang membingungkan bagi user ("FREE" di port status karena proses boot up script Python / server berjalan agak lambat).
 - **File yang diubah/dibuat:**
   - `RVM/start_rvm.sh` [DIMODIFIKASI]
-- **Status saat ini:** Selesai ✅
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - Kini start script lebih reliable. Apabila service Python gagal untuk hidup (misalnya environment error), proses startup bash script akan menampilkan notifikasi timeout warning daripada pesan sukses semu.
+
+---
+
+### [Entri — Pembaruan README.md Global untuk Menyajikan Kondisi Aktif Terkini] — 2026-06-07 01:30 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 01:30 WIB
+- **Tugas yang diselesaikan:**
+  1. **Pembaruan Dokumentasi Utama**:
+     - Merombak total file `README.md` pada repositori root `/data/users/g6717500336/Trainning-Models/README.md`.
+     - Mendokumentasikan pembagian lingkungan kerja multi-environment secara eksplisit (`MyFineTunning-SlurmMaster`, `MyFineTunning-RunPOD`, `MyFineTunning-dev`).
+     - Memperluas pemaparan evaluasi penelitian SOTA mencakup total **49 model** (termasuk Hybrid SAM2, Hybrid Mobile SAM, Mask R-CNN, dan YOLO).
+     - Menjelaskan metrik evaluasi geometri tingkat lanjut yang baru ditambahkan (**Boundary IoU** dan **Boundary AP**).
+     - Mendokumentasikan status integrasi aplikasi web RVM (Reverse Vending Machine), arsitektur FIFO queue penolak CUDA OOM, fitur dual-theme, comparison mode, dan aksesibilitas publik melalui Cloudflare Tunnel.
+     - Menyematkan panduan komprehensif penggunaan CLI global `slurm` dan mekanisme background daemon booking GPU.
+- **File yang diubah/dibuat:**
+  - `README.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Repositori kini memiliki dokumentasi utama yang akurat dan lengkap sesuai dengan arsitektur SlurmMaster terbaru. Pastikan jika ada perubahan parameter batch RT-DETR atau port RVM di masa mendatang, sesuaikan dokumentasi README agar tetap sinkron.
