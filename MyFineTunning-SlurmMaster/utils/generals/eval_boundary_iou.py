@@ -109,10 +109,9 @@ def _ensure_boundary_iou_installed() -> bool:
         print("[BoundaryIoU] ✅ boundary-iou-api berhasil diinstall dan di-load.")
         return True
 
-    print("[BoundaryIoU] ❌ Import masih gagal setelah instalasi.")
-    print(f"   Jalankan manual di dalam .venv:")
+    print(f"   Jalankan manual di dalam conda environment yolo_env:")
     print(f"   git clone https://github.com/bowenc0221/boundary-iou-api.git /tmp/biou")
-    print(f"   pip install -e /tmp/biou")
+    print(f"   conda activate yolo_env && pip install -e /tmp/biou")
     return False
 
 

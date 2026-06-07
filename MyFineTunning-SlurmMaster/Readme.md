@@ -94,13 +94,13 @@ python -u main.py --device 0 2>&1 | tee maskrcnn_train.log
 **Xorg untuk pengaturan FAN**: Kontrol ini akan terus aktif selama `cv-host` tidak di-reboot lagi. (Jika di-reboot, Anda cukup jalankan `sudo nohup Xorg :0 &` sekali lagi).
 
 ```bash
-tmux kill-session -t yolo8training 2>/dev/null; echo "Killed old Yolo9 session" && tmux new-session -d -s yolo8training "source /home/my/Trainning-Models/MyFineTunning-dev.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-devyolo/yolo8 && python -u main.py 2>&1 | tee yolo8training.log" && echo "New Yolo8 session started"
+tmux kill-session -t yolo8training 2>/dev/null; echo "Killed old Yolo8 session" && tmux new-session -d -s yolo8training "source /data/programs/anaconda3/bin/activate yolo_env && cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/yolo/yolo8 && python -u main.py 2>&1 | tee yolo8training.log" && echo "New Yolo8 session started"
 
-tmux kill-session -t yolo9training 2>/dev/null; echo "Killed old Yolo9 session" && tmux new-session -d -s yolo9training "source /home/my/Trainning-Models/MyFineTunning-dev.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-devyolo/yolo9 && python -u main.py 2>&1 | tee yolo9training.log" && echo "New Yolo9 session started"
+tmux kill-session -t yolo9training 2>/dev/null; echo "Killed old Yolo9 session" && tmux new-session -d -s yolo9training "source /data/programs/anaconda3/bin/activate yolo_env && cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/yolo/yolo9 && python -u main.py 2>&1 | tee yolo9training.log" && echo "New Yolo9 session started"
 
-tmux kill-session -t yolo11training 2>/dev/null; echo "Killed old Yolo11 session" && tmux new-session -d -s yolo11training "source /home/my/Trainning-Models/MyFineTunning-dev.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-devyolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log" && echo "New Yolo11 session started"
+tmux kill-session -t yolo11training 2>/dev/null; echo "Killed old Yolo11 session" && tmux new-session -d -s yolo11training "source /data/programs/anaconda3/bin/activate yolo_env && cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/yolo/yolo11 && python -u main.py 2>&1 | tee yolo11training.log" && echo "New Yolo11 session started"
 
-tmux kill-session -t maskrcnntraining 2>/dev/null; echo "Killed old Mask R-CNN session" && tmux new-session -d -s maskrcnntraining "source /home/my/Trainning-Models/MyFineTunning-dev/.venv/bin/activate && cd /home/my/Trainning-Models/MyFineTunning-dev/mask-r-cnn && python -u train_multigpu.py 2>&1 | tee train_multigpu.log" && echo "New Mask R-CNN session started"
+tmux kill-session -t maskrcnntraining 2>/dev/null; echo "Killed old Mask R-CNN session" && tmux new-session -d -s maskrcnntraining "source /data/programs/anaconda3/bin/activate yolo_env && cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/mask-r-cnn && python -u train_multigpu.py 2>&1 | tee train_multigpu.log" && echo "New Mask R-CNN session started"
 ```
 
 ## Konfigurasi Environment
@@ -117,7 +117,7 @@ Pastikan file konfigurasi berikut sudah disiapkan:
 1. **Setup Environment**:
 
    ```bash
-   source .venv/bin/activate
+   source /data/programs/anaconda3/bin/activate yolo_env
    ```
 
 2. **Jalankan Training**:

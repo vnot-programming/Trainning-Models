@@ -80,8 +80,7 @@ from datetime import datetime, timedelta
 # KONFIGURASI PIPELINE
 # ==============================================================================
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-venv_path = os.path.join(BASE_DIR, '.venv', 'bin', 'activate')
-VENV_ACTIVATE = f"source {venv_path}" if os.path.exists(venv_path) else "true"
+VENV_ACTIVATE = "source /data/programs/anaconda3/bin/activate yolo_env"
 
 TRAINING_JOBS = [
     {
