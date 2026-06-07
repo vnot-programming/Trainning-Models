@@ -141,10 +141,10 @@ def generate_booking_sbatch(target_node=None, exclude_nodes=None):
         "echo \"Cara masuk ke node ini tanpa antre:\"",
         "echo \"  ./attach_gpu.sh\"",
         "echo \"\"",
-        "# Panggil script Ollama tanpa menyebabkan double slurm job",
-        "bash /data/users/g6717500336/singularity/ollama/sbatch_llm_service.sh &",
-        "SERVICE_PID=$!",
-        "wait $SERVICE_PID",
+        "# Panggil script Ollama tanpa menyebabkan double slurm job (Dinonaktifkan sementara)",
+        "# bash /data/users/g6717500336/singularity/ollama/sbatch_llm_service.sh &",
+        "# SERVICE_PID=$!",
+        "# wait $SERVICE_PID",
         "echo \"Menahan node agar tidak tertutup...\"",
         "sleep infinity"
     ])

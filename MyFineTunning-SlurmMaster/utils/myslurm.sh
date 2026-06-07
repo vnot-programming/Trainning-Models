@@ -316,6 +316,574 @@ manage_web_rvm() {
     done
 }
 
+manage_aspri_ai() {
+    local aspri_dir="/data/users/g6717500336/singularity/ollama"
+    while true; do
+        clear
+        
+        # Deteksi status secara real-time
+        local active_job=$(squeue -u $USER -n vnot -h -o "%i %N %t" | head -n 1)
+        local job_id=$(echo $active_job | cut -d' ' -f1)
+        local node_name=$(echo $active_job | cut -d' ' -f2)
+        local job_state=$(echo $active_job | cut -d' ' -f3)
+        
+        local fallback_url="TIDAK AKTIF"
+        local active_port="N/A"
+        local ollama_running="MATI"
+        
+        if [ -n "$job_id" ]; then
+            local ollama_active=$(ssh -o StrictHostKeyChecking=no ${node_name} "ps -u $USER -f | grep ollama | grep -v grep" 2>/dev/null | grep -v "sbatch_aspri" || echo "")
+            if [ -n "$ollama_active" ]; then
+                ollama_running="RUNNING"
+                active_port=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_sbatch.log" | tail -n 1 | cut -d' ' -f2)
+                active_port=${active_port:-N/A}
+                fallback_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_sbatch.log" | tail -n 1)
+                fallback_url=${fallback_url:-TIDAK AKTIF}
+            else
+                ollama_running="MATI / STANDBY"
+            fi
+        fi
+        
+        # Deteksi status kesehatan AspriAI Core & Desk secara real-time
+        local core_status="Unhealthy"
+        local env_file="/data/users/g6717500336/singularity/AspriAI/.env"
+        local cf_id=""
+        local cf_secret=""
+        if [ -f "$env_file" ]; then
+            cf_id=$(grep -E "^CF-Access-Client-Id=" "$env_file" | cut -d'=' -f2 | tr -d '\r' | tr -d '\n')
+            cf_secret=$(grep -E "^CF-Access-Client-Secret=" "$env_file" | cut -d'=' -f2 | tr -d '\r' | tr -d '\n')
+        fi
+        
+        if [ -n "$cf_id" ] && [ -n "$cf_secret" ]; then
+            local core_http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+                -H "CF-Access-Client-Id: $cf_id" \
+                -H "CF-Access-Client-Secret: $cf_secret" \
+                https://backend-ollama.penelitian.my.id/v1/health --max-time 2)
+            if [ "$core_http_code" = "200" ]; then
+                core_status="Healthy"
+            fi
+        else
+            local core_http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:11434/v1/health --max-time 2)
+            if [ "$core_http_code" = "200" ]; then
+                core_status="Healthy"
+            fi
+        fi
+        
+        local desk_status="Unhealthy"
+        local desk_http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST https://xyz.penelitian.my.id/v1/health --max-time 2)
+        if [ "$desk_http_code" = "200" ]; then
+            desk_status="Healthy"
+        fi
+
+        # Cetak Header & Status Utama
+        echo "============================================="
+        echo "       Manajemen Layanan AspriAI"
+        echo "============================================="
+        echo "Status Saat Ini:"
+        if [ -z "$job_id" ]; then
+            echo -e "• Sewa GPU (Slurm)  : \033[91mTIDAK AKTIF\033[0m"
+            echo -e "• Ollama Server     : \033[91mMATI\033[0m (Butuh Booking GPU)"
+            echo -e "• Port Compute Node : \033[91mN/A\033[0m"
+        else
+            echo -e "• Sewa GPU (Slurm)  : \033[92mAKTIF\033[0m (Job ID: ${job_id} di Node: ${node_name})"
+            if [ "$ollama_running" = "RUNNING" ]; then
+                echo -e "• Ollama Server     : \033[92mRUNNING\033[0m (di compute node ${node_name})"
+                echo -e "• Port Compute Node : \033[96m${active_port}\033[0m"
+            else
+                echo -e "• Ollama Server     : \033[93m${ollama_running}\033[0m"
+                echo -e "• Port Compute Node : \033[91mN/A\033[0m"
+            fi
+        fi
+        
+        if [ "$core_status" = "Healthy" ]; then
+            echo -e "• AspriAI Core : \033[92mHealthy\033[0m (POST ke Endpoint https://backend-ollama.penelitian.my.id/v1/health)"
+        else
+            echo -e "• AspriAI Core : \033[91mUnhealthy\033[0m (POST ke Endpoint https://backend-ollama.penelitian.my.id/v1/health)"
+        fi
+        
+        if [ "$desk_status" = "Healthy" ]; then
+            echo -e "• AspriAI Desk : \033[92mHealthy\033[0m (POST ke Endpoint https://xyz.penelitian.my.id/v1/health)"
+        else
+            echo -e "• AspriAI Desk : \033[91mUnhealthy\033[0m (POST ke Endpoint https://xyz.penelitian.my.id/v1/health)"
+        fi
+        
+        # Cetak Status Ollama
+        echo "============================================="
+        echo "       Manajemen Layanan Ollama"
+        echo "============================================="
+        if [ "$ollama_running" = "RUNNING" ]; then
+            echo -e "• URL : \033[92mhttps://backend-ollama.penelitian.my.id\033[0m"
+            if [ "$fallback_url" != "TIDAK AKTIF" ]; then
+                echo -e "• URL Fallback : \033[92m${fallback_url}\033[0m"
+            else
+                echo -e "• URL Fallback : \033[91m${fallback_url}\033[0m"
+            fi
+            echo -e "• Port : \033[96m11434\033[0m"
+        else
+            echo -e "• URL : https://backend-ollama.penelitian.my.id (MATI)"
+            echo -e "• URL Fallback : \033[91m${fallback_url}\033[0m"
+            echo -e "• Port : 11434"
+        fi
+        
+        # Cetak Status ComfyUI (Placeholder)
+        echo "============================================="
+        echo "       Manajemen Layanan ComfUI"
+        echo "============================================="
+        echo -e "• URL : \033[93mhttps://backend-xyz.penelitian.my.id\033[0m (masih placeholder)"
+        echo -e "• URL Fallback : \033[93mhttps://xyz.trycloudflare.com\033[0m"
+        echo -e "• Port : \033[93mxxxx\033[0m"
+        
+        echo "---------------------------------------------"
+        echo "Sub Menu AspriAI:"
+        echo "1. Jalankan AspriAI Core"
+        echo "2. Stop AspriAI Core"
+        echo "3. Restart AspriAI Core"
+        echo "---------------------------------------------"
+        echo "Modul AspriAI:"
+        echo "4. Ollama"
+        echo "5. Chat via Ollama"
+        echo "6. ComfUI"
+        echo "7. {AI Lainnya belum saya fikirkan}"
+        echo "Enter untuk kembali ke menu utama"
+        echo "---------------------------------------------"
+        read -p "Pilih aksi [1-7]: " main_choice
+        
+        if [ -z "$main_choice" ]; then
+            break
+        fi
+        
+        case $main_choice in
+            1)
+                # 1. Jalankan AspriAI Core
+                echo "Meluncurkan AspriAI Core (FastAPI Proxy)..."
+                local is_core_running=$(pgrep -f "uvicorn main:app --host 127.0.0.1 --port 11434" || echo "")
+                if [ -n "$is_core_running" ]; then
+                    echo -e "\033[93mℹ️ AspriAI Core sudah berjalan.\033[0m"
+                else
+                    nohup bash /data/users/g6717500336/singularity/AspriAI/aspri-core/run_gateway.sh > /data/users/g6717500336/singularity/AspriAI/aspri-core/gateway.log 2>&1 &
+                    sleep 2
+                    echo -e "\033[92m✅ AspriAI Core berhasil diluncurkan di background!\033[0m"
+                fi
+                
+                # 2. Jalankan Server Ollama secara otomatis jika GPU aktif
+                if [ -n "$job_id" ]; then
+                    local current_job_state=$(squeue -j $job_id -h -o "%t" 2>/dev/null | tr -d ' ' || echo "")
+                    if [ "$current_job_state" = "R" ]; then
+                        echo "Memeriksa status Server Ollama di compute node ${node_name}..."
+                        local is_ollama_running_node=$(ssh -o StrictHostKeyChecking=no ${node_name} "ps -u $USER -f | grep ollama | grep -v grep" 2>/dev/null | grep -v "sbatch_aspri" || echo "")
+                        if [ -z "$is_ollama_running_node" ]; then
+                            echo "Meluncurkan Server Ollama secara otomatis di node ${node_name}..."
+                            ssh -o StrictHostKeyChecking=no ${node_name} "nohup bash ${aspri_dir}/sbatch_aspri_service.sh > ${aspri_dir}/logs/nohup_runner.log 2>&1 &"
+                            echo "⏳ Menunggu inisiasi Ollama & Cloudflare Tunnel..."
+                            local wait_sec=0
+                            while [ $wait_sec -lt 15 ]; do
+                                local check_port=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_sbatch.log" | tail -n 1 | cut -d' ' -f2 || echo "")
+                                local check_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_sbatch.log" | tail -n 1 || echo "")
+                                if [ -n "$check_port" ] && [ -n "$check_url" ]; then
+                                    break
+                                fi
+                                sleep 2
+                                wait_sec=$((wait_sec + 2))
+                            done
+                            echo -e "\033[92m✅ Server Ollama & Tunnel berhasil diinisiasi secara otomatis!\033[0m"
+                        else
+                            echo -e "\033[93mℹ️ Server Ollama sudah berjalan di node ${node_name}.\033[0m"
+                        fi
+                    else
+                        echo -e "\033[93m⏳ Sewa GPU (Job ID: ${job_id}) masih dalam status ${current_job_state}. Server Ollama akan aktif saat job RUNNING.\033[0m"
+                    fi
+                else
+                    echo -e "\033[91m⚠️ Sewa GPU tidak aktif. Server Ollama tidak dapat dijalankan secara otomatis.\033[0m"
+                fi
+                sleep 1.5
+                ;;
+            2)
+                echo "Menghentikan AspriAI Core..."
+                pkill -f "uvicorn main:app --host 127.0.0.1 --port 11434" || true
+                echo -e "\033[92m✅ AspriAI Core berhasil dihentikan.\033[0m"
+                sleep 1.5
+                ;;
+            3)
+                echo "Restarting AspriAI Core..."
+                pkill -f "uvicorn main:app --host 127.0.0.1 --port 11434" || true
+                sleep 2
+                nohup bash /data/users/g6717500336/singularity/AspriAI/aspri-core/run_gateway.sh > /data/users/g6717500336/singularity/AspriAI/aspri-core/gateway.log 2>&1 &
+                sleep 2
+                echo -e "\033[92m✅ AspriAI Core berhasil di-restart!\033[0m"
+                sleep 1.5
+                ;;
+            4)
+                # Submenu Ollama
+                while true; do
+                    # Ambil status real-time khusus submenu Ollama
+                    local active_job_sub=$(squeue -u $USER -n vnot -h -o "%i %N %t" | head -n 1)
+                    local job_id_sub=$(echo $active_job_sub | cut -d' ' -f1)
+                    local node_name_sub=$(echo $active_job_sub | cut -d' ' -f2)
+                    local job_state_sub=$(echo $active_job_sub | cut -d' ' -f3)
+                    
+                    local fallback_url_sub="TIDAK AKTIF"
+                    local active_port_sub="N/A"
+                    local ollama_running_sub="MATI"
+                    
+                    if [ -n "$job_id_sub" ]; then
+                        local ollama_active_sub=$(ssh -o StrictHostKeyChecking=no ${node_name_sub} "ps -u $USER -f | grep ollama | grep -v grep" 2>/dev/null | grep -v "sbatch_aspri" || echo "")
+                        if [ -n "$ollama_active_sub" ]; then
+                            ollama_running_sub="RUNNING"
+                            active_port_sub=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_sbatch.log" | tail -n 1 | cut -d' ' -f2)
+                            active_port_sub=${active_port_sub:-N/A}
+                            fallback_url_sub=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_sbatch.log" | tail -n 1)
+                            fallback_url_sub=${fallback_url_sub:-TIDAK AKTIF}
+                        else
+                            ollama_running_sub="MATI / STANDBY"
+                        fi
+                    fi
+                    
+                    clear
+                    echo "============================================="
+                    echo "       Manajemen Layanan AspriAI"
+                    echo "============================================="
+                    echo "Status Saat Ini:"
+                    if [ -z "$job_id_sub" ]; then
+                        echo -e "• Sewa GPU (Slurm)  : \033[91mTIDAK AKTIF\033[0m"
+                        echo -e "• Ollama Server     : \033[91mMATI\033[0m (Butuh Booking GPU)"
+                        echo -e "• Port Compute Node : \033[91mN/A\033[0m"
+                    else
+                        echo -e "• Sewa GPU (Slurm)  : \033[92mAKTIF\033[0m (Job ID: ${job_id_sub} di Node: ${node_name_sub})"
+                        if [ "$ollama_running_sub" = "RUNNING" ]; then
+                            echo -e "• Ollama Server     : \033[92mRUNNING\033[0m (di compute node ${node_name_sub})"
+                            echo -e "• Port Compute Node : \033[96m${active_port_sub}\033[0m"
+                        else
+                            echo -e "• Ollama Server     : \033[93m${ollama_running_sub}\033[0m"
+                            echo -e "• Port Compute Node : \033[91mN/A\033[0m"
+                        fi
+                    fi
+                    
+                    echo "============================================="
+                    echo "       Manajemen Layanan Ollama"
+                    echo "============================================="
+                    if [ "$ollama_running_sub" = "RUNNING" ]; then
+                        echo -e "• URL : \033[92mhttps://backend-ollama.penelitian.my.id\033[0m"
+                        if [ "$fallback_url_sub" != "TIDAK AKTIF" ]; then
+                            echo -e "• URL Fallback : \033[92m${fallback_url_sub}\033[0m"
+                        else
+                            echo -e "• URL Fallback : \033[91m${fallback_url_sub}\033[0m"
+                        fi
+                        echo -e "• Port : \033[96m11434\033[0m"
+                    else
+                        echo -e "• URL : https://backend-ollama.penelitian.my.id (MATI)"
+                        echo -e "• URL Fallback : \033[91m${fallback_url_sub}\033[0m"
+                        echo -e "• Port : 11434"
+                    fi
+                    echo "---------------------------------------------"
+                    echo "Sub Menu Ollama:"
+                    echo "1. 🚀 Jalankan Server Ollama (di Compute Node aktif)"
+                    echo "2. 🛑 Hentikan Server Ollama (Sewa GPU tetap aktif)"
+                    echo "3. 🔄 Restart Server Ollama"
+                    echo "4. 📋 Lihat Log Runtime Ollama (Log & Tunnel)"
+                    echo "5. ⚙️ Instal Ulang Modul (setup.sh --install)"
+                    echo "Enter untuk kembali ke Manajemen Layanan AspriAI"
+                    echo "---------------------------------------------"
+                    read -p "Pilih aksi [1-5]: " ollama_choice
+                    
+                    if [ -z "$ollama_choice" ]; then
+                        break
+                    fi
+                    
+                    case $ollama_choice in
+                        1)
+                            if [ -z "$job_id_sub" ]; then
+                                echo -e "\033[91m⚠️ Anda belum menyewa GPU! Silakan jalankan menu utama Opsi 1 terlebih dahulu.\033[0m"
+                                sleep 2
+                            elif [ "$job_state_sub" != "R" ]; then
+                                echo -e "\033[93m⏳ Job booking GPU Anda masih dalam antrean (PENDING). Tunggu hingga RUNNING.\033[0m"
+                                sleep 2
+                            else
+                                # Pastikan server belum running
+                                local is_running=$(ssh -o StrictHostKeyChecking=no ${node_name_sub} "ps -u $USER -f | grep ollama | grep -v grep" 2>/dev/null | grep -v "sbatch_aspri" || echo "")
+                                if [ ! -z "$is_running" ]; then
+                                    echo -e "\033[93mℹ️ Server Ollama sudah berjalan di node ${node_name_sub}.\033[0m"
+                                    sleep 1
+                                else
+                                    echo "Meluncurkan Server Ollama modular di node ${node_name_sub}..."
+                                    ssh -o StrictHostKeyChecking=no ${node_name_sub} "nohup bash ${aspri_dir}/sbatch_aspri_service.sh > ${aspri_dir}/logs/nohup_runner.log 2>&1 &"
+                                    echo "⏳ Menunggu inisiasi Ollama & Cloudflare Tunnel..."
+                                    local wait_sec=0
+                                    while [ $wait_sec -lt 15 ]; do
+                                        local check_port=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_sbatch.log" | tail -n 1 | cut -d' ' -f2 || echo "")
+                                        local check_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_sbatch.log" | tail -n 1 || echo "")
+                                        if [ -n "$check_port" ] && [ -n "$check_url" ]; then
+                                            break
+                                        fi
+                                        sleep 2
+                                        wait_sec=$((wait_sec + 2))
+                                    done
+                                    echo -e "\033[92m✅ Server Ollama & Tunnel berhasil diluncurkan!\033[0m"
+                                    sleep 1.5
+                                fi
+                            fi
+                            ;;
+                        2)
+                            if [ -z "$job_id_sub" ] || [ "$job_state_sub" != "R" ]; then
+                                echo -e "\033[91m⚠️ Tidak ada server aktif di compute node yang bisa dihentikan.\033[0m"
+                                sleep 1.5
+                            else
+                                echo "Menghentikan proses server Ollama di node ${node_name_sub}..."
+                                ssh -o StrictHostKeyChecking=no ${node_name_sub} "pkill -u \$USER -f ollama-0.24.sif || true; pkill -u \$USER -f cloudflared || true; pkill -u \$USER -f 'ssh -o StrictHostKeyChecking=no'" 2>/dev/null || true
+                                pkill -f "11434:localhost" 2>/dev/null || true
+                                echo -e "\033[92m✅ Server Ollama di node ${node_name_sub} berhasil dihentikan.\033[0m"
+                                sleep 1.5
+                            fi
+                            ;;
+                        3)
+                            if [ -z "$job_id_sub" ] || [ "$job_state_sub" != "R" ]; then
+                                echo -e "\033[91m⚠️ Tidak ada server aktif di compute node yang bisa di-restart.\033[0m"
+                                sleep 1.5
+                            else
+                                echo "Melakukan restart Server Ollama di node ${node_name_sub}..."
+                                echo "1. Menghentikan proses server lama..."
+                                ssh -o StrictHostKeyChecking=no ${node_name_sub} "pkill -u \$USER -f ollama-0.24.sif || true; pkill -u \$USER -f cloudflared || true; pkill -u \$USER -f 'ssh -o StrictHostKeyChecking=no'" 2>/dev/null || true
+                                pkill -f "11434:localhost" 2>/dev/null || true
+                                sleep 3
+                                
+                                echo "2. Meluncurkan Server Ollama kembali..."
+                                ssh -o StrictHostKeyChecking=no ${node_name_sub} "nohup bash ${aspri_dir}/sbatch_aspri_service.sh > ${aspri_dir}/logs/nohup_runner.log 2>&1 &"
+                                echo "⏳ Menunggu inisiasi Ollama & Cloudflare Tunnel..."
+                                local wait_sec=0
+                                while [ $wait_sec -lt 15 ]; do
+                                    local check_port=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_sbatch.log" | tail -n 1 | cut -d' ' -f2 || echo "")
+                                    local check_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_sbatch.log" | tail -n 1 || echo "")
+                                    if [ -n "$check_port" ] && [ -n "$check_url" ]; then
+                                        break
+                                    fi
+                                    sleep 2
+                                    wait_sec=$((wait_sec + 2))
+                                done
+                                echo -e "\033[92m✅ Server Ollama berhasil di-restart dan diinisiasi!\033[0m"
+                                sleep 1.5
+                            fi
+                            ;;
+                        4)
+                            clear
+                            echo "=== RUNTIME OLLAMA LOG ==="
+                            if [ -f "${aspri_dir}/logs/ollama_sbatch.log" ]; then
+                                tail -n 25 "${aspri_dir}/logs/ollama_sbatch.log"
+                            else
+                                echo "Log Ollama belum tersedia."
+                            fi
+                            echo -e "\n=== TUNNEL LOG ==="
+                            if [ -f "${aspri_dir}/logs/tunnel_sbatch.log" ]; then
+                                tail -n 10 "${aspri_dir}/logs/tunnel_sbatch.log"
+                            else
+                                echo "Log Tunnel belum tersedia."
+                            fi
+                            echo ""
+                            read -p "Tekan Enter untuk kembali..."
+                            ;;
+                        5)
+                            echo "Menginisiasi ulang modul Ollama..."
+                            if [ -f "${aspri_dir}/setup.sh" ]; then
+                                bash "${aspri_dir}/setup.sh" --install
+                            else
+                                echo -e "\033[91m❌ Berkas setup.sh tidak ditemukan di ${aspri_dir}!\033[0m"
+                            fi
+                            read -p "Tekan Enter untuk melanjutkan..."
+                            ;;
+                        *)
+                            echo "Pilihan tidak valid!"
+                            sleep 1
+                            ;;
+                    esac
+                done
+                ;;
+            5)
+                # Submenu Chat via Ollama
+                while true; do
+                    clear
+                    echo "============================================="
+                    echo "       Sub Menu Chat via Ollama"
+                    echo "============================================="
+                    
+                    # Cek real-time status Ollama
+                    local active_job_chat=$(squeue -u $USER -n vnot -h -o "%i %N %t" | head -n 1)
+                    local job_id_chat=$(echo $active_job_chat | cut -d' ' -f1)
+                    local node_name_chat=$(echo $active_job_chat | cut -d' ' -f2)
+                    
+                    local ollama_running_chat=0
+                    if [ -n "$job_id_chat" ]; then
+                        local ollama_active_chat=$(ssh -o StrictHostKeyChecking=no ${node_name_chat} "ps -u $USER -f | grep ollama | grep -v grep" 2>/dev/null | grep -v "sbatch_aspri" || echo "")
+                        if [ -n "$ollama_active_chat" ]; then
+                            ollama_running_chat=1
+                        fi
+                    fi
+                    
+                    if [ $ollama_running_chat -eq 0 ]; then
+                        echo -e "\033[91m⚠️ Server Ollama tidak aktif! Silakan jalankan Server Ollama terlebih dahulu.\033[0m"
+                        echo "============================================="
+                        read -p "Tekan Enter untuk kembali..."
+                        break
+                    fi
+                    
+                    # Dapatkan port compute node dinamis
+                    local active_port_chat=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_sbatch.log" | tail -n 1 | cut -d' ' -f2 || echo "N/A")
+                    
+                    # Memetakan model terinstall secara dinamis menggunakan python
+                    local local_model_list=()
+                    local external_model_list=()
+                    while read -r line; do
+                        if [ -n "$line" ]; then
+                            local model_name=$(echo "$line" | cut -d'|' -f1)
+                            local model_src=$(echo "$line" | cut -d'|' -f2)
+                            if [ "$model_src" = "local" ]; then
+                                local_model_list+=("$model_name")
+                            else
+                                external_model_list+=("$model_name")
+                            fi
+                        fi
+                    done < <(python3 -c "
+import urllib.request, json, os
+
+manifests_dir = '${aspri_dir}/models/manifests'
+
+try:
+    response = urllib.request.urlopen('http://localhost:11434/api/tags', timeout=3)
+    data = json.loads(response.read().decode())
+    for m in data.get('models', []):
+        model_name = m.get('name', '')
+        if not model_name:
+            continue
+            
+        # Parse name and tag
+        if ':' in model_name:
+            name, tag = model_name.split(':', 1)
+        else:
+            name, tag = model_name, 'latest'
+            
+        if '/' in name:
+            parts = name.split('/', 1)
+            namespace, mname = parts[0], parts[1]
+        else:
+            namespace, mname = 'library', name
+            
+        manifest_path = os.path.join(manifests_dir, 'registry.ollama.ai', namespace, mname, tag)
+        
+        if os.path.exists(manifest_path):
+            print(f'{model_name}|local')
+        else:
+            print(f'{model_name}|external')
+except Exception:
+    pass
+" 2>/dev/null)
+                    
+                    echo "Model yang Terinstall (Local):"
+                    local idx=1
+                    if [ ${#local_model_list[@]} -eq 0 ]; then
+                        echo -e "  \033[90m(Tidak ada model lokal yang terinstall)\033[0m"
+                    else
+                        for model in "${local_model_list[@]}"; do
+                            echo -e "${idx}) 🤖 ${model}"
+                            idx=$((idx + 1))
+                        done
+                    fi
+                    echo "---------------------------------------------"
+                    echo "0) 📥 Download Model Baru (ollama pull)"
+                    echo "L) 🌐 Lihat Model External"
+                    echo "Enter untuk kembali ke Manajemen Layanan AspriAI"
+                    echo "---------------------------------------------"
+                    
+                    local max_choice=$((idx - 1))
+                    if [ $max_choice -eq 0 ]; then
+                        read -p "Pilih aksi [0, L]: " chat_choice
+                    else
+                        read -p "Pilih aksi [0-$max_choice, L]: " chat_choice
+                    fi
+                    
+                    if [ -z "$chat_choice" ]; then
+                        break
+                    fi
+                    
+                    if [ "$chat_choice" = "0" ]; then
+                        echo "============================================="
+                        echo "           Download Model Ollama"
+                        echo "============================================="
+                        echo "💡 Nama model populer: llama3, qwen2.5, mistral, gemma2, phi3"
+                        read -p "Masukkan nama model yang ingin diunduh (contoh: qwen2.5:7b): " model_to_pull
+                        
+                        if [ -n "$model_to_pull" ]; then
+                            echo -e "\nMemulai unduhan model \033[92m${model_to_pull}\033[0m..."
+                            echo -e "Menghubungkan ke compute node \033[96m${node_name_chat}\033[0m..."
+                            sleep 1
+                            
+                            # Jalankan pull interaktif via ssh tty allocation
+                            ssh -t -o StrictHostKeyChecking=no ${node_name_chat} "export OLLAMA_HOST=127.0.0.1:${active_port_chat}; export SINGULARITYENV_OLLAMA_HOST=127.0.0.1:${active_port_chat}; singularity exec --bind ${aspri_dir}/models:/root/.ollama ${aspri_dir}/ollama-0.24.sif ollama pull ${model_to_pull}"
+                            
+                            echo -e "\nProses unduhan model selesai."
+                            read -p "Tekan Enter untuk memuat ulang daftar model..."
+                        else
+                            echo "⚠️ Nama model tidak boleh kosong."
+                            sleep 1.5
+                        fi
+                    elif [[ "$chat_choice" =~ ^[lL]$ ]]; then
+                        clear
+                        echo "============================================="
+                        echo "       Daftar Model Eksternal (Port Clash)"
+                        echo "============================================="
+                        if [ ${#external_model_list[@]} -eq 0 ]; then
+                            echo "Tidak ada model eksternal yang terdeteksi."
+                        else
+                            local ext_idx=1
+                            for ext_model in "${external_model_list[@]}"; do
+                                echo "${ext_idx}) 🌐 ${ext_model}"
+                                ext_idx=$((ext_idx + 1))
+                            done
+                            echo "---------------------------------------------"
+                            echo "💡 Model eksternal ini milik pengguna lain di server Slurm."
+                            echo "   Untuk menggunakannya, Anda harus mendownloadnya secara lokal"
+                            echo "   menggunakan Opsi 0."
+                        fi
+                        echo "============================================="
+                        read -p "Tekan Enter untuk kembali..."
+                    elif [[ "$chat_choice" =~ ^[0-9]+$ ]] && [ "$chat_choice" -ge 1 ] && [ "$chat_choice" -le "$max_choice" ]; then
+                        local selected_model="${local_model_list[$((chat_choice - 1))]}"
+                        
+                        echo -e "\nMemulai sesi chat interaktif dengan \033[92m${selected_model}\033[0m..."
+                        echo -e "Hubungkan ke compute node \033[96m${node_name_chat}\033[0m di port \033[96m${active_port_chat}\033[0m..."
+                        echo -e "Gunakan \033[93m/exit\033[0m atau \033[93mCtrl+D\033[0m untuk keluar dari sesi chat.\n"
+                        sleep 1
+                        
+                        # Jalankan interactive chat via ssh tty allocation
+                        ssh -t -o StrictHostKeyChecking=no ${node_name_chat} "export OLLAMA_HOST=127.0.0.1:${active_port_chat}; export SINGULARITYENV_OLLAMA_HOST=127.0.0.1:${active_port_chat}; singularity exec --bind ${aspri_dir}/models:/root/.ollama ${aspri_dir}/ollama-0.24.sif ollama run ${selected_model}"
+                        
+                        echo -e "\nSesi chat dengan \033[92m${selected_model}\033[0m selesai."
+                        read -p "Tekan Enter untuk kembali ke daftar model..."
+                    else
+                        echo "Pilihan tidak valid!"
+                        sleep 1
+                    fi
+                done
+                ;;
+            6)
+                # Placeholder ComfyUI
+                clear
+                echo "============================================="
+                echo "       Manajemen Layanan ComfUI"
+                echo "============================================="
+                echo -e "ℹ️ Layanan ComfUI belum dikonfigurasi atau diinstal."
+                echo -e "  Status saat ini masih berupa placeholder."
+                echo "============================================="
+                read -p "Tekan Enter untuk kembali ke Manajemen Layanan AspriAI..."
+                ;;
+            7)
+                echo -e "\033[93mℹ️ Pilihan ini belum diimplementasikan.\033[0m"
+                sleep 1.5
+                ;;
+            *)
+                echo "Pilihan tidak valid!"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
 while true; do
     clear
     echo "============================================="
@@ -328,9 +896,10 @@ while true; do
     echo "5. 🗑️ Manajemen Sesi TMUX"
     echo "6. ☁️ Manajemen Cloudflare Tunnel"
     echo "7. 🖥️ Web RVM"
+    echo "8. 🤖 Manajemen AspriAI (Ollama & WebUI)"
     echo -e "\033[91m0. ❌ Keluar Menu\033[0m"
     echo "============================================="
-    read -p "Pilih menu [0-7]: " pilihan
+    read -p "Pilih menu [0-8]: " pilihan
 
     case $pilihan in
         1)
@@ -467,6 +1036,9 @@ while true; do
             ;;
         7)
             manage_web_rvm
+            ;;
+        8)
+            manage_aspri_ai
             ;;
         0)
             echo "Terima kasih telah menggunakan sistem ini."
