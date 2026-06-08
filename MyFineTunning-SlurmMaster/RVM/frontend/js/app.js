@@ -17,6 +17,12 @@
     // =========================================================================
     const API_BASE = detectApiBase();
 
+    // Cloudflare Zero Trust Service Token untuk koneksi API eksternal (diinject oleh backend /env.js)
+    const CF_HEADERS = window.RVM_ENV || {
+        "CF-Access-Client-Id": "",
+        "CF-Access-Client-Secret": ""
+    };
+
     function detectApiBase() {
         if (
             window.location.hostname === "localhost" ||
@@ -24,7 +30,10 @@
         ) {
             return `${window.location.protocol}//${window.location.hostname}:8502`;
         }
-        return "https://backend-rvm.penelitian.my.id";
+        // Gunakan relative path agar API request masuk ke server frontend (port 8501)
+        // yang akan mem-proxy-kannya ke backend lokal (port 8502).
+        // Ini menghindari blokir CORS OPTIONS dari Cloudflare Access.
+        return "";
     }
 
     // =========================================================================
@@ -121,6 +130,7 @@
     async function checkHealth() {
         try {
             const res = await fetch(`${API_BASE}/api/health`, {
+                headers: CF_HEADERS,
                 signal: AbortSignal.timeout(10000),
             });
             if (res.ok) {
@@ -158,6 +168,7 @@
     async function fetchModels() {
         try {
             const res = await fetch(`${API_BASE}/api/models`, {
+                headers: CF_HEADERS,
                 signal: AbortSignal.timeout(15000),
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -807,6 +818,7 @@
         try {
             const res = await fetch(`${API_BASE}/api/evaluate`, {
                 method: "POST",
+                headers: CF_HEADERS,
                 body: formData,
             });
 
@@ -866,6 +878,7 @@
         queuePollInterval = setInterval(async () => {
             try {
                 const res = await fetch(`${API_BASE}/api/queue/status`, {
+                    headers: CF_HEADERS,
                     signal: AbortSignal.timeout(5000),
                 });
                 if (res.ok) {

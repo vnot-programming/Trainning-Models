@@ -129,43 +129,15 @@ start_backend() {
         # Buat sesi baru
         "$TMUX_BIN" new-session -d -s "$SESSION_BACKEND"
         
-        # Kirim perintah pertama: attach GPU
-        "$TMUX_BIN" send-keys -t "$SESSION_BACKEND" "cd ${ROOT_DIR}/utils && ./attach_gpu.sh" C-m
+        # Jalankan RVM Backend Daemon di dalam Tmux
+        "$TMUX_BIN" send-keys -t "$SESSION_BACKEND" "bash ${ROOT_DIR}/RVM/run_backend_daemon.sh" C-m
         
-        echo -e "  ${YELLOW}➔ Menghubungkan ke Node GPU (menunggu 5 detik agar stabil)...${NC}"
-        sleep 5
-        
-        # Kirim perintah kedua: aktifkan conda di compute node
-        "$TMUX_BIN" send-keys -t "$SESSION_BACKEND" "source $CONDA_ACTIVATE $CONDA_ENV" C-m
-        
-        # Kirim perintah ketiga: masuk root direktori
-        "$TMUX_BIN" send-keys -t "$SESSION_BACKEND" "cd ${ROOT_DIR}" C-m
-        
-        # Kirim perintah keempat: jalankan reverse tunnel di background compute node (tidak butuh tmux rvm_tunnel terpisah!)
-        "$TMUX_BIN" send-keys -t "$SESSION_BACKEND" "ssh -N -f -R ${BACKEND_PORT}:localhost:${BACKEND_PORT} slurmmaster" C-m
-        
-        # Kirim perintah kelima: jalankan Flask API dengan tee ke backend.log
-        "$TMUX_BIN" send-keys -t "$SESSION_BACKEND" "python -u RVM/backend/visual_eval_api.py 2>&1 | tee RVM/backend/logs/backend.log" C-m
-        
-        echo -e "  ${YELLOW}➔ Menunggu Backend berjalan di port ${BACKEND_PORT} (timeout 15s)...${NC}"
-        local timeout=15
-        local elapsed=0
-        while ! ss -tln 2>/dev/null | grep -q ":${BACKEND_PORT} " && [ $elapsed -lt $timeout ]; do
-            echo -ne "  ${CYAN}⏳ Loading... ($elapsed s)\r${NC}"
-            sleep 1
-            elapsed=$((elapsed+1))
-        done
-        echo ""
-
-        if [ $elapsed -ge $timeout ]; then
-            echo -e "  ${RED}⚠️  Timeout! Backend (Port ${BACKEND_PORT}) mungkin gagal berjalan.${NC}"
-            echo -e "  ${YELLOW}➔ Cek log dengan: tmux attach -t $SESSION_BACKEND${NC}"
-        else
-            echo -e "  ${GREEN}✅ Backend berhasil berjalan dan listening di port ${BACKEND_PORT}!${NC}"
-            echo -e "  ${CYAN}➔ Gunakan perintah berikut untuk masuk dan memantau log backend:${NC}"
-            echo -e "     tmux attach -t $SESSION_BACKEND"
-            echo -e "  ${YELLOW}➔ Tekan Ctrl+B lalu D untuk keluar (detach) dari sesi tersebut.${NC}\n"
-        fi
+        echo -e "  ${YELLOW}➔ Daemon Auto-Resume berjalan di Tmux '$SESSION_BACKEND'...${NC}"
+        echo -e "  ${YELLOW}➔ Daemon ini akan otomatis menunggu dan menautkan GPU untuk Backend Anda.${NC}"
+        echo -e "  ${GREEN}✅ Tmux '$SESSION_BACKEND' berhasil dikonfigurasi!${NC}"
+        echo -e "  ${CYAN}➔ Gunakan perintah berikut untuk masuk dan memantau log backend:${NC}"
+        echo -e "     tmux attach -t $SESSION_BACKEND"
+        echo -e "  ${YELLOW}➔ Tekan Ctrl+B lalu D untuk keluar (detach) dari sesi tersebut.${NC}\n"
     else
         # Jika dipanggil langsung di dalam compute node (jarang digunakan langsung, namun disediakan)
         echo -e "  ${GREEN}✅ Menjalankan Backend API langsung di Compute Node...${NC}"

@@ -2588,3 +2588,27 @@
 - **Status saat ini:** Selesai ✅
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - Pastikan untuk melakukan booking ulang GPU terlebih dahulu apabila ingin menguji coba secara utuh (agar SSH tunnel lama dibersihkan dan port 11434 Login Node dibebaskan dari terowongan lama).
+
+---
+
+### [Entri 059] — Implementasi Arsitektur RVM Backend Auto-Resume (Watchdog Daemon)
+
+- **Tanggal/Waktu:** 2026-06-08 22:41 WIB
+- **Tugas yang diselesaikan:**
+  - Menganalisis isu `visual_eval_api.py` yang mati (crash) karena koneksi SSH ke Compute Node terputus akibat Slurm job (GPU) dibatalkan secara sistemik (Time Limit/OOM).
+  - Merancang arsitektur **Watchdog Daemon** (`run_backend_daemon.sh`) yang berjalan secara independen di dalam sesi TMUX `rvm_backend` pada *Login Node*.
+  - Logika daemon meliputi mekanisme *polling* `squeue` untuk mencari GPU yang tersedia, melakukan *SSH* secara otomatis ke GPU Compute Node yang berhasil dibooking, membuka SSH Reverse Tunnel `8502`, dan menjalankan kembali (auto-resume) server Flask. Jika node mati lagi, skrip secara pintar kembali menunggu dan me-reconnect tanpa campur tangan pengguna.
+  - Mengubah fungsi peluncuran pada `start_rvm.sh` (`start_backend()`) agar menggunakan eksekusi tunggal daemon wrapper tersebut dibanding sekumpulan `send-keys` statis.
+  - Memastikan *stop commands* mematikan TMUX session agar daemon dapat diakhiri secara manual oleh user saat menu di `myslurm.sh` diklik (Stop All / Stop Backend).
+- **File yang diubah/dibuat:**
+  - `RVM/run_backend_daemon.sh` [DIBUAT BARU]
+  - `RVM/start_rvm.sh` [DIMODIFIKASI]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - RVM Backend kini akan selalu hidup ("bangkit dari kematian") selama script Booking GPU (`book_gpu.py`) aktif mencarikan alokasi GPU.
+  - Jika ingin membunuh layanan RVM API secara permanen, ikuti instruksi dari menu `myslurm.sh` (matikan TMUX).
+- **Tanggal/Waktu:** Mon Jun  8 23:25:22 +07 2026
+- **Tugas yang diselesaikan:** Memperbaiki 'Failed to load models' akibat CORS & CF Access di RVM. Menambahkan Reverse Proxy via urllib di serve_frontend.py agar Service Token tidak terekspos ke frontend, serta bypass error 403 preflight OPTIONS. Memperbarui app.js untuk hit /api lokal.
+- **File yang diubah/dibuat:** RVM/serve_frontend.py, RVM/frontend/js/app.js, RVM/backend/visual_eval_api.py
+- **Status saat ini:** Selesai
+- **Catatan untuk AI selanjutnya:** Frontend kini bisa load model. Validasi pipeline evaluasi jika ada yang masih error.

@@ -332,45 +332,41 @@ manage_aspri_ai() {
         local ollama_running="MATI"
         
         if [ -n "$job_id" ]; then
-            local ollama_active=$(ssh -o StrictHostKeyChecking=no ${node_name} "ps -u $USER -f | grep ollama | grep -v grep" 2>/dev/null | grep -v "sbatch_aspri" || echo "")
+            local ollama_active=$(pgrep -f "run_ollama_daemon.sh" || echo "")
             if [ -n "$ollama_active" ]; then
                 ollama_running="RUNNING"
-                active_port=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_sbatch.log" | tail -n 1 | cut -d' ' -f2)
+                active_port=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_daemon.log" 2>/dev/null | tail -n 1 | cut -d' ' -f2)
                 active_port=${active_port:-N/A}
-                fallback_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_sbatch.log" | tail -n 1)
+                fallback_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_daemon.log" | tail -n 1)
                 fallback_url=${fallback_url:-TIDAK AKTIF}
             else
                 ollama_running="MATI / STANDBY"
             fi
         fi
         
-        # Deteksi status kesehatan AspriAI Core & Desk secara real-time
-        local core_status="Unhealthy"
-        local env_file="/data/users/g6717500336/singularity/AspriAI/.env"
-        local cf_id=""
-        local cf_secret=""
-        if [ -f "$env_file" ]; then
-            cf_id=$(grep -E "^CF-Access-Client-Id=" "$env_file" | cut -d'=' -f2 | tr -d '\r' | tr -d '\n')
-            cf_secret=$(grep -E "^CF-Access-Client-Secret=" "$env_file" | cut -d'=' -f2 | tr -d '\r' | tr -d '\n')
-        fi
+        # Deteksi status kesehatan AspriAI Core & subsistem secara real-time dari Gateway
+        local gateway_json=$(curl -s --max-time 2 http://127.0.0.1:11434/health || echo "{}")
         
-        if [ -n "$cf_id" ] && [ -n "$cf_secret" ]; then
-            local core_http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-                -H "CF-Access-Client-Id: $cf_id" \
-                -H "CF-Access-Client-Secret: $cf_secret" \
-                https://backend-ollama.penelitian.my.id/v1/health --max-time 2)
-            if [ "$core_http_code" = "200" ]; then
-                core_status="Healthy"
-            fi
-        else
-            local core_http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:11434/v1/health --max-time 2)
-            if [ "$core_http_code" = "200" ]; then
-                core_status="Healthy"
-            fi
+        local core_status="Unhealthy"
+        if [ "$(echo "$gateway_json" | jq -r '.status_code' 2>/dev/null)" = "200" ]; then
+            core_status="Healthy"
+        fi
+
+        local ollama_engine_status="Unhealthy"
+        local ollama_engine_url="https://backend-ollama.penelitian.my.id/v1/health"
+        if [ "$(echo "$gateway_json" | jq -r '.services[] | select(.name=="Ollama Server") | .status' 2>/dev/null)" = "online" ]; then
+            ollama_engine_status="Healthy"
+        fi
+
+        local rvm_engine_status="Unhealthy"
+        local rvm_engine_url="https://backend-rvm.penelitian.my.id/api/health"
+        if [ "$(echo "$gateway_json" | jq -r '.services[] | select(.name=="RVM Server") | .status' 2>/dev/null)" = "online" ]; then
+            rvm_engine_status="Healthy"
         fi
         
         local desk_status="Unhealthy"
-        local desk_http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST https://xyz.penelitian.my.id/v1/health --max-time 2)
+        local desk_url="https://aspri.vnot.my.id/v1/health"
+        local desk_http_code=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$desk_url" --max-time 2)
         if [ "$desk_http_code" = "200" ]; then
             desk_status="Healthy"
         fi
@@ -396,15 +392,27 @@ manage_aspri_ai() {
         fi
         
         if [ "$core_status" = "Healthy" ]; then
-            echo -e "• AspriAI Core : \033[92mHealthy\033[0m (POST ke Endpoint https://backend-ollama.penelitian.my.id/v1/health)"
+            echo -e "• AspriAI Core  : \033[92mHealthy\033[0m (Endpoint: https://aspri-core.vnot.my.id/health)"
         else
-            echo -e "• AspriAI Core : \033[91mUnhealthy\033[0m (POST ke Endpoint https://backend-ollama.penelitian.my.id/v1/health)"
+            echo -e "• AspriAI Core  : \033[91mUnhealthy\033[0m (Endpoint: https://aspri-core.vnot.my.id/health)"
+        fi
+
+        if [ "$ollama_engine_status" = "Healthy" ]; then
+            echo -e "• Ollama Engine : \033[92mHealthy\033[0m ($ollama_engine_url)"
+        else
+            echo -e "• Ollama Engine : \033[91mUnhealthy\033[0m ($ollama_engine_url)"
+        fi
+
+        if [ "$rvm_engine_status" = "Healthy" ]; then
+            echo -e "• RVM Engine    : \033[92mHealthy\033[0m ($rvm_engine_url)"
+        else
+            echo -e "• RVM Engine    : \033[91mUnhealthy\033[0m ($rvm_engine_url)"
         fi
         
         if [ "$desk_status" = "Healthy" ]; then
-            echo -e "• AspriAI Desk : \033[92mHealthy\033[0m (POST ke Endpoint https://xyz.penelitian.my.id/v1/health)"
+            echo -e "• AspriAI Desk  : \033[92mHealthy\033[0m ($desk_url)"
         else
-            echo -e "• AspriAI Desk : \033[91mUnhealthy\033[0m (POST ke Endpoint https://xyz.penelitian.my.id/v1/health)"
+            echo -e "• AspriAI Desk  : \033[91mUnhealthy\033[0m ($desk_url)"
         fi
         
         # Cetak Status Ollama
@@ -469,16 +477,16 @@ manage_aspri_ai() {
                 if [ -n "$job_id" ]; then
                     local current_job_state=$(squeue -j $job_id -h -o "%t" 2>/dev/null | tr -d ' ' || echo "")
                     if [ "$current_job_state" = "R" ]; then
-                        echo "Memeriksa status Server Ollama di compute node ${node_name}..."
-                        local is_ollama_running_node=$(ssh -o StrictHostKeyChecking=no ${node_name} "ps -u $USER -f | grep ollama | grep -v grep" 2>/dev/null | grep -v "sbatch_aspri" || echo "")
+                        echo "Memeriksa status Server Ollama daemon..."
+                        local is_ollama_running_node=$(pgrep -f "run_ollama_daemon.sh" || echo "")
                         if [ -z "$is_ollama_running_node" ]; then
-                            echo "Meluncurkan Server Ollama secara otomatis di node ${node_name}..."
-                            ssh -o StrictHostKeyChecking=no ${node_name} "nohup bash ${aspri_dir}/sbatch_aspri_service.sh > ${aspri_dir}/logs/nohup_runner.log 2>&1 &"
+                            echo "Meluncurkan Server Ollama Daemon secara otomatis..."
+                            nohup bash ${aspri_dir}/run_ollama_daemon.sh > ${aspri_dir}/logs/nohup_daemon.log 2>&1 &
                             echo "⏳ Menunggu inisiasi Ollama & Cloudflare Tunnel..."
                             local wait_sec=0
                             while [ $wait_sec -lt 15 ]; do
-                                local check_port=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_sbatch.log" | tail -n 1 | cut -d' ' -f2 || echo "")
-                                local check_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_sbatch.log" | tail -n 1 || echo "")
+                                local check_port=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_daemon.log" 2>/dev/null | tail -n 1 | cut -d' ' -f2 || echo "")
+                                local check_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_daemon.log" | tail -n 1 || echo "")
                                 if [ -n "$check_port" ] && [ -n "$check_url" ]; then
                                     break
                                 fi
@@ -487,7 +495,7 @@ manage_aspri_ai() {
                             done
                             echo -e "\033[92m✅ Server Ollama & Tunnel berhasil diinisiasi secara otomatis!\033[0m"
                         else
-                            echo -e "\033[93mℹ️ Server Ollama sudah berjalan di node ${node_name}.\033[0m"
+                            echo -e "\033[93mℹ️ Server Ollama Daemon sudah berjalan di latar belakang.\033[0m"
                         fi
                     else
                         echo -e "\033[93m⏳ Sewa GPU (Job ID: ${job_id}) masih dalam status ${current_job_state}. Server Ollama akan aktif saat job RUNNING.\033[0m"
@@ -526,12 +534,12 @@ manage_aspri_ai() {
                     local ollama_running_sub="MATI"
                     
                     if [ -n "$job_id_sub" ]; then
-                        local ollama_active_sub=$(ssh -o StrictHostKeyChecking=no ${node_name_sub} "ps -u $USER -f | grep ollama | grep -v grep" 2>/dev/null | grep -v "sbatch_aspri" || echo "")
+                        local ollama_active_sub=$(pgrep -f "run_ollama_daemon.sh" || echo "")
                         if [ -n "$ollama_active_sub" ]; then
                             ollama_running_sub="RUNNING"
-                            active_port_sub=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_sbatch.log" | tail -n 1 | cut -d' ' -f2)
+                            active_port_sub=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_daemon.log" 2>/dev/null | tail -n 1 | cut -d' ' -f2)
                             active_port_sub=${active_port_sub:-N/A}
-                            fallback_url_sub=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_sbatch.log" | tail -n 1)
+                            fallback_url_sub=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_daemon.log" | tail -n 1)
                             fallback_url_sub=${fallback_url_sub:-TIDAK AKTIF}
                         else
                             ollama_running_sub="MATI / STANDBY"
@@ -598,19 +606,19 @@ manage_aspri_ai() {
                                 echo -e "\033[93m⏳ Job booking GPU Anda masih dalam antrean (PENDING). Tunggu hingga RUNNING.\033[0m"
                                 sleep 2
                             else
-                                # Pastikan server belum running
-                                local is_running=$(ssh -o StrictHostKeyChecking=no ${node_name_sub} "ps -u $USER -f | grep ollama | grep -v grep" 2>/dev/null | grep -v "sbatch_aspri" || echo "")
+                                # Pastikan daemon belum running
+                                local is_running=$(pgrep -f "run_ollama_daemon.sh" || echo "")
                                 if [ ! -z "$is_running" ]; then
-                                    echo -e "\033[93mℹ️ Server Ollama sudah berjalan di node ${node_name_sub}.\033[0m"
+                                    echo -e "\033[93mℹ️ Server Ollama Daemon sudah berjalan di latar belakang.\033[0m"
                                     sleep 1
                                 else
-                                    echo "Meluncurkan Server Ollama modular di node ${node_name_sub}..."
-                                    ssh -o StrictHostKeyChecking=no ${node_name_sub} "nohup bash ${aspri_dir}/sbatch_aspri_service.sh > ${aspri_dir}/logs/nohup_runner.log 2>&1 &"
+                                    echo "Meluncurkan Server Ollama Daemon di latar belakang..."
+                                    nohup bash ${aspri_dir}/run_ollama_daemon.sh > ${aspri_dir}/logs/nohup_daemon.log 2>&1 &
                                     echo "⏳ Menunggu inisiasi Ollama & Cloudflare Tunnel..."
                                     local wait_sec=0
                                     while [ $wait_sec -lt 15 ]; do
-                                        local check_port=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_sbatch.log" | tail -n 1 | cut -d' ' -f2 || echo "")
-                                        local check_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_sbatch.log" | tail -n 1 || echo "")
+                                        local check_port=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_daemon.log" 2>/dev/null | tail -n 1 | cut -d' ' -f2 || echo "")
+                                        local check_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_daemon.log" | tail -n 1 || echo "")
                                         if [ -n "$check_port" ] && [ -n "$check_url" ]; then
                                             break
                                         fi
@@ -627,9 +635,11 @@ manage_aspri_ai() {
                                 echo -e "\033[91m⚠️ Tidak ada server aktif di compute node yang bisa dihentikan.\033[0m"
                                 sleep 1.5
                             else
-                                echo "Menghentikan proses server Ollama di node ${node_name_sub}..."
-                                ssh -o StrictHostKeyChecking=no ${node_name_sub} "pkill -u \$USER -f ollama-0.24.sif || true; pkill -u \$USER -f cloudflared || true; pkill -u \$USER -f 'ssh -o StrictHostKeyChecking=no'" 2>/dev/null || true
-                                pkill -f "11434:localhost" 2>/dev/null || true
+                                echo "Menghentikan proses daemon Ollama lokal dan srun terkait..."
+                                pkill -f "run_ollama_daemon.sh" 2>/dev/null || true
+                                pkill -f "singularity exec --nv" 2>/dev/null || true
+                                pkill -f "cloudflared tunnel.*18" 2>/dev/null || true
+                                pkill -f "11435:localhost" 2>/dev/null || true
                                 echo -e "\033[92m✅ Server Ollama di node ${node_name_sub} berhasil dihentikan.\033[0m"
                                 sleep 1.5
                             fi
@@ -639,19 +649,21 @@ manage_aspri_ai() {
                                 echo -e "\033[91m⚠️ Tidak ada server aktif di compute node yang bisa di-restart.\033[0m"
                                 sleep 1.5
                             else
-                                echo "Melakukan restart Server Ollama di node ${node_name_sub}..."
-                                echo "1. Menghentikan proses server lama..."
-                                ssh -o StrictHostKeyChecking=no ${node_name_sub} "pkill -u \$USER -f ollama-0.24.sif || true; pkill -u \$USER -f cloudflared || true; pkill -u \$USER -f 'ssh -o StrictHostKeyChecking=no'" 2>/dev/null || true
-                                pkill -f "11434:localhost" 2>/dev/null || true
+                                echo "Melakukan restart Server Ollama Daemon..."
+                                echo "1. Menghentikan proses daemon lama..."
+                                pkill -f "run_ollama_daemon.sh" 2>/dev/null || true
+                                pkill -f "singularity exec --nv" 2>/dev/null || true
+                                pkill -f "cloudflared tunnel.*18" 2>/dev/null || true
+                                pkill -f "11435:localhost" 2>/dev/null || true
                                 sleep 3
                                 
-                                echo "2. Meluncurkan Server Ollama kembali..."
-                                ssh -o StrictHostKeyChecking=no ${node_name_sub} "nohup bash ${aspri_dir}/sbatch_aspri_service.sh > ${aspri_dir}/logs/nohup_runner.log 2>&1 &"
+                                echo "2. Meluncurkan Server Ollama Daemon kembali..."
+                                nohup bash ${aspri_dir}/run_ollama_daemon.sh > ${aspri_dir}/logs/nohup_daemon.log 2>&1 &
                                 echo "⏳ Menunggu inisiasi Ollama & Cloudflare Tunnel..."
                                 local wait_sec=0
                                 while [ $wait_sec -lt 15 ]; do
-                                    local check_port=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_sbatch.log" | tail -n 1 | cut -d' ' -f2 || echo "")
-                                    local check_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_sbatch.log" | tail -n 1 || echo "")
+                                    local check_port=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_daemon.log" 2>/dev/null | tail -n 1 | cut -d' ' -f2 || echo "")
+                                    local check_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_daemon.log" | tail -n 1 || echo "")
                                     if [ -n "$check_port" ] && [ -n "$check_url" ]; then
                                         break
                                     fi
@@ -665,14 +677,14 @@ manage_aspri_ai() {
                         4)
                             clear
                             echo "=== RUNTIME OLLAMA LOG ==="
-                            if [ -f "${aspri_dir}/logs/ollama_sbatch.log" ]; then
-                                tail -n 25 "${aspri_dir}/logs/ollama_sbatch.log"
+                            if [ -f "${aspri_dir}/logs/ollama_daemon.log" ]; then
+                                tail -n 25 "${aspri_dir}/logs/ollama_daemon.log"
                             else
                                 echo "Log Ollama belum tersedia."
                             fi
                             echo -e "\n=== TUNNEL LOG ==="
-                            if [ -f "${aspri_dir}/logs/tunnel_sbatch.log" ]; then
-                                tail -n 10 "${aspri_dir}/logs/tunnel_sbatch.log"
+                            if [ -f "${aspri_dir}/logs/tunnel_daemon.log" ]; then
+                                tail -n 10 "${aspri_dir}/logs/tunnel_daemon.log"
                             else
                                 echo "Log Tunnel belum tersedia."
                             fi
@@ -710,7 +722,7 @@ manage_aspri_ai() {
                     
                     local ollama_running_chat=0
                     if [ -n "$job_id_chat" ]; then
-                        local ollama_active_chat=$(ssh -o StrictHostKeyChecking=no ${node_name_chat} "ps -u $USER -f | grep ollama | grep -v grep" 2>/dev/null | grep -v "sbatch_aspri" || echo "")
+                        local ollama_active_chat=$(pgrep -f "run_ollama_daemon.sh" || echo "")
                         if [ -n "$ollama_active_chat" ]; then
                             ollama_running_chat=1
                         fi
@@ -724,7 +736,7 @@ manage_aspri_ai() {
                     fi
                     
                     # Dapatkan port compute node dinamis
-                    local active_port_chat=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_sbatch.log" | tail -n 1 | cut -d' ' -f2 || echo "N/A")
+                    local active_port_chat=$(grep -oE "Port: [0-9]+" "${aspri_dir}/logs/ollama_daemon.log" 2>/dev/null | tail -n 1 | cut -d' ' -f2 || echo "N/A")
                     
                     # Memetakan model terinstall secara dinamis menggunakan python
                     local local_model_list=()
