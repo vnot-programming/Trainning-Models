@@ -21,8 +21,8 @@ Cara menjalankan:
     python -u eval_multigpu.py --gpus 0,1 2>&1 | tee eval_multigpu.log
 
     # tmux background:
-    tmux new-session -d -s maskeval "source ../.venv/bin/activate && \\
-      cd /home/my/Trainning-Models/MyFineTunning-dev/mask-r-cnn && \\
+    tmux new-session -d -s maskeval "source /data/programs/anaconda3/bin/activate yolo_env && \\
+      cd /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/mask-r-cnn && \\
       python -u eval_multigpu.py 2>&1 | tee eval_multigpu.log"
 
 Output:

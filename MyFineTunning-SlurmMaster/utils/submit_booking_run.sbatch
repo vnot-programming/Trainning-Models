@@ -6,7 +6,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G#SBATCH --signal=B:USR1@120
-#SBATCH --nodelist=ai2
+#SBATCH --nodelist=ai3
 
 mkdir -p slurm_logs
 echo "=========================================================="
@@ -18,9 +18,9 @@ echo ""
 echo "Cara masuk ke node ini tanpa antre:"
 echo "  ./attach_gpu.sh"
 echo ""
-# Panggil script Ollama tanpa menyebabkan double slurm job
-bash /data/users/g6717500336/singularity/ollama/sbatch_llm_service.sh &
-SERVICE_PID=$!
-wait $SERVICE_PID
+# Panggil script Ollama tanpa menyebabkan double slurm job (Dinonaktifkan sementara)
+# bash /data/users/g6717500336/singularity/ollama/sbatch_llm_service.sh &
+# SERVICE_PID=$!
+# wait $SERVICE_PID
 echo "Menahan node agar tidak tertutup..."
 sleep infinity

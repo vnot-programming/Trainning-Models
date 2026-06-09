@@ -3,7 +3,7 @@
 utils/generals/run_eval_multi.py
 ================================
 Pipeline orchestrator — menjalankan semua eval_multigpu.py secara SEKUENSIAL
-menggunakan virtual environment .venv yang tersedia di direktori ini.
+menggunakan conda environment yolo_env yang aktif.
 
 Urutan eksekusi:
   1. yolo/yolo8/eval_multigpu.py
@@ -216,8 +216,8 @@ def _validate_env():
 
     if not os.path.isfile(_VENV_PYTHON):
         errors.append(
-            f"Venv python tidak ditemukan: {_VENV_PYTHON}\n"
-            f"  Pastikan .venv sudah dibuat: python -m venv .venv && .venv/bin/pip install ..."
+            f"Python interpreter tidak ditemukan: {_VENV_PYTHON}\n"
+            f"  Pastikan conda environment yolo_env sudah aktif."
         )
 
     for step in _PIPELINE:

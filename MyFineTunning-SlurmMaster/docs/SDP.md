@@ -2266,3 +2266,373 @@
 - **Status saat ini:** Selesai ✅
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - Semua file `dataset_setup.py` di ketiga folder sekarang sudah tersanitasi dari hardcoded key di bagian docstring. Jangan menulis ulang key asli di file mana pun yang terdaftar dalam tracking git.
+
+---
+
+### [Entri — Pembaruan Aturan Global Proyek Slurm Master] — 2026-06-07 02:12 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 02:12 WIB
+- **Tugas yang diselesaikan:**
+  - Memperbarui Aturan Global (`GEMINI.md`) untuk menyertakan sub-bab baru mengenai Klasifikasi Proyek GPU Slurm yang berdiri sendiri.
+  - Mendefinisikan secara jelas empat proyek AI independen (LLM API, Computer Vision, Image Generator, dan Video Generator) yang berjalan terpisah di atas infrastruktur Slurm Master yang sama.
+- **File yang diubah/dibuat:**
+  - `.gemini/GEMINI.md` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Masing-masing AI ini dideklarasikan berdiri sendiri (independent). Pastikan koordinasi sumber daya Slurm dan penamaan sesi tmux/job tidak bertabrakan satu sama lain di kemudian hari.
+
+---
+
+### [Entri — Pembersihan Legacy .venv & Migrasi Penuh ke Conda yolo_env] — 2026-06-07 02:53 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 02:53 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan audit rujukan direktori virtual environment lokal `.venv` yang sudah usang di seluruh workspace.
+  - Memodifikasi skrip orkestrasi `run_pipeline.py` agar secara aktif memanggil Conda environment `yolo_env` milik Anaconda (`/data/programs/anaconda3/bin/activate yolo_env`) alih-alih mencari berkas `.venv/bin/activate` lokal.
+  - Memperbarui dokumentasi petunjuk eksekusi pada `Readme.md`, `utils/generals/run_eval_multi.py`, `utils/generals/maskrcnn/eval_multigpu.py`, dan `utils/generals/eval_boundary_iou.py` untuk mengarahkan pengguna ke environment conda `yolo_env`.
+  - Menghapus folder `/data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/.venv` secara permanen dan berhasil menghemat ruang penyimpanan sebesar **5,6 GB**.
+- **File yang diubah/dibuat:**
+  - `run_pipeline.py` [DIMODIFIKASI]
+  - `Readme.md` [DIMODIFIKASI]
+  - `utils/generals/run_eval_multi.py` [DIMODIFIKASI]
+  - `utils/generals/maskrcnn/eval_multigpu.py` [DIMODIFIKASI]
+  - `utils/generals/eval_boundary_iou.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Seluruh komponen saat ini telah dimigrasikan secara penuh ke environment conda `yolo_env`. Jangan pernah lagi membuat virtual environment lokal `.venv` baru di bawah workspace SlurmMaster karena semua dependency diatur terpusat di Conda.
+
+---
+
+### [Entri — Inisiasi Proyek AspriAI (Asisten Pribadi AI)] — 2026-06-07 03:10 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 03:10 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan perancangan awal, analisis, dan inisiasi proyek terpisah bernama **AspriAI** di direktori `/data/users/g6717500336/singularity/AspriAI/`.
+  - Membuat berkas rancangan awal `README.md` yang merinci Konsep Identitas, Slogan, Network Topology, Rencana Struktur Proyek, dan Mekanisme API Headless ComfyUI.
+  - Mempersiapkan folder `docs/` dengan inisiasi 5 dokumen standar rekayasa perangkat lunak: `SRS.md`, `SDD.md`, `SRD.md`, `STD.md`, dan `SDP.md` untuk mengawal siklus hidup proyek AspriAI.
+- **File yang diubah/dibuat:**
+  - `/data/users/g6717500336/singularity/AspriAI/README.md` [DIBUAT BARU]
+  - `/data/users/g6717500336/singularity/AspriAI/docs/SRS.md` [DIBUAT BARU]
+  - `/data/users/g6717500336/singularity/AspriAI/docs/SDD.md` [DIBUAT BARU]
+  - `/data/users/g6717500336/singularity/AspriAI/docs/SRD.md` [DIBUAT BARU]
+  - `/data/users/g6717500336/singularity/AspriAI/docs/STD.md` [DIBUAT BARU]
+  - `/data/users/g6717500336/singularity/AspriAI/docs/SDP.md` [DIBUAT BARU]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Proyek AspriAI dirancang sebagai API gateway & dasbor pribadi mandiri. Langkah pengembangan berikutnya dapat langsung menuju ke pembuatan FastAPI backend (`aspri-core`) dan antarmuka Next.js (`aspri-desk`).
+
+---
+
+### [Entri — Integrasi Git/GitHub & Inisialisasi CI/CD AspriAI] — 2026-06-07 03:22 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 03:22 WIB
+- **Tugas yang diselesaikan:**
+  - Menginisialisasi repositori Git lokal di `/data/users/g6717500336/singularity/AspriAI/` dan menghubungkannya dengan repositori jarak jauh `git@github.com:vnot-programming/aspri.git`.
+  - Mengonfigurasi `/data/users/g6717500336/.ssh/config` untuk membelokkan lalu lintas `github.com` via `ssh.github.com` pada port 443 menggunakan kunci privat `id_ed25519` (untuk memotong pemblokiran port 22 di jaringan login node).
+  - Melakukan push awal kode struktur proyek, folder `docs/`, dan workflow CI/CD ke branch `main` (Sukses pushed!).
+  - Membuat dan mempublikasikan branch `core/dev` (untuk backend) dan `desk/dev` (untuk frontend) sesuai skema *prefix-based branching*.
+  - Membuat berkas aturan agen baru `/data/users/g6717500336/.agents/rules/workflow-aspri.md` yang menetapkan tata cara Git branching dan mewajibkan AI berhenti untuk bertanya ("desk" atau "core") jika pengguna tidak menyebutkan tujuan push.
+  - Merancang cetak biru otomatisasi CI/CD jarak jauh menggunakan GitHub Actions di `.github/workflows/deploy.yml` yang menggunakan integrasi Tailscale VPN dan SSH Action untuk deploy ke GPU node (Core) dan Azure VPS (Desk) secara terisolasi.
+- **File yang diubah/dibuat:**
+  - `singularity/AspriAI/.git/` [DIINISIALISASI]
+  - `singularity/AspriAI/.github/workflows/deploy.yml` [DIBUAT BARU & DI-PUSH]
+  - `.agents/rules/workflow-aspri.md` [DIBUAT BARU]
+  - `.ssh/config` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Git remote telah terintegrasi penuh dan branch `core/dev` & `desk/dev` sudah aktif di remote.
+  - Selalu periksa berkas aturan `.agents/rules/workflow-aspri.md` setiap kali ada perintah push, commit, atau checkout branch untuk proyek AspriAI.
+  - Untuk deployment otomatis, pastikan kredensial VPN Tailscale (`TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET`), SSH Private Key (`SSH_PRIVATE_KEY`), dan Password VPS (`VPS_PASSWORD`) telah didaftarkan pada bagian Repository Secrets di repositori GitHub `aspri`.
+
+---
+
+### [Entri — Pembaruan Konfigurasi Host CI/CD AspriAI] — 2026-06-07 03:32 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 03:32 WIB
+- **Tugas yang diselesaikan:**
+  - Memperbarui berkas otomatisasi CI/CD `.github/workflows/deploy.yml` untuk AspriAI.
+  - Mengubah konfigurasi target deployment host GPU Node (Backend/Core) menjadi `slurm.penelitian.my.id` dengan SSH user `g6717500336` (port 22).
+  - Mengubah konfigurasi target deployment host Web Host (Frontend/Desk) menjadi `ssh-docker-host.vnot.my.id` dengan SSH user `my` (port 22), menyesuaikan integrasi otentikasi SSH Key.
+- **File yang diubah/dibuat:**
+  - `singularity/AspriAI/.github/workflows/deploy.yml` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Host deploy telah disesuaikan dengan skema isolasi server dan VPN Kampus / Cloudflare Tunnel. Lakukan pengujian push ke GitHub untuk memicu jalannya workflow Actions dan pastikan repository secret untuk `SSH_PRIVATE_KEY` telah didaftarkan.
+
+---
+
+### [Entri — Verifikasi Sukses SSH via Cloudflare Service Token] — 2026-06-07 03:55 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 03:55 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan uji coba (verifikasi) koneksi SSH lokal dari Login Node ke `slurm.penelitian.my.id` (GPU Node) dan `ssh-docker-host.vnot.my.id` (Docker Host) menggunakan Cloudflare Service Token.
+  - Berhasil membypass Cloudflare Access Zero Trust murni via parameter `--id` dan `--secret` pada biner `cloudflared` tanpa interaksi peramban web.
+  - Memastikan otentikasi SSH Key (`id_ed25519`) terverifikasi sukses masuk ke shell target (exit status 0).
+- **File yang diubah/dibuat:**
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Kredensial Service Token dan SSH Key telah divalidasi bekerja dengan baik. CI/CD GitHub Actions siap berjalan setelah rahasia repositori di-push.
+
+---
+
+### [Entri — Penghapusan Tailscale & Migrasi Penuh CI/CD ke Cloudflare Tunnel] — 2026-06-07 04:00 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 04:00 WIB
+- **Tugas yang diselesaikan:**
+  - Menghapus blok konfigurasi Tailscale VPN (`tailscale/github-action@v2`) yang sudah usang dan tidak diperlukan pada berkas otomatisasi CI/CD `.github/workflows/deploy.yml`.
+  - Mengimplementasikan instalasi `cloudflared` dan pemanggilan `ssh` standard berbasis OpenSSH client secara penuh untuk kedua job (`deploy-core` dan `deploy-desk`) demi kestabilan runtime deployment.
+  - Melakukan commit dan push revisi bersih tersebut ke branch remote `main` di GitHub.
+- **File yang diubah/dibuat:**
+  - `singularity/AspriAI/.github/workflows/deploy.yml` [DIMODIFIKASI & DI-PUSH]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Workflow CI/CD sekarang sepenuhnya bergantung pada Cloudflare Tunnel untuk menembus jaringan terisolasi. Parameter rahasia Tailscale (`TS_OAUTH_...`) tidak lagi dibutuhkan di repositori.
+
+---
+
+### [Entri — Perbaikan Format SSH Key & Penyelesaian Error libcrypto CI/CD] — 2026-06-07 10:44 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 10:44 WIB
+- **Tugas yang diselesaikan:**
+  - Mendiagnosis kegagalan `Execute Remote Deploy via SSH` pada Run #4 & #5 dengan pesan error `Load key "/home/runner/.ssh/id_ed25519": error in libcrypto`.
+  - Menemukan akar masalah (*root-cause*) pada pemanggilan `echo "$SSH_PRIVATE_KEY"` yang memicu sensor otomatis `***` oleh runner GitHub Actions dan merusak integritas format multiline kunci privat SSH.
+  - Memodifikasi berkas `.github/workflows/deploy.yml` untuk menulis kunci privat SSH menggunakan metode literal `cat << 'EOF'` yang kebal dari ekspansi shell dan sensor runtime.
+  - Menambahkan sanitasi carriage return (`sed -i 's/\r$//'`) untuk mencegah malformasi kunci akibat copy-paste dari sistem operasi Windows.
+  - Melakukan commit dan push perbaikan tersebut ke remote branch `main`.
+- **File yang diubah/dibuat:**
+  - `singularity/AspriAI/.github/workflows/deploy.yml` [DIMODIFIKASI & DI-PUSH]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Kunci privat SSH kini ditulis secara literal dan dibersihkan dari CRLF. Tunggu hasil Run #6 di GitHub Actions untuk memverifikasi deployment akhir.
+
+---
+
+### [Entri — Sukses Penuh Integrasi CI/CD AspriAI via Cloudflare Tunnel] — 2026-06-07 11:00 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 11:00 WIB
+- **Tugas yang diselesaikan:**
+  - Menyelesaikan perbaikan error `invalid input` pada Base64 decoding dengan menuntun pengguna membersihkan prompt terminal `(base)` yang tidak sengaja tersalin pada GitHub Secrets.
+  - Menambahkan sanitasi string Base64 (`tr -d '\r' | tr -d '\n'`) pada skrip `Setup SSH Config` untuk menjamin tidak ada karakter whitespace/newline kotor yang merusak jalannya decoding.
+  - Memverifikasi keberhasilan penuh (Success) pada **Run #9** GitHub Actions untuk kedua job deployment (`Deploy Backend to GPU Node` dan `Deploy Frontend to Web Host`).
+- **File yang diubah/dibuat:**
+  - `singularity/AspriAI/.github/workflows/deploy.yml` [DIMODIFIKASI & DI-PUSH]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Seluruh alur otomatisasi deployment CI/CD jarak jauh berbasis Cloudflare Tunnel sudah terverifikasi sukses berjalan 100%. Pipeline siap digunakan untuk menerima commit pengembangan fitur core & desk berikutnya.
+
+---
+
+### [Entri — Penyempurnaan Menu 8 (Manajemen AspriAI) pada myslurm.sh] — 2026-06-07 13:20 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 13:20 WIB
+- **Tugas yang diselesaikan:**
+  - Menyempurnakan Menu 8 (`Manajemen AspriAI`) di dalam `utils/myslurm.sh` untuk menampilkan URL Utama (`backend-ollama.penelitian.my.id`) dan URL Fallback dinamis secara real-time yang diekstrak dari `/data/users/g6717500336/singularity/ollama/logs/tunnel_sbatch.log`.
+  - Menambahkan submenu baru **Restart Server Ollama** (Opsi 3) yang secara sekuensial menghentikan server lama, membersihkan port forwarding lokal slurmmaster, dan menembakkan peluncuran ulang server secara rapi.
+  - Memperbarui label penomoran aksi submenu lainnya untuk log runtime (menjadi opsi 4) dan instalasi modul (menjadi opsi 5), serta menyesuaikan rentang input penanganan aksi menjadi `[1-5]`.
+- **File yang diubah/dibuat:**
+  - `Trainning-Models/MyFineTunning-SlurmMaster/utils/myslurm.sh` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Periksa integrasi log `tunnel_sbatch.log` jika dynamic parsing URL fallback gagal diekstrak (pola grep pencarian URL `trycloudflare.com` harus tetap didukung).
+  - Skrip `myslurm.sh` sudah terverifikasi bebas dari error sintaksis (`bash -n` sukses).
+
+---
+
+### [Entri — Penataan Menu Bercabang AspriAI pada myslurm.sh] — 2026-06-07 13:30 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 13:30 WIB
+- **Tugas yang diselesaikan:**
+  - Merestrukturisasi fungsi `manage_aspri_ai` di dalam `utils/myslurm.sh` dari menu linier menjadi menu bercabang (nested menu).
+  - Menu utama AspriAI kini menampilkan ringkasan status GPU Slurm, port compute node, serta rincian port dan URL (utama & fallback) untuk Ollama dan ComfyUI secara berdampingan.
+  - Menyediakan sub-menu khusus **1. Ollama** yang memuat 5 aksi (Jalankan, Hentikan, Restart, Log, Instal ulang), serta sub-menu **2. ComfUI** yang menyajikan status placeholder yang aman.
+  - Memastikan transisi kembali ke menu sebelumnya berjalan lancar dengan menekan `Enter` (kosong).
+- **File yang diubah/dibuat:**
+  - `Trainning-Models/MyFineTunning-SlurmMaster/utils/myslurm.sh` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan variabel pendeteksi `job_id`, `node_name`, dan `ollama_running` diperbarui secara berkala dalam perulangan loop agar status status real-time akurat saat berpindah sub-menu.
+  - Integrasi ComfUI sesungguhnya dapat dilanjutkan begitu Singularity image ComfUI siap digunakan.
+
+---
+
+### [Entri — Integrasi Sub-menu Chat via Ollama pada myslurm.sh] — 2026-06-07 13:40 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 13:40 WIB
+- **Tugas yang diselesaikan:**
+  - Menambahkan submenu baru **2. Chat via Ollama** pada Menu Utama AspriAI di `utils/myslurm.sh`.
+  - Mengimplementasikan pendeteksian model secara otomatis dan dinamis dari API tags local (`http://localhost:11434/api/tags`) menggunakan request HTTP `urllib` di python secara aman dan mandiri (tanpa dependensi luar seperti `jq`).
+  - Mengimplementasikan alur interaktif chat CLI menggunakan perintah SSH pseudo-terminal allocation (`ssh -t`) yang merutekan input langsung ke container Singularity Ollama di compute node GPU aktif menggunakan port dinamis (`OLLAMA_HOST`).
+- **File yang diubah/dibuat:**
+  - `Trainning-Models/MyFineTunning-SlurmMaster/utils/myslurm.sh` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Periksa ketersediaan model terinstall dengan memastikan server Ollama berjalan di latar belakang compute node. Jika list model kosong, submenu akan mengarahkan pengguna kembali secara aman tanpa *crash*.
+  - Sesi chat CLI interaktif ini memerlukan pseudo-terminal TTY yang dialokasikan via parameter `-t` pada SSH.
+
+---
+
+### [Entri — Penambahan Fitur Download Model di Sub-menu Chat via Ollama pada myslurm.sh] — 2026-06-07 13:58 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 13:58 WIB
+- **Tugas yang diselesaikan:**
+  - Menambahkan opsi **0) Download Model Baru (ollama pull)** di dalam sub-menu Chat via Ollama di `utils/myslurm.sh`.
+  - Mengimplementasikan alur interaktif unduhan model di mana pengguna dapat memasukkan nama model (misal `qwen2.5:7b` atau `llama3`) untuk diunduh langsung di compute node aktif.
+  - Memanfaatkan perintah `ollama pull` yang dijalankan via SSH pseudo-terminal allocation (`ssh -t`) agar progress bar unduhan dapat dirender secara real-time di terminal pengguna.
+- **File yang diubah/dibuat:**
+  - `Trainning-Models/MyFineTunning-SlurmMaster/utils/myslurm.sh` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Opsi download ini memerlukan server Ollama dalam kondisi `RUNNING`. Jika server mati, menu input download akan tertutup secara otomatis setelah memberikan pesan peringatan yang relevan.
+
+---
+
+### [Entri — Penyempurnaan Warisan Env Singularity pada Pemanggilan Client Ollama] — 2026-06-07 14:02 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 14:02 WIB
+- **Tugas yang diselesaikan:**
+  - Mendiagnosis masalah kegagalan deteksi model baru yang baru saja diunduh oleh pengguna (model tidak muncul di `/api/tags`).
+  - **Akar Masalah (Root Cause):** Variabel lingkungan `OLLAMA_HOST` yang dideklarasikan pada terminal compute node host tidak diwariskan ke dalam kontainer Singularity. Akibatnya, client `ollama pull` yang dieksekusi di dalam kontainer secara membabi buta mencari daemon Ollama di port default `11434` (yang tidak aktif), menyebabkan kegagalan koneksi sepihak.
+  - **Tindakan Perbaikan:** Menambahkan ekspor variabel `SINGULARITYENV_OLLAMA_HOST` secara eksplisit tepat sebelum eksekusi `singularity exec` baik pada perintah `ollama pull` maupun `ollama run` (chat) di berkas `utils/myslurm.sh`.
+- **File yang diubah/dibuat:**
+  - `Trainning-Models/MyFineTunning-SlurmMaster/utils/myslurm.sh` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan pengguna memasukkan nama model yang valid dan terdaftar secara resmi di Ollama model library (contoh: `qwen2.5:0.5b` or `qwen2.5:1.5b`). Model fiktif atau salah ketik (seperti `qwen3.5:0.8b`) akan ditolak secara otomatis oleh registry resmi Ollama.
+
+---
+
+### [Entri — Integrasi Deteksi Sumber Model (Local vs External) pada myslurm.sh] — 2026-06-07 14:10 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 14:10 WIB
+- **Tugas yang diselesaikan:**
+  - Mengimplementasikan deteksi sumber model secara cerdas untuk membedakan model lokal dan eksternal pada sub-menu Chat via Ollama di `utils/myslurm.sh`.
+  - Skrip Python di dalam perulangan bash sekarang melakukan verifikasi keberadaan berkas manifes lokal di bawah folder `${aspri_dir}/models/manifests` untuk setiap model yang dikembalikan oleh API tags.
+  - Model yang memiliki berkas manifes lokal akan diberi label `(local)`. Model yang tidak memiliki berkas manifes lokal (akibat bentrokan port `11434` global di slurmmaster dengan pengguna lain) diberi label `(external - port clash)`.
+  - Menambahkan dialog konfirmasi pencegahan keamanan: jika pengguna memilih model `external`, skrip akan menampilkan peringatan bahwa hal tersebut akan memicu download weights baru pada penyimpanan lokal mereka, dan meminta konfirmasi eksplisit (`y/N`) sebelum dieksekusi.
+- **File yang diubah/dibuat:**
+  - `Trainning-Models/MyFineTunning-SlurmMaster/utils/myslurm.sh` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pola verifikasi manifes ini mendukung namespace standar (`library`) maupun namespace kustom (seperti `iapp/chinda-qwen3-4b`). Pastikan path `/manifests/registry.ollama.ai/...` tetap valid.
+
+---
+
+### [Entri — Pembatasan Model Utama ke Lokal & Pemisahan Menu Model Eksternal] — 2026-06-07 14:15 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 14:15 WIB
+- **Tugas yang diselesaikan:**
+  - Memodifikasi sub-menu Chat via Ollama di `utils/myslurm.sh` untuk membatasi tampilan model pada daftar utama hanya untuk model berstatus **`Local`** (yang memiliki manifes lokal).
+  - Menyembunyikan seluruh model eksternal (akibat bentrokan port `11434` global) dari daftar utama guna meningkatkan keamanan kuota disk pengguna dan menyederhanakan antarmuka.
+  - Menambahkan menu **`L) Lihat Model External`** yang secara terpisah menampilkan daftar model eksternal milik pengguna lain yang terdeteksi, lengkap dengan pesan edukasi mengenai status port clash.
+  - Memperbaiki duplikasi syntax *else-fi* yang tidak sengaja terjadi pada pemrosesan pilhan aksi chat.
+- **File yang diubah/dibuat:**
+  - `Trainning-Models/MyFineTunning-SlurmMaster/utils/myslurm.sh` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Daftar model lokal langsung dialokasikan tanpa perlunya konfirmasi download (pull) karena weights model sudah dipastikan ada secara fisik.
+  - Opsi `L` mendeteksi model eksternal secara dinamis tanpa mengubah state server Ollama.
+
+---
+
+### [Entri — Perbaikan Akses Eksternal Quick Tunnel Ollama via Postman] — 2026-06-07 14:25 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 14:25 WIB
+- **Tugas yang diselesaikan:**
+  - Mendiagnosis penyebab error 403 Forbidden ketika mengakses endpoint API Ollama (`GET/POST /api/tags`) via Cloudflare Quick Tunnel dari Postman.
+  - Menemukan akar masalah (*root cause*): Ollama memiliki proteksi host header strict. Ketika dijalankan dengan `127.0.0.1` dan diakses melalui domain dinamis `trycloudflare.com`, ia menolak request eksternal dengan status 403. Selain itu, ada beberapa proses zombie `sbatch_aspri_service.sh` dan `cloudflared` lama yang memicu bentrokan port dinamis.
+  - Memperbaiki `sbatch_aspri_service.sh` dengan mengubah bind host `SINGULARITYENV_OLLAMA_HOST` menjadi `0.0.0.0:${OLLAMA_PORT}` agar server Ollama mendengarkan di semua interface dan menonaktifkan pemblokiran strict Host header.
+  - Menambahkan argumen `--http-host-header localhost` pada pemanggilan Quick Tunnel `cloudflared` untuk menulis ulang Host header ke localhost sebelum request diteruskan ke server Ollama lokal.
+  - Membersihkan total seluruh proses zombie `ollama`, `cloudflared`, dan `sbatch_aspri_service.sh` di compute node `ai3`.
+  - Merestart server Ollama bersih dan memverifikasi akses via `curl` ke URL Quick Tunnel baru (`https://truly-surgical-jar-providers.trycloudflare.com/api/tags`), berhasil merespon dengan status 200 OK dan data JSON model lokal.
+- **File yang diubah/dibuat:**
+  - `singularity/ollama/sbatch_aspri_service.sh` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Host binding Ollama server kini berada di `0.0.0.0`, pastikan file config launcher tetap terlindungi dari hardcode.
+  - Untuk setiap peluncuran ulang, verifikasi bahwa tunnel log `tunnel_sbatch.log` memuat url `trycloudflare.com` yang baru dan ujilah menggunakan curl.
+
+---
+
+### [Entri — Integrasi Health Check & Otomatisasi One-Click Launch AspriAI] — 2026-06-07 17:00 WIB
+
+- **Tanggal/Waktu:** 2026-06-07 17:00 WIB
+- **Tugas yang diselesaikan:**
+  - Membuat dan mendaftarkan endpoint `/health` (dengan metode `GET` dan `POST`) secara khusus pada `chat.py` milik AspriAI Core. Langkah ini mencegah request `/v1/health` dan `/api/health` diteruskan (di-proxy) ke Ollama Server di port 11435, mengeliminasi error 404/405 dan memastikan pelaporan status kesehatan Gateway berjalan lancar.
+  - Memodifikasi skrip `myslurm.sh` untuk melakukan otomatisasi peluncuran satu-klik (One-Click Launch): Opsi 1 (Jalankan AspriAI Core) kini tidak hanya meluncurkan FastAPI Gateway di Login Node, tetapi juga otomatis menyalakan server Ollama di compute node aktif (jika GPU aktif).
+  - Mengintegrasikan monitoring kesehatan real-time `AspriAI Core` dan `AspriAI Desk` di menu Opsi 8 dengan memanggil HTTP POST request ke domain Cloudflare Tunnel masing-masing. Untuk `backend-ollama`, status kesehatan dinegosiasikan dengan menyertakan token autentikasi Cloudflare Access Zero Trust secara dinamis dari file `.env`.
+  - Memperbaiki parser `active_port` di seluruh fungsi `myslurm.sh` agar membaca pola `Port: [0-9]+` yang di-output oleh script launcher `sbatch_aspri_service.sh` dengan penanganan fallback parameter default Bash (`${var:-fallback}`) untuk mencegah port/URL kosong akibat latensi penulisan log.
+  - Memperbarui visualisasi URL di menu status agar seragam menggunakan skema `https://`.
+  - Memperbaiki pencarian proses `ollama` di compute node pada `myslurm.sh` dengan membatasi hanya pada user saat ini (`ps -u $USER -f`) agar tidak mendeteksi proses Ollama milik pengguna lain di server bersama (menyelesaikan masalah status RUNNING yang nyantol).
+  - Mengimplementasikan loop polling dinamis (maksimal 15 detik) untuk menunggu sinkronisasi log port/URL tunnel Ollama di Login Node setelah perintah dijalankan, mencegah tampilan data kosong.
+- **File yang diubah/dibuat:**
+  - `singularity/AspriAI/aspri-core/app/api/v1/endpoints/chat.py` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/utils/myslurm.sh` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan untuk melakukan booking ulang GPU terlebih dahulu apabila ingin menguji coba secara utuh (agar SSH tunnel lama dibersihkan dan port 11434 Login Node dibebaskan dari terowongan lama).
+
+---
+
+### [Entri 059] — Implementasi Arsitektur RVM Backend Auto-Resume (Watchdog Daemon)
+
+- **Tanggal/Waktu:** 2026-06-08 22:41 WIB
+- **Tugas yang diselesaikan:**
+  - Menganalisis isu `visual_eval_api.py` yang mati (crash) karena koneksi SSH ke Compute Node terputus akibat Slurm job (GPU) dibatalkan secara sistemik (Time Limit/OOM).
+  - Merancang arsitektur **Watchdog Daemon** (`run_backend_daemon.sh`) yang berjalan secara independen di dalam sesi TMUX `rvm_backend` pada *Login Node*.
+  - Logika daemon meliputi mekanisme *polling* `squeue` untuk mencari GPU yang tersedia, melakukan *SSH* secara otomatis ke GPU Compute Node yang berhasil dibooking, membuka SSH Reverse Tunnel `8502`, dan menjalankan kembali (auto-resume) server Flask. Jika node mati lagi, skrip secara pintar kembali menunggu dan me-reconnect tanpa campur tangan pengguna.
+  - Mengubah fungsi peluncuran pada `start_rvm.sh` (`start_backend()`) agar menggunakan eksekusi tunggal daemon wrapper tersebut dibanding sekumpulan `send-keys` statis.
+  - Memastikan *stop commands* mematikan TMUX session agar daemon dapat diakhiri secara manual oleh user saat menu di `myslurm.sh` diklik (Stop All / Stop Backend).
+- **File yang diubah/dibuat:**
+  - `RVM/run_backend_daemon.sh` [DIBUAT BARU]
+  - `RVM/start_rvm.sh` [DIMODIFIKASI]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - RVM Backend kini akan selalu hidup ("bangkit dari kematian") selama script Booking GPU (`book_gpu.py`) aktif mencarikan alokasi GPU.
+  - Jika ingin membunuh layanan RVM API secara permanen, ikuti instruksi dari menu `myslurm.sh` (matikan TMUX).
+- **Tanggal/Waktu:** Mon Jun  8 23:25:22 +07 2026
+- **Tugas yang diselesaikan:** Memperbaiki 'Failed to load models' akibat CORS & CF Access di RVM. Menambahkan Reverse Proxy via urllib di serve_frontend.py agar Service Token tidak terekspos ke frontend, serta bypass error 403 preflight OPTIONS. Memperbarui app.js untuk hit /api lokal.
+- **File yang diubah/dibuat:** RVM/serve_frontend.py, RVM/frontend/js/app.js, RVM/backend/visual_eval_api.py
+- **Status saat ini:** Selesai
+- **Catatan untuk AI selanjutnya:** Frontend kini bisa load model. Validasi pipeline evaluasi jika ada yang masih error.
+
+---
+
+### [Entri 060] — Root Cause Fix: Cloudflare Tunnel Selalu Mati (Port Metrics Conflict)
+
+- **Tanggal/Waktu:** 2026-06-09 03:41 WIB
+- **Tugas yang diselesaikan:**
+  - **Investigasi mendalam** mengapa Cloudflare Named Tunnel (`myslurm.sh` Menu 1) selalu mati dengan pesan `Initiating graceful shutdown due to signal terminated` tepat 2-8 detik setelah berhasil konek ke jaringan Cloudflare.
+  - **Root Cause Teridentifikasi:** Port metrics default `127.0.0.1:20241` selalu *conflik* karena sisa binding dari instance cloudflared sebelumnya yang tidak dilepas dengan benar. Instance baru menerima `SIGTERM` dari sistem karena *address already in use*.
+  - **Fix `myslurm.sh`:** Menambahkan flag `--metrics 127.0.0.1:<random_port>` menggunakan `shuf -i 20200-20299 -n 1` pada wrapper script di fungsi `manage_cloudflare_tunnel()`. Dengan port metrics acak, konflik tidak pernah terjadi. Juga menghapus `exec` dan `| tee` dari wrapper yang menyebabkan masalah pipe SIGPIPE.
+  - **Investigasi ComfyUI Daemon:** Mengaudit `/singularity/comfui/` — menemukan bahwa `run_comfui_daemon.sh` menggunakan `pkill -f "cloudflared tunnel.*run --token"` secara global yang membunuh SEMUA instance cloudflared termasuk tunnel master dari `myslurm.sh`. Diperbaiki dengan mekanisme **PID File Tracking** (`named_tunnel.pid`).
+  - **Error ComfyUI Teridentifikasi:** Package `comfy_kitchen 0.2.10` di `~/.local/lib/python3.10/` tidak kompatibel dengan PyTorch 2.2.2 (butuh PyTorch ≥ 2.4). User akan upgrade container Singularity secara manual.
+  - **Verifikasi Berhasil:** Setelah fix, sesi tmux `cloudflare_tunnel` berjalan stabil tanpa terminasi.
+- **File yang diubah/dibuat:**
+  - `utils/myslurm.sh` [DIMODIFIKASI — wrapper cloudflared dengan `--metrics` random port, hapus exec+tee]
+  - `singularity/comfui/run_comfui_daemon.sh` [DIMODIFIKASI — pkill global diganti PID file tracking]
+  - `docs/SDP.md` [DIMODIFIKASI — Penambahan Log 060]
+- **Status saat ini:** **Selesai**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Tunnel Cloudflare kini stabil via sesi tmux `cloudflare_tunnel`.
+  - **JANGAN** pernah menggunakan `pkill -f "cloudflared tunnel.*run --token"` secara global di script manapun. Selalu gunakan PID file targeting.
+  - ComfyUI menunggu upgrade container ke PyTorch ≥ 2.4. Setelah upgrade, jalankan menu 6 `myslurm.sh` → Opsi 1.
+  - Quick Tunnel ComfyUI sementara rate-limited (429) karena terlalu banyak request debugging — akan pulih otomatis dalam beberapa jam.
+
