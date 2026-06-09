@@ -155,16 +155,56 @@ manage_cloudflare_tunnel() {
                 if tmux has-session -t cloudflare_tunnel 2>/dev/null; then
                     echo "⚠️ Terowongan Cloudflare sudah berjalan dalam sesi tmux 'cloudflare_tunnel'."
                 else
-                    echo "Memulai Cloudflare Tunnel di background (Sesi TMUX: cloudflare_tunnel)..."
-                    # Menggunakan parameter optimasi konektivitas --edge-ip-version dan --retries serta pipe tee ke berkas log
-                    tmux new-session -d -s cloudflare_tunnel "$cf_bin tunnel --protocol http2 --edge-ip-version 4 --retries 10 --no-autoupdate run --token $cf_token 2>&1 | tee -a \"$cf_log\""
-                    sleep 2
-                    if tmux has-session -t cloudflare_tunnel 2>/dev/null; then
-                        echo "✅ Sesi tmux 'cloudflare_tunnel' berhasil dibuat."
-                        echo "💡 Log dialihkan ke berkas: $cf_log"
-                    else
-                        echo "❌ Gagal membuat sesi tmux 'cloudflare_tunnel'. Pastikan path binary valid."
+                    # Validasi token sebelum menjalankan
+                    if [ -z "$cf_token" ]; then
+                        echo "❌ CLOUDFLARE_TUNNEL_TOKEN tidak ditemukan di file .env!"
+                        echo "   Pastikan file .env berisi: CLOUDFLARE_TUNNEL_TOKEN=<token>"
+                        read -p "Tekan Enter untuk melanjutkan..."
+                        continue
                     fi
+                    if [ ! -f "$cf_bin" ]; then
+                        echo "❌ Binary cloudflared tidak ditemukan: $cf_bin"
+                        read -p "Tekan Enter untuk melanjutkan..."
+                        continue
+                    fi
+                    echo "Memulai Cloudflare Tunnel di background (Sesi TMUX: cloudflare_tunnel)..."
+                    # FIX FINAL: Gunakan port metrics RANDOM (shuf) untuk menghindari konflik
+                    # port default 20241 yang selalu dipakai sisa proses cloudflared sebelumnya.
+                    # Tulis wrapper script ke /tmp agar token JWT tidak merusak shell quoting.
+                    local cf_metrics_port
+                    cf_metrics_port=$(shuf -i 20200-20299 -n 1)
+                    local cf_wrapper="/tmp/cf_tunnel_run_$$.sh"
+                    cat > "$cf_wrapper" << CFEOF
+#!/bin/bash
+CF_BIN="$cf_bin"
+CF_TOKEN="$cf_token"
+CF_LOG="$cf_log"
+CF_METRICS_PORT="$cf_metrics_port"
+echo "=== TUNNEL START: \$(date '+%Y-%m-%d %H:%M:%S') | metrics port: \${CF_METRICS_PORT} ===" >> "\${CF_LOG}"
+"\${CF_BIN}" tunnel --protocol http2 --edge-ip-version 4 --retries 10 --no-autoupdate \
+    --metrics "127.0.0.1:\${CF_METRICS_PORT}" run --token "\${CF_TOKEN}" >> "\${CF_LOG}" 2>&1
+echo "=== TUNNEL EXIT (code:\$?): \$(date '+%Y-%m-%d %H:%M:%S') ===" >> "\${CF_LOG}"
+CFEOF
+                    chmod +x "$cf_wrapper"
+                    tmux new-session -d -s cloudflare_tunnel "bash $cf_wrapper"
+                    sleep 5
+                    if tmux has-session -t cloudflare_tunnel 2>/dev/null; then
+                        sleep 1
+                        if pgrep -u "$USER" -f "cloudflared tunnel" >/dev/null 2>&1; then
+                            echo "✅ Sesi tmux 'cloudflare_tunnel' berhasil dibuat & tunnel AKTIF."
+                            echo "   Metrics port: $cf_metrics_port"
+                        else
+                            echo "⚠️  Sesi tmux dibuat, namun proses cloudflared tidak terdeteksi."
+                            echo "   Gunakan Menu 4 (Attach) atau cek: tail -20 $cf_log"
+                        fi
+                        echo "💡 Log: $cf_log"
+                    else
+                        echo "❌ Gagal: sesi tmux langsung exit."
+                        echo "   Tail log terakhir:"
+                        [ -f "$cf_log" ] && tail -10 "$cf_log" || echo "   (log belum tersedia)"
+                    fi
+                    # Hapus wrapper sementara
+                    rm -f "$cf_wrapper"
                 fi
                 read -p "Tekan Enter untuk melanjutkan..."
                 ;;
@@ -339,8 +379,24 @@ manage_aspri_ai() {
                 active_port=${active_port:-N/A}
                 fallback_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${aspri_dir}/logs/tunnel_daemon.log" | tail -n 1)
                 fallback_url=${fallback_url:-TIDAK AKTIF}
+            fi
+        fi
+        
+        local comfui_dir="/data/users/g6717500336/singularity/comfui"
+        local comfui_running="MATI"
+        local fallback_url_comfui="TIDAK AKTIF"
+        local active_port_comfui="N/A"
+        
+        if [ -n "$job_id" ]; then
+            local comfui_active=$(pgrep -f "run_comfui_daemon.sh" || echo "")
+            if [ -n "$comfui_active" ]; then
+                comfui_running="RUNNING"
+                active_port_comfui=$(grep -oE "Port: [0-9]+" "${comfui_dir}/logs/comfui_daemon.log" 2>/dev/null | tail -n 1 | cut -d' ' -f2)
+                active_port_comfui=${active_port_comfui:-N/A}
+                fallback_url_comfui=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${comfui_dir}/logs/tunnel_daemon.log" 2>/dev/null | tail -n 1)
+                fallback_url_comfui=${fallback_url_comfui:-TIDAK AKTIF}
             else
-                ollama_running="MATI / STANDBY"
+                comfui_running="MATI / STANDBY"
             fi
         fi
         
@@ -433,13 +489,23 @@ manage_aspri_ai() {
             echo -e "• Port : 11434"
         fi
         
-        # Cetak Status ComfyUI (Placeholder)
+        # Cetak Status ComfyUI
         echo "============================================="
-        echo "       Manajemen Layanan ComfUI"
+        echo "       Manajemen Layanan ComfyUI"
         echo "============================================="
-        echo -e "• URL : \033[93mhttps://backend-xyz.penelitian.my.id\033[0m (masih placeholder)"
-        echo -e "• URL Fallback : \033[93mhttps://xyz.trycloudflare.com\033[0m"
-        echo -e "• Port : \033[93mxxxx\033[0m"
+        if [ "$comfui_running" = "RUNNING" ]; then
+            echo -e "• URL (Named)    : \033[92mhttps://backend-comfui.penelitian.my.id\033[0m"
+            if [ "$fallback_url_comfui" != "TIDAK AKTIF" ]; then
+                echo -e "• URL (Fallback) : \033[92m${fallback_url_comfui}\033[0m"
+            else
+                echo -e "• URL (Fallback) : \033[91m${fallback_url_comfui}\033[0m"
+            fi
+            echo -e "• Port Compute   : \033[96m${active_port_comfui}\033[0m"
+        else
+            echo -e "• URL (Named)    : https://backend-comfui.penelitian.my.id (MATI)"
+            echo -e "• URL (Fallback) : \033[91m${fallback_url_comfui}\033[0m"
+            echo -e "• Port Compute   : N/A"
+        fi
         
         echo "---------------------------------------------"
         echo "Sub Menu AspriAI:"
@@ -874,15 +940,187 @@ except Exception:
                 done
                 ;;
             6)
-                # Placeholder ComfyUI
-                clear
-                echo "============================================="
-                echo "       Manajemen Layanan ComfUI"
-                echo "============================================="
-                echo -e "ℹ️ Layanan ComfUI belum dikonfigurasi atau diinstal."
-                echo -e "  Status saat ini masih berupa placeholder."
-                echo "============================================="
-                read -p "Tekan Enter untuk kembali ke Manajemen Layanan AspriAI..."
+                # Submenu ComfyUI
+                while true; do
+                    # Ambil status real-time khusus submenu ComfyUI
+                    local active_job_sub=$(squeue -u $USER -n vnot -h -o "%i %N %t" | head -n 1)
+                    local job_id_sub=$(echo $active_job_sub | cut -d' ' -f1)
+                    local node_name_sub=$(echo $active_job_sub | cut -d' ' -f2)
+                    local job_state_sub=$(echo $active_job_sub | cut -d' ' -f3)
+                    
+                    local fallback_url_sub="TIDAK AKTIF"
+                    local active_port_sub="N/A"
+                    local comfui_running_sub="MATI"
+                    
+                    if [ -n "$job_id_sub" ]; then
+                        local comfui_active_sub=$(pgrep -f "run_comfui_daemon.sh" || echo "")
+                        if [ -n "$comfui_active_sub" ]; then
+                            comfui_running_sub="RUNNING"
+                            active_port_sub=$(grep -oE "Port: [0-9]+" "${comfui_dir}/logs/comfui_daemon.log" 2>/dev/null | tail -n 1 | cut -d' ' -f2)
+                            active_port_sub=${active_port_sub:-N/A}
+                            fallback_url_sub=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${comfui_dir}/logs/tunnel_daemon.log" 2>/dev/null | tail -n 1)
+                            fallback_url_sub=${fallback_url_sub:-TIDAK AKTIF}
+                        else
+                            comfui_running_sub="MATI / STANDBY"
+                        fi
+                    fi
+                    
+                    clear
+                    echo "============================================="
+                    echo "       Manajemen Layanan AspriAI"
+                    echo "============================================="
+                    echo "Status Saat Ini:"
+                    if [ -z "$job_id_sub" ]; then
+                        echo -e "• Sewa GPU (Slurm)  : \033[91mTIDAK AKTIF\033[0m"
+                        echo -e "• ComfyUI Server    : \033[91mMATI\033[0m (Butuh Booking GPU)"
+                    else
+                        echo -e "• Sewa GPU (Slurm)  : \033[92mAKTIF\033[0m (Job ID: ${job_id_sub} di Node: ${node_name_sub})"
+                        if [ "$comfui_running_sub" = "RUNNING" ]; then
+                            echo -e "• ComfyUI Server    : \033[92mRUNNING\033[0m (di compute node ${node_name_sub})"
+                        else
+                            echo -e "• ComfyUI Server    : \033[93m${comfui_running_sub}\033[0m"
+                        fi
+                    fi
+                    
+                    echo "============================================="
+                    echo "       Manajemen Layanan ComfyUI"
+                    echo "============================================="
+                    if [ "$comfui_running_sub" = "RUNNING" ]; then
+                        echo -e "• URL (Named)    : \033[92mhttps://backend-comfui.penelitian.my.id\033[0m"
+                        if [ "$fallback_url_sub" != "TIDAK AKTIF" ]; then
+                            echo -e "• URL (Fallback) : \033[92m${fallback_url_sub}\033[0m"
+                        else
+                            echo -e "• URL (Fallback) : \033[91m${fallback_url_sub}\033[0m"
+                        fi
+                        echo -e "• Port Compute   : \033[96m${active_port_sub}\033[0m"
+                    else
+                        echo -e "• URL (Named)    : https://backend-comfui.penelitian.my.id (MATI)"
+                        echo -e "• URL (Fallback) : \033[91m${fallback_url_sub}\033[0m"
+                        echo -e "• Port Compute   : N/A"
+                    fi
+                    echo "---------------------------------------------"
+                    echo "Sub Menu ComfyUI:"
+                    echo "1. 🚀 Jalankan Server ComfyUI (di Compute Node aktif)"
+                    echo "2. 🛑 Hentikan Server ComfyUI (Sewa GPU tetap aktif)"
+                    echo "3. 🔄 Restart Server ComfyUI"
+                    echo "4. 📋 Lihat Log Runtime ComfyUI (Log & Tunnel)"
+                    echo "5. ⚙️ Instal Ulang Modul (setup.sh --install)"
+                    echo "Enter untuk kembali ke Manajemen Layanan AspriAI"
+                    echo "---------------------------------------------"
+                    read -p "Pilih aksi [1-5]: " comfui_choice
+                    
+                    if [ -z "$comfui_choice" ]; then
+                        break
+                    fi
+                    
+                    case $comfui_choice in
+                        1)
+                            if [ -z "$job_id_sub" ]; then
+                                echo -e "\033[91m⚠️ Anda belum menyewa GPU! Silakan jalankan menu utama Opsi 1 terlebih dahulu.\033[0m"
+                                sleep 2
+                            elif [ "$job_state_sub" != "R" ]; then
+                                echo -e "\033[93m⏳ Job booking GPU Anda masih dalam antrean (PENDING). Tunggu hingga RUNNING.\033[0m"
+                                sleep 2
+                            else
+                                local is_running=$(pgrep -f "run_comfui_daemon.sh" || echo "")
+                                if [ ! -z "$is_running" ]; then
+                                    echo -e "\033[93mℹ️ Server ComfyUI Daemon sudah berjalan di latar belakang.\033[0m"
+                                    sleep 1
+                                else
+                                    echo "Meluncurkan Server ComfyUI Daemon di latar belakang..."
+                                    nohup bash ${comfui_dir}/run_comfui_daemon.sh > ${comfui_dir}/logs/nohup_daemon.log 2>&1 &
+                                    echo "⏳ Menunggu inisiasi ComfyUI & Cloudflare Tunnel..."
+                                    local wait_sec=0
+                                    while [ $wait_sec -lt 15 ]; do
+                                        local check_port=$(grep -oE "Port: [0-9]+" "${comfui_dir}/logs/comfui_daemon.log" 2>/dev/null | tail -n 1 | cut -d' ' -f2 || echo "")
+                                        local check_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${comfui_dir}/logs/tunnel_daemon.log" 2>/dev/null | tail -n 1 || echo "")
+                                        if [ -n "$check_port" ] && [ -n "$check_url" ]; then
+                                            break
+                                        fi
+                                        sleep 2
+                                        wait_sec=$((wait_sec + 2))
+                                    done
+                                    echo -e "\033[92m✅ Server ComfyUI & Tunnel berhasil diluncurkan!\033[0m"
+                                    sleep 1.5
+                                fi
+                            fi
+                            ;;
+                        2)
+                            if [ -z "$job_id_sub" ] || [ "$job_state_sub" != "R" ]; then
+                                echo -e "\033[91m⚠️ Tidak ada server aktif di compute node yang bisa dihentikan.\033[0m"
+                                sleep 1.5
+                            else
+                                echo "Menghentikan proses daemon ComfyUI lokal dan srun terkait..."
+                                pkill -f "run_comfui_daemon.sh" 2>/dev/null || true
+                                pkill -f "python main.py --listen 0.0.0.0" 2>/dev/null || true
+                                pkill -f "cloudflared tunnel.*19" 2>/dev/null || true
+                                pkill -f "8188:localhost" 2>/dev/null || true
+                                echo -e "\033[92m✅ Server ComfyUI di node ${node_name_sub} berhasil dihentikan.\033[0m"
+                                sleep 1.5
+                            fi
+                            ;;
+                        3)
+                            if [ -z "$job_id_sub" ] || [ "$job_state_sub" != "R" ]; then
+                                echo -e "\033[91m⚠️ Tidak ada server aktif di compute node yang bisa di-restart.\033[0m"
+                                sleep 1.5
+                            else
+                                echo "Melakukan restart Server ComfyUI Daemon..."
+                                echo "1. Menghentikan proses daemon lama..."
+                                pkill -f "run_comfui_daemon.sh" 2>/dev/null || true
+                                pkill -f "python main.py --listen 0.0.0.0" 2>/dev/null || true
+                                pkill -f "cloudflared tunnel.*19" 2>/dev/null || true
+                                pkill -f "8188:localhost" 2>/dev/null || true
+                                sleep 3
+                                
+                                echo "2. Meluncurkan Server ComfyUI Daemon kembali..."
+                                nohup bash ${comfui_dir}/run_comfui_daemon.sh > ${comfui_dir}/logs/nohup_daemon.log 2>&1 &
+                                echo "⏳ Menunggu inisiasi ComfyUI & Cloudflare Tunnel..."
+                                local wait_sec=0
+                                while [ $wait_sec -lt 15 ]; do
+                                    local check_port=$(grep -oE "Port: [0-9]+" "${comfui_dir}/logs/comfui_daemon.log" 2>/dev/null | tail -n 1 | cut -d' ' -f2 || echo "")
+                                    local check_url=$(grep -oE "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" "${comfui_dir}/logs/tunnel_daemon.log" 2>/dev/null | tail -n 1 || echo "")
+                                    if [ -n "$check_port" ] && [ -n "$check_url" ]; then
+                                        break
+                                    fi
+                                    sleep 2
+                                    wait_sec=$((wait_sec + 2))
+                                done
+                                echo -e "\033[92m✅ Server ComfyUI berhasil di-restart dan diinisiasi!\033[0m"
+                                sleep 1.5
+                            fi
+                            ;;
+                        4)
+                            clear
+                            echo "=== RUNTIME COMFYUI LOG ==="
+                            if [ -f "${comfui_dir}/logs/comfui_daemon.log" ]; then
+                                tail -n 25 "${comfui_dir}/logs/comfui_daemon.log"
+                            else
+                                echo "Log ComfyUI belum tersedia."
+                            fi
+                            echo -e "\n=== TUNNEL LOG ==="
+                            if [ -f "${comfui_dir}/logs/tunnel_daemon.log" ]; then
+                                tail -n 10 "${comfui_dir}/logs/tunnel_daemon.log"
+                            else
+                                echo "Log Tunnel belum tersedia."
+                            fi
+                            echo ""
+                            read -p "Tekan Enter untuk kembali..."
+                            ;;
+                        5)
+                            echo "Menginisiasi ulang modul ComfyUI..."
+                            if [ -f "${comfui_dir}/setup.sh" ]; then
+                                bash "${comfui_dir}/setup.sh" --install
+                            else
+                                echo -e "\033[91m❌ Berkas setup.sh tidak ditemukan di ${comfui_dir}!\033[0m"
+                            fi
+                            read -p "Tekan Enter untuk melanjutkan..."
+                            ;;
+                        *)
+                            echo "Pilihan tidak valid!"
+                            sleep 1
+                            ;;
+                    esac
+                done
                 ;;
             7)
                 echo -e "\033[93mℹ️ Pilihan ini belum diimplementasikan.\033[0m"

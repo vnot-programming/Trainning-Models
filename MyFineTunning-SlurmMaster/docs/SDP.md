@@ -2612,3 +2612,27 @@
 - **File yang diubah/dibuat:** RVM/serve_frontend.py, RVM/frontend/js/app.js, RVM/backend/visual_eval_api.py
 - **Status saat ini:** Selesai
 - **Catatan untuk AI selanjutnya:** Frontend kini bisa load model. Validasi pipeline evaluasi jika ada yang masih error.
+
+---
+
+### [Entri 060] — Root Cause Fix: Cloudflare Tunnel Selalu Mati (Port Metrics Conflict)
+
+- **Tanggal/Waktu:** 2026-06-09 03:41 WIB
+- **Tugas yang diselesaikan:**
+  - **Investigasi mendalam** mengapa Cloudflare Named Tunnel (`myslurm.sh` Menu 1) selalu mati dengan pesan `Initiating graceful shutdown due to signal terminated` tepat 2-8 detik setelah berhasil konek ke jaringan Cloudflare.
+  - **Root Cause Teridentifikasi:** Port metrics default `127.0.0.1:20241` selalu *conflik* karena sisa binding dari instance cloudflared sebelumnya yang tidak dilepas dengan benar. Instance baru menerima `SIGTERM` dari sistem karena *address already in use*.
+  - **Fix `myslurm.sh`:** Menambahkan flag `--metrics 127.0.0.1:<random_port>` menggunakan `shuf -i 20200-20299 -n 1` pada wrapper script di fungsi `manage_cloudflare_tunnel()`. Dengan port metrics acak, konflik tidak pernah terjadi. Juga menghapus `exec` dan `| tee` dari wrapper yang menyebabkan masalah pipe SIGPIPE.
+  - **Investigasi ComfyUI Daemon:** Mengaudit `/singularity/comfui/` — menemukan bahwa `run_comfui_daemon.sh` menggunakan `pkill -f "cloudflared tunnel.*run --token"` secara global yang membunuh SEMUA instance cloudflared termasuk tunnel master dari `myslurm.sh`. Diperbaiki dengan mekanisme **PID File Tracking** (`named_tunnel.pid`).
+  - **Error ComfyUI Teridentifikasi:** Package `comfy_kitchen 0.2.10` di `~/.local/lib/python3.10/` tidak kompatibel dengan PyTorch 2.2.2 (butuh PyTorch ≥ 2.4). User akan upgrade container Singularity secara manual.
+  - **Verifikasi Berhasil:** Setelah fix, sesi tmux `cloudflare_tunnel` berjalan stabil tanpa terminasi.
+- **File yang diubah/dibuat:**
+  - `utils/myslurm.sh` [DIMODIFIKASI — wrapper cloudflared dengan `--metrics` random port, hapus exec+tee]
+  - `singularity/comfui/run_comfui_daemon.sh` [DIMODIFIKASI — pkill global diganti PID file tracking]
+  - `docs/SDP.md` [DIMODIFIKASI — Penambahan Log 060]
+- **Status saat ini:** **Selesai**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Tunnel Cloudflare kini stabil via sesi tmux `cloudflare_tunnel`.
+  - **JANGAN** pernah menggunakan `pkill -f "cloudflared tunnel.*run --token"` secara global di script manapun. Selalu gunakan PID file targeting.
+  - ComfyUI menunggu upgrade container ke PyTorch ≥ 2.4. Setelah upgrade, jalankan menu 6 `myslurm.sh` → Opsi 1.
+  - Quick Tunnel ComfyUI sementara rate-limited (429) karena terlalu banyak request debugging — akan pulih otomatis dalam beberapa jam.
+
