@@ -2636,3 +2636,18 @@
   - ComfyUI menunggu upgrade container ke PyTorch ≥ 2.4. Setelah upgrade, jalankan menu 6 `myslurm.sh` → Opsi 1.
   - Quick Tunnel ComfyUI sementara rate-limited (429) karena terlalu banyak request debugging — akan pulih otomatis dalam beberapa jam.
 
+---
+
+### [Entri 061] — Otomatisasi Git Merge (sync_main.sh) untuk Melindungi Struktur Folder
+
+- **Tanggal/Waktu:** 2026-06-09 14:03 WIB
+- **Tugas yang diselesaikan:**
+  - Membuat *bash script* `utils/sync_main.sh` untuk mengotomatiskan proses *merging* pembaruan dari branch `slurm` ke `main` secara aman.
+  - Skrip memastikan folder arsitektur lengkap (`MyFineTunning-dev` dan `MyFineTunning-RunPOD`) **tidak terhapus** saat disinkronkan, dengan menariknya kembali dari branch `dev` menggunakan opsi `--no-commit`.
+  - Mengubah *permission* script menjadi *executable* (`chmod +x`).
+- **File yang diubah/dibuat:**
+  - `utils/sync_main.sh` [DIBUAT BARU]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 061]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Untuk memindahkan update kode dari branch `slurm` ke `main` dengan aman, pengguna WAJIB menggunakan perintah `./utils/sync_main.sh` ketimbang membuat Pull Request lewat GUI GitHub.
