@@ -1,5 +1,0 @@
-Model,Model Size (MB),mAP50-95,mAP50,Precision,Recall,Preprocess (ms),Inference (ms),Postprocess (ms),Latency (ms),FPS,GPUs,Evaluator
-YOLO11m,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
-YOLOv9m,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
-YOLOv8m,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
-Hybrid (YOLO11m+SAM2),N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A

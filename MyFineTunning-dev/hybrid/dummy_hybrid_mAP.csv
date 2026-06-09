@@ -1,6 +1,0 @@
-Model,mAP50-95 (Box),mAP50 (Box),mAP50-95 (Mask),mAP50 (Mask),Precision,Recall,FPS,Latency (ms),Notes
-Hybrid (YOLO11m + SAM2),0.7823,0.8912,0.7456,0.8523,0.8834,0.8712,4.18,239.2,Dummy sample - perlu dihitung dari validasi set
-YOLOv8m-Seg (Fine-tuned),0.8029,0.9234,0.7616,0.8812,0.9156,0.8923,126.42,7.91,Reference
-YOLOv9c-Seg (Fine-tuned),0.8148,0.9312,0.7577,0.8798,0.9234,0.9012,91.83,10.89,Reference
-YOLO11m-Seg (Fine-tuned),0.8018,0.9289,0.7475,0.8689,0.9189,0.8956,117.10,8.54,Reference
-Mask R-CNN ResNet-50 FPN (Fine-tuned),0.7654,0.8923,0.7234,0.8345,0.8765,0.8543,N/A,N/A,Reference (dummy)
