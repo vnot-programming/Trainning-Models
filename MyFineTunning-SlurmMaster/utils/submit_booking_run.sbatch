@@ -6,7 +6,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G#SBATCH --signal=B:USR1@120
-#SBATCH --nodelist=ai3
+#SBATCH --nodelist=ai2
 
 mkdir -p slurm_logs
 echo "=========================================================="

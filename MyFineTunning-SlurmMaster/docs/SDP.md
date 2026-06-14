@@ -2651,3 +2651,226 @@
 - **Status saat ini:** **Selesai 100%**
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - Untuk memindahkan update kode dari branch `slurm` ke `main` dengan aman, pengguna WAJIB menggunakan perintah `./utils/sync_main.sh` ketimbang membuat Pull Request lewat GUI GitHub.
+
+---
+
+### [Entri 062] — Implementasi Script Manual Backup & Integrasi Notifikasi Telegram
+
+- **Tanggal/Waktu:** 2026-06-09 15:56 WIB
+- **Tugas yang diselesaikan:**
+  - Membuat script python baru `manual_backup.py` dan wrapper `run_manual_backup.sh` untuk backup manual interaktif.
+  - Menggabungkan fungsionalitas kompresi file/folder secara interaktif ke format `.tar.gz` di dalam sesi tmux `manual_backup`.
+  - Mengunggah berkas arsip ke Google Drive menggunakan `rclone` dengan base path dinamis `(hostname)-backup/(DD_NamaBulan_YYYY)`.
+  - Menambahkan pengiriman heartbeat notifikasi Telegram setiap 5 menit (300 detik) yang berjalan di thread background untuk melaporkan durasi dan status backup.
+  - Relokasi berkas ke folder `/data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/manual_backups/`.
+- **File yang diubah/dibuat:**
+  - `utils/manual_backups/manual_backup.py` [DIBUAT BARU]
+  - `utils/manual_backups/run_manual_backup.sh` [DIBUAT BARU]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 062]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Jalankan script via `./utils/manual_backups/run_manual_backup.sh` untuk otomatis membuka tmux session `manual_backup` dan log output ditulis ke `manual_backup.log`.
+
+---
+
+### [Entri 063] — Pembaruan Konfigurasi .env Manual Backup & Proteksi Dependency (Python3/Tmux)
+
+- **Tanggal/Waktu:** 2026-06-09 16:20 WIB
+- **Tugas yang diselesaikan:**
+  - **Pemuatan Berkas `.env`:** Memodifikasi pencarian path `.env` pada fungsi `_load_dotenv()` di dalam [manual_backup.py](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/manual_backups/manual_backup.py) agar memprioritaskan file lokal `.env` di direktori `utils/manual_backups/` terlebih dahulu sebelum melakukan fallback ke root project.
+- **Pengecekan Dependensi Sistem & Otomatisasi Instalasi:** Menambahkan validasi keberadaan sistem `python3` dan `tmux` pada berkas pembungkus shell [run_manual_backup.sh](file:///data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/manual_backups/run_manual_backup.sh). Jika python3 tidak aktif, script otomatis mencoba mengaktifkan environment conda. Jika tmux belum terpasang, script akan mencoba melakukan instalasi `tmux` + `ncurses` secara rootless via Conda (`conda-forge`).
+- **File yang diubah/dibuat:**
+  - `utils/manual_backups/manual_backup.py` [DIMODIFIKASI]
+  - `utils/manual_backups/run_manual_backup.sh` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 063]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Seluruh konfigurasi backup lokal saat ini terisolasi di `utils/manual_backups/.env`. Skrip pembungkus shell akan mencoba mengaktifkan conda environment untuk memuat `python3` dan menginstal `tmux` secara otomatis dan aman (rootless) via conda-forge jika hilang.
+
+### [Entri 028] — Pembersihan Cache Antigravity
+- **Tanggal/Waktu:** 2026-06-12 21:40 WIB
+- **Tugas yang diselesaikan:**
+  - Menghapus direktori cache Antigravity di `~/.cache/antigravity/` dan `~/.antigravity-server/` untuk membebaskan ruang disk dan meningkatkan kinerja Slurm Master.
+- **File yang diubah/dibuat:**
+  - (Tidak ada perubahan kode sumber.)
+- **Status saat ini:** **Selesai**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan tidak ada proses Antigravity yang sedang berjalan sebelum pembersihan cache. Cache dapat dibangun kembali secara otomatis saat Antigravity dijalankan kembali.
+
+---
+
+### [Entri — Pembersihan Cache Slurm Master dengan Proteksi Checkpoint] — 2026-06-12 22:15 WIB
+
+- **Tanggal/Waktu:** 2026-06-12 22:15 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan eksekusi pembersihan cache Slurm Master secara aman dan terkontrol.
+  - Memodifikasi skrip `clean_slurm_cache.sh` dan `preview_clean_slurm_cache.sh` untuk mengecualikan (memproteksi) direktori `/data/users/g6717500336/.cache/torch` (menyimpan bobot model Mask R-CNN) dan file konfigurasi `/data/users/g6717500336/.ai_completion/config.json` agar tidak ikut terhapus. Hal ini mencegah kegagalan pipeline evaluasi Mask R-CNN karena node komputasi yang terisolasi dari internet tidak akan dapat mengunduh ulang bobot tersebut.
+  - Menambahkan pengaman `|| true` pada seluruh perintah `find` di dalam skrip pembersihan untuk menghindari kegagalan eksekusi skrip (`exit code 1` akibat `set -e`) apabila ada direktori target yang belum terbentuk.
+  - Menjalankan skrip `clean_slurm_cache.sh` dan memverifikasi keberhasilan pembersihan cache secara sukses (exit code 0).
+- **File yang diubah/dibuat:**
+  - `Trainning-Models/MyFineTunning-SlurmMaster/utils/clean_slurm_cache.sh` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/utils/preview_clean_slurm_cache.sh` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pembersihan cache berjalan sukses tanpa mengganggu file esensial/weights Mask R-CNN.
+  - Semua file log pembersihan tersimpan di bawah folder `~/cleanup_logs/`.
+
+---
+
+### [Entri 064] — Download Model ComfyUI Langsung ke Server
+
+- **Tanggal/Waktu:** 2026-06-13 06:48 WIB
+- **Tugas yang diselesaikan:**
+  - Mengidentifikasi masalah pengguna yang mendapati model ComfyUI (`v1-5-pruned-emaonly.ckpt`) terunduh ke perangkat lokal (browser) alih-alih ke server saat mengklik tombol *Download* di UI ComfyUI.
+  - Menjelaskan bahwa UI ComfyUI berjalan secara *client-side*, sehingga *trigger download* akan mengunduh ke perangkat pengakses.
+  - Memulai proses unduh *checkpoint* model `v1-5-pruned-emaonly.ckpt` sebesar ~4GB langsung ke dalam node komputasi di *path* `/data/users/g6717500336/singularity/comfui/ComfyUI/models/checkpoints/` menggunakan eksekusi *background task* via wget.
+- **File yang diubah/dibuat:**
+  - `docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pastikan pengguna melakukan "Refresh" pada antarmuka ComfyUI mereka setelah file selesai diunduh di *background* untuk mendeteksi *checkpoint* baru.
+
+---
+
+### [Entri 066] — Implementasi Sub Menu Custom Nodes (Install & Hapus) ComfyUI
+
+- **Tanggal/Waktu:** 2026-06-13 08:00 WIB
+- **Tugas yang diselesaikan:**
+  - Mengubah pilihan menu `6. Hapus Custom Nodes` menjadi menu interaktif bercabang `6. Custom Nodes (Install / Hapus)` pada sub menu ComfyUI di `utils/myslurm.sh`.
+  - Mengimplementasikan fitur **Install** (pilihan 1) yang memungkinkan pengguna menginput nama model missing (misal `DreamShaper_8_pruned.safetensors`), URL unduhan file langsung (`http/https`), atau URL Git repository.
+  - Script secara cerdas mendeteksi jenis masukan:
+    - Jika input adalah repository Git, ia akan mengkloning repository tersebut ke folder `custom_nodes`.
+    - Jika input adalah nama file model populer (seperti `DreamShaper_8_pruned.safetensors`, `v1-5-pruned-emaonly.safetensors`, `sd_xl_base_1.0.safetensors`), script langsung mencocokkan dengan URL database internal HuggingFace untuk melakukan unduhan otomatis.
+    - Jika input adalah URL download langsung atau model non-populer, script meminta URL download langsung dan secara otomatis menempatkan file tersebut ke folder models yang sesuai (`checkpoints/`, `loras/`, `vae/`, `controlnet/`, `upscale_models/`, `embeddings/`) berdasarkan jenis ekstensinya, atau memberikan pilihan menu interaktif jika tidak terdeteksi otomatis.
+  - Memindahkan fitur **Hapus** interaktif yang sudah ada sebelumnya ke pilihan 2 tanpa merubah fungsi intinya.
+  - Memverifikasi keberhasilan sintaksis script `myslurm.sh` via perintah `bash -n` (Sukses 100% tanpa error).
+- **File yang diubah/dibuat:**
+  - `Trainning-Models/MyFineTunning-SlurmMaster/utils/myslurm.sh` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/docs/SDP.md` [DIMODIFIKASI]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Penginstalan model memanfaatkan command `wget -c` sehingga mendukung resume unduhan jika terputus di tengah jalan.
+  - Setelah menginstal Custom Nodes atau Model baru, pengguna diwajibkan untuk me-restart server ComfyUI (Menu 3) agar perubahan tersebut dimuat.
+
+
+
+
+---
+
+### [Entri 033] — Perubahan Nama Model Ollama (qwen3-embedding)
+
+- **Tanggal/Waktu:** 2026-06-13 16:20 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan penggantian nama (rename) pada model Ollama yang berjalan di daemon dari `qwen3-embedding:8b-q8_0` menjadi `Aspri-Q3e:8b-q8_0`.
+  - Menggunakan Ollama REST API (Endpoint `/api/copy` dan `/api/delete`) via tunnel port 11435 untuk memastikan penggantian nama dilakukan dengan mulus di dalam container Singularity tanpa restart layanan.
+- **File yang diubah/dibuat:**
+  - Model registry internal Ollama (`/root/.ollama/models`) [DIMODIFIKASI SECARA VIRTUAL]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 033]
+- **Status saat ini:** Selesai.
+- **Catatan untuk AI selanjutnya (Handoff Note):** Model telah berganti nama. Pastikan setiap panggilan API inferensi baru untuk embedding merujuk ke nama model terbaru `Aspri-Q3e:8b-q8_0`.
+
+---
+
+### [Entri 067] — Implementasi AspriAI Smart Routing & API Key Security
+
+- **Tanggal/Waktu:** 2026-06-14 13:55 WIB
+- **Tugas yang diselesaikan:**
+  - **Backend RVM (`visual_eval_api.py`):** Menambahkan endpoint `POST /api/gateway_keys/generate` dan `POST /api/gateway_keys/revoke` beserta notifikasi Telegram. Kunci disimpan dalam format JSON (`api_keys.json`) di direktori AspriAI dengan masa berlaku otomatis 2 tahun.
+  - **Frontend RVM (`index.html` & `app.js`):** Membangun UI/UX API Keys Management dengan gaya Bio-Digital (Tailwind-like semantic CSS) untuk memudahkan pengguna (Admin/User) mengatur kunci Gateway API secara langsung dari dashboard RVM.
+  - **AspriAI Core (`openai.py`):** Merombak list model menjadi dinamis. Mengambil daftar model Ollama langsung dari `http://127.0.0.1:11435/api/tags` via SSH reverse tunnel dan menggabungkannya dengan list model NVIDIA NIM secara harfiah.
+  - **AspriAI Core (`chat.py`):** Menerapkan validasi token berdasarkan `api_keys.json` dan menambahkan logika 100% Passthrough Smart Routing. Akses ke model NVIDIA (seperti `qwen/qwen3.5-397b-a17b` atau `nvidia/nemotron-3-ultra-550b-a55b`) akan di-routing secara transparan ke endpoint NVIDIA NIM (`https://integrate.api.nvidia.com`), sedangkan akses ke model lokal diarahkan ke Ollama.
+- **File yang diubah/dibuat:**
+  - `Trainning-Models/MyFineTunning-SlurmMaster/RVM/backend/visual_eval_api.py` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/RVM/frontend/index.html` [DIMODIFIKASI]
+  - `Trainning-Models/MyFineTunning-SlurmMaster/RVM/frontend/js/app.js` [DIMODIFIKASI]
+  - `singularity/AspriAI/aspri-core/app/api/v1/endpoints/openai.py` [DIMODIFIKASI]
+  - `singularity/AspriAI/aspri-core/app/api/v1/endpoints/chat.py` [DIMODIFIKASI]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 067]
+- **Status saat ini:** Selesai ✅
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Kunci API (Gateway Key) kini bersifat dinamis dan dibutuhkan saat berinteraksi dengan gateway AspriAI (seperti dari VSCode Extensions atau 9router). 
+  - Pastikan menggunakan Bearer token yang telah di-generate dari UI RVM Dashboard saat melakukan pemanggilan ke AspriAI.
+
+- **Tanggal/Waktu:** 2026-06-14 14:18:00
+- **Tugas yang diselesaikan:** Memperbaiki tata letak UI API Keys di Front End RVM agar aestetik, serta menambahkan API key permanen untuk myslurm.sh agar dapat fetch list model ke Ollama via proxy AspriAI. Juga menambahkan info API Keys di menu Manajemen AspriAI terminal myslurm.
+- **File yang diubah/dibuat:** `RVM/frontend/js/app.js`, `utils/myslurm.sh`, `singularity/AspriAI/api_keys.json`
+- **Status saat ini:** Selesai
+- **Catatan untuk AI selanjutnya (Handoff Note):** API Key untuk script bash internal `myslurm.sh` adalah `sk-aspri-myslurm-permanent-token`.
+
+---
+
+### [Entri 128] — Implementasi AspriGate Proxy (Scale-to-Zero Architecture)
+
+- **Tanggal/Waktu:** 2026-06-14 17:44 WIB
+- **Tugas yang diselesaikan:**
+  - Menulis ulang arsitektur reverse proxy menggunakan FastAPI/aiohttp (`utils/asprigate_proxy.py`).
+  - Memasang **background manager** untuk mendeteksi status "idle" selama 5 menit, lalu mematikan sesi engine secara transparan (`pkill`) guna menghemat VRAM tanpa membatalkan antrean Slurm/squeue dan tanpa merusak sesi tmux Cloudflare Tunnel.
+  - Memodifikasi `start_rvm.sh`, `serve_frontend.py`, `run_backend_daemon.sh`, dan `config_shared.py` dengan menggeser RVM port ke `8601` dan `8602`. 
+  - AspriGate Proxy mengambil alih peran penerima trafik HTTP di port standar `8501`, `8502`, `19095`. Hal ini menjamin bahwa **pengaturan Cloudflare Tunnel dari end-user sama sekali tidak perlu diubah**.
+  - Merancang User Interface transisi berbasis Bio-Digital Minimalism di `utils/templates/loading_template.html` lengkap dengan **i18n dinamis** berdasarkan `CF-IPCountry` (mendukung bahasa EN, ID, dan TH).
+  - Melakukan integrasi menu khusus "9. 🛡️ Manajemen AspriGate Proxy" ke dalam UI antarmuka utama `utils/myslurm.sh`.
+- **File yang diubah/dibuat:**
+  - `utils/asprigate_proxy.py` [DIBUAT BARU]
+  - `utils/templates/loading_template.html` [DIBUAT BARU]
+  - `utils/myslurm.sh` [DIMODIFIKASI - Menu Baru AspriGate]
+  - `RVM/start_rvm.sh` [DIMODIFIKASI - Port shift]
+  - `RVM/run_backend_daemon.sh` [DIMODIFIKASI - Port shift]
+  - `config_shared.py` [DIMODIFIKASI - Port shift]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):** 
+  - Tidak perlu mengubah DNS atau Tunnel di Cloudflare. Skema port mapping telah diatasi melalui internal proxy.
+
+### [Entri 129] — Perbaikan Routing Model Eksternal NVIDIA (9router Prefix)
+
+- **Tanggal/Waktu:** 2026-06-14 20:43 WIB
+- **Tugas yang diselesaikan:**
+  - Memperbaiki logika Smart Routing (`is_nvidia_route`) di `Aspri Core` (`app/api/v1/endpoints/chat.py`).
+  - Menambahkan pengecekan substring (bukan exact match) agar request dari 9router yang berisi prefix seperti `Prod3/mistralai/mistral-large-3...` dapat dikenali sebagai model NVIDIA.
+  - Memodifikasi JSON body (menghapus prefix dan mengembalikan nama model asli NVIDIA) sebelum diteruskan ke eksternal API `integrate.api.nvidia.com` agar tidak memicu respon HTTP 400 Bad Request.
+  - Menghapus header `content-length` agar httpx menghitung ulang otomatis panjang data yang dimodifikasi.
+- **File yang diubah/dibuat:**
+  - `singularity/AspriAI/aspri-core/app/api/v1/endpoints/chat.py` [DIMODIFIKASI]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):** 
+  - Routing NVIDIA kini dapat membaca prefix alias dari tool eksternal (seperti 9router) dan secara pintar membersihkannya (*stripping*) sebelum ditembakkan ke endpoint NVIDIA asli.
+
+### [Entri 130] — Implementasi Strict Header Scrubbing (Proxy WAF Bypass)
+
+- **Tanggal/Waktu:** 2026-06-14 20:53 WIB
+- **Tugas yang diselesaikan:**
+  - Menganalisis log respons dari NVIDIA NIM yang menghasilkan error HTTP 400 Bad Request.
+  - Menghapus trailing question mark (`?`) pada build `target_url` jika query string kosong.
+  - Mengimplementasikan pembersihan header (header scrubbing) secara agresif terhadap atribut `cf-*`, `x-forwarded-*`, dan `cdn-loop`. Ini menyelesaikan konflik *Infinite Routing Loop* antara infrastruktur proxy Cloudflare dan NVIDIA.
+  - Menyelesaikan konflik duplikasi otorisasi ganda (`authorization`) dari endpoint 9router sebelum mem-forward token valid dari sistem.
+- **File yang diubah/dibuat:**
+  - `singularity/AspriAI/aspri-core/app/api/v1/endpoints/chat.py` [DIMODIFIKASI]
+- **Status saat ini:** **Selesai 100% (Bug Fixed)**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pengujian integrasi external dengan 9router telah sukses. Segala traffic menuju eksternal (terutama dari Cloudflare ke Cloudflare) *wajib* disaring headers-nya.
+
+### [Entri 131] — NVIDIA Response Interceptor & JSON Scrubber
+
+- **Tanggal/Waktu:** 2026-06-14 21:08 WIB
+- **Tugas yang diselesaikan:**
+  - Mengimplementasikan *Response Interceptor / JSON Scrubber* secara *on-the-fly* pada rute NVIDIA NIM.
+  - Menyaring *keys* ilegal non-standar OpenAI (seperti `reasoning_content`, `kv_transfer_params`, `routed_experts`) yang memicu crash pada strict JSON Validator milik 9router (terjadi pada model Nemotron dan Kimi).
+  - Fitur ini aman dan *backward-compatible* sehingga tidak mengganggu model-model standar seperti Mistral dan Qwen.
+- **File yang diubah/dibuat:**
+  - `singularity/AspriAI/aspri-core/app/api/v1/endpoints/chat.py` [DIMODIFIKASI]
+- **Status saat ini:** **Selesai 100% (Bug Fixed)**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Logika *streaming response* pada Aspri Core Proxy sekarang memiliki kapabilitas modifikasi struktur payload *chunk-by-chunk* yang aman.
+
+### [Entri 132] — Fix ASGI Content-Length Protocol Error
+
+- **Tanggal/Waktu:** 2026-06-14 21:12 WIB
+- **Tugas yang diselesaikan:**
+  - Menyelesaikan error `h11._util.LocalProtocolError: Too little data for declared Content-Length` yang muncul pada Aspri Core.
+  - **Akar Masalah:** Karena JSON Scrubber mengurangi ukuran byte dari *payload* NVIDIA, ukuran *Content-Length* asli menjadi tidak relevan. ASGI server (*uvicorn*) melakukan *crash* karena jumlah byte yang ditransfer (*yielded*) lebih sedikit dari deklarasi *header*.
+  - **Solusi:** Melakukan proses *stripping* (penghapusan) atribut `content-length` dari *Headers* respons proksi, yang secara otomatis memaksa FastAPI/Starlette menggunakan mekanisme *Chunked Transfer Encoding* yang adaptif terhadap *stream*.
+- **File yang diubah/dibuat:**
+  - `singularity/AspriAI/aspri-core/app/api/v1/endpoints/chat.py` [DIMODIFIKASI]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Jika Anda memodifikasi respons payload pada *streaming proxy*, pastikan `content-length` tidak diteruskan dari server asal (upstream) agar tidak terjadi *mismatch* ukuran byte di level koneksi (HTTP/1.1).

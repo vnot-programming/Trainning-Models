@@ -87,6 +87,73 @@ generate_gpu_session_name() {
 }
 
 # Function to manage Cloudflare Tunnel on Master Node
+manage_asprigate() {
+    while true; do
+        clear
+        echo "============================================="
+        echo "      Manajemen AspriGate Proxy Server"
+        echo "============================================="
+        echo "Status Sesi:"
+        if tmux has-session -t asprigate 2>/dev/null; then
+            echo -e "AspriGate Proxy    : \033[92m● ACTIVE\033[0m"
+        else
+            echo -e "AspriGate Proxy    : \033[91m○ INACTIVE\033[0m"
+        fi
+        echo "---------------------------------------------"
+        echo "1. 🚀 Jalankan AspriGate Proxy (Background)"
+        echo "2. 🛑 Hentikan AspriGate Proxy"
+        echo "3. 💻 Masuk / Attach ke Sesi TMUX AspriGate"
+        echo "Enter untuk kembali ke menu utama"
+        echo "============================================="
+        read -p "Pilih aksi [1-3]: " ag_choice
+        
+        if [ -z "$ag_choice" ]; then
+            break
+        fi
+        
+        case $ag_choice in
+            1)
+                if tmux has-session -t asprigate 2>/dev/null; then
+                    echo "⚠️ AspriGate Proxy sudah berjalan."
+                else
+                    echo "Memulai AspriGate Proxy di background..."
+                    tmux new-session -d -s asprigate "source /data/programs/anaconda3/bin/activate yolo_env && python /data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/utils/asprigate_proxy.py"
+                    sleep 2
+                    if tmux has-session -t asprigate 2>/dev/null; then
+                        echo "✅ AspriGate Proxy AKTIF."
+                    else
+                        echo "❌ Gagal menjalankan AspriGate Proxy."
+                    fi
+                fi
+                read -p "Tekan Enter untuk melanjutkan..."
+                ;;
+            2)
+                if tmux has-session -t asprigate 2>/dev/null; then
+                    tmux kill-session -t asprigate
+                    echo "✅ AspriGate Proxy dihentikan."
+                else
+                    echo "⚠️ AspriGate Proxy tidak aktif."
+                fi
+                read -p "Tekan Enter untuk melanjutkan..."
+                ;;
+            3)
+                if tmux has-session -t asprigate 2>/dev/null; then
+                    echo "Memasuki sesi tmux 'asprigate'. Tekan Ctrl+B lalu D untuk detach."
+                    sleep 2
+                    tmux attach -t asprigate
+                else
+                    echo "⚠️ AspriGate Proxy tidak aktif."
+                    read -p "Tekan Enter untuk melanjutkan..."
+                fi
+                ;;
+            *)
+                echo "❌ Pilihan tidak valid."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
 manage_cloudflare_tunnel() {
     # Ambil konfigurasi dari config_shared.py dan .env
     local cf_bin=$(grep -E "^CLOUDFLARE_BIN\s*=" "${SCRIPT_DIR}/../config_shared.py" | head -n 1 | cut -d'"' -f2)
@@ -471,6 +538,36 @@ manage_aspri_ai() {
             echo -e "• AspriAI Desk  : \033[91mUnhealthy\033[0m ($desk_url)"
         fi
         
+        # Cetak API Keys AspriAI
+        echo "============================================="
+        echo "       Kunci API AspriAI (Gateway)"
+        echo "============================================="
+        if [ -f "/data/users/g6717500336/singularity/AspriAI/api_keys.json" ]; then
+            python3 -c "
+import json, datetime
+try:
+    with open('/data/users/g6717500336/singularity/AspriAI/api_keys.json') as f:
+        keys = json.load(f)
+    if not keys:
+        print('  (Belum ada API Key)')
+    else:
+        for k, v in keys.items():
+            is_revoked = v.get('revoked', False)
+            exp_date = datetime.datetime.fromisoformat(v['expires_at'])
+            is_expired = exp_date < datetime.datetime.now()
+            
+            status = '\033[91mRevoked\033[0m' if is_revoked else ('\033[93mExpired\033[0m' if is_expired else '\033[92mActive\033[0m')
+            label = v.get('label', '')
+            lbl_str = f' [\033[96m{label}\033[0m]' if label else ''
+            print(f'  • {k[:15]}...{k[-5:]}{lbl_str}')
+            print(f'    Status: {status} | Exp: {exp_date.strftime(\"%Y-%m-%d\")}')
+except Exception as e:
+    print('  Gagal membaca api_keys.json', e)
+"
+        else
+            echo "  (File api_keys.json tidak ditemukan)"
+        fi
+        
         # Cetak Status Ollama
         echo "============================================="
         echo "       Manajemen Layanan Ollama"
@@ -823,7 +920,9 @@ import urllib.request, json, os
 manifests_dir = '${aspri_dir}/models/manifests'
 
 try:
-    response = urllib.request.urlopen('http://localhost:11434/api/tags', timeout=3)
+    req = urllib.request.Request('http://localhost:11434/api/tags')
+    req.add_header('Authorization', 'Bearer sk-aspri-myslurm-permanent-token')
+    response = urllib.request.urlopen(req, timeout=3)
     data = json.loads(response.read().decode())
     for m in data.get('models', []):
         model_name = m.get('name', '')
@@ -1004,10 +1103,14 @@ except Exception:
                     echo "2. 🛑 Hentikan Server ComfyUI (Sewa GPU tetap aktif)"
                     echo "3. 🔄 Restart Server ComfyUI"
                     echo "4. 📋 Lihat Log Runtime ComfyUI (Log & Tunnel)"
-                    echo "5. ⚙️ Instal Ulang Modul (setup.sh --install)"
+                    echo "5. 🔄 Update ComfyUI (.sif Container + Custom Nodes)"
+                    echo "6. 📦 Custom Nodes (Install / Hapus)"
+                    echo "7. 🗑️  Hapus Output Gambar / Video / Hasil Generate"
+                    echo "---------------------------------------------"
+                    echo "i. ⚙️  Instal Ulang Modul (setup.sh --install)"
                     echo "Enter untuk kembali ke Manajemen Layanan AspriAI"
                     echo "---------------------------------------------"
-                    read -p "Pilih aksi [1-5]: " comfui_choice
+                    read -p "Pilih aksi [1-7 / i]: " comfui_choice
                     
                     if [ -z "$comfui_choice" ]; then
                         break
@@ -1107,6 +1210,473 @@ except Exception:
                             read -p "Tekan Enter untuk kembali..."
                             ;;
                         5)
+                            # ── Menu 5: Update ComfyUI (upgrade .sif + log) ──────────────────
+                            clear
+                            echo "============================================="
+                            echo "     🔄 Update ComfyUI (Upgrade Container)"
+                            echo "============================================="
+                            echo ""
+                            echo "ℹ️  ComfyUI berjalan di dalam container Singularity (.sif)."
+                            echo "   Update engine dilakukan dengan mengganti file image container"
+                            echo "   ke versi terbaru. Custom Nodes dan Model TIDAK akan terhapus."
+                            echo ""
+                            echo "📋 Informasi Container Saat Ini:"
+                            local sif_file="${comfui_dir}/pytorch_cuda12_1.sif"
+                            if [ -f "$sif_file" ]; then
+                                local sif_size=$(du -sh "$sif_file" | cut -f1)
+                                local sif_date=$(stat -c "%y" "$sif_file" | cut -d' ' -f1)
+                                echo -e "   • File     : \033[96mpytorch_cuda12_1.sif\033[0m"
+                                echo -e "   • Ukuran   : \033[96m${sif_size}\033[0m"
+                                echo -e "   • Diunduh  : \033[96m${sif_date}\033[0m"
+                            else
+                                echo -e "   \033[91m• File .sif tidak ditemukan di ${comfui_dir}\033[0m"
+                            fi
+                            echo ""
+                            echo "📦 Versi ComfyUI Aktif:"
+                            local comfy_ver=$(grep -r "version" "${comfui_dir}/ComfyUI/comfy/version.py" 2>/dev/null | head -n 1 | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" || echo "N/A")
+                            echo -e "   • ComfyUI  : \033[96mv${comfy_ver}\033[0m"
+                            echo ""
+                            echo "============================================="
+                            echo "Pilihan:"
+                            echo "1. 📥 Download .sif Terbaru dari DockerHub (ukuran besar)"
+                            echo "2. 🔄 Update Custom Nodes Semua via git pull"
+                            echo "3. 📋 Lihat Log Container (comfui_daemon.log)"
+                            echo "Enter untuk kembali"
+                            echo "---------------------------------------------"
+                            read -p "Pilih [1-3]: " update_choice
+                            
+                            case $update_choice in
+                                1)
+                                    echo ""
+                                    echo -e "\033[93m⚠️  Perhatian: Proses ini akan mengunduh image baru dan membutuhkan waktu lama.\033[0m"
+                                    echo -e "   Pastikan ComfyUI sedang TIDAK berjalan sebelum melanjutkan."
+                                    echo ""
+                                    read -p "Konfirmasi download image baru? [y/N]: " confirm_update
+                                    if [[ "$confirm_update" =~ ^[yY]$ ]]; then
+                                        echo "Menghentikan ComfyUI terlebih dahulu..."
+                                        pkill -f "run_comfui_daemon.sh" 2>/dev/null || true
+                                        pkill -f "python main.py --listen 0.0.0.0" 2>/dev/null || true
+                                        sleep 2
+                                        echo ""
+                                        echo "🔄 Mengunduh image ComfyUI terbaru..."
+                                        echo "   Sumber: docker://pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime"
+                                        echo "   Target: ${comfui_dir}/pytorch_cuda12_1.sif"
+                                        echo ""
+                                        singularity pull --force "${comfui_dir}/pytorch_cuda12_1_new.sif" docker://pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime 2>&1 | tee "${comfui_dir}/logs/update_container.log"
+                                        if [ $? -eq 0 ]; then
+                                            echo ""
+                                            mv "${comfui_dir}/pytorch_cuda12_1.sif" "${comfui_dir}/pytorch_cuda12_1.sif.bak"
+                                            mv "${comfui_dir}/pytorch_cuda12_1_new.sif" "${comfui_dir}/pytorch_cuda12_1.sif"
+                                            echo -e "\033[92m✅ Image baru berhasil diunduh dan diaktifkan!\033[0m"
+                                            echo -e "   File lama tersimpan di: pytorch_cuda12_1.sif.bak"
+                                        else
+                                            echo -e "\033[91m❌ Gagal mengunduh image baru. Lihat log: ${comfui_dir}/logs/update_container.log\033[0m"
+                                        fi
+                                    else
+                                        echo "Dibatalkan."
+                                    fi
+                                    ;;
+                                2)
+                                    echo ""
+                                    echo "🔄 Mengupdate semua Custom Nodes via git pull..."
+                                    local nodes_dir="${comfui_dir}/ComfyUI/custom_nodes"
+                                    local updated=0
+                                    local failed=0
+                                    for node_path in "${nodes_dir}"/*/; do
+                                        if [ -d "${node_path}/.git" ]; then
+                                            local node_name=$(basename "$node_path")
+                                            echo -ne "   • ${node_name}... "
+                                            if git -C "$node_path" pull --ff-only 2>/dev/null; then
+                                                echo -e "\033[92mOK\033[0m"
+                                                updated=$((updated+1))
+                                            else
+                                                echo -e "\033[91mFAIL\033[0m"
+                                                failed=$((failed+1))
+                                            fi
+                                        fi
+                                    done
+                                    echo ""
+                                    echo -e "   ✅ Updated: \033[92m${updated}\033[0m | ❌ Gagal: \033[91m${failed}\033[0m"
+                                    echo "   Lakukan Restart ComfyUI (menu 3) agar perubahan aktif."
+                                    ;;
+                                3)
+                                    clear
+                                    echo "=== LOG CONTAINER COMFYUI ==="
+                                    if [ -f "${comfui_dir}/logs/comfui_daemon.log" ]; then
+                                        tail -n 40 "${comfui_dir}/logs/comfui_daemon.log"
+                                    else
+                                        echo "Log belum tersedia."
+                                    fi
+                                    ;;
+                                *)
+                                    echo "Kembali..."
+                                    ;;
+                            esac
+                            read -p "Tekan Enter untuk kembali..."
+                            ;;
+                        6)
+                            # ── Menu 6: Custom Nodes (Install / Hapus) ──────────────────────
+                            while true; do
+                                clear
+                                echo "============================================="
+                                echo "       📦 Manajemen Custom Nodes ComfyUI"
+                                echo "============================================="
+                                echo "1. 📥 Install Custom Nodes / Model Missing"
+                                echo "2. 🗑️  Hapus Custom Nodes"
+                                echo "Enter untuk kembali"
+                                echo "---------------------------------------------"
+                                read -p "Pilih menu [1-2]: " cn_submenu_choice
+                                
+                                if [ -z "$cn_submenu_choice" ]; then
+                                    break
+                                fi
+                                
+                                case $cn_submenu_choice in
+                                    1)
+                                        clear
+                                        echo "============================================="
+                                        echo "   📥 Install Custom Nodes / Model Missing"
+                                        echo "============================================="
+                                        echo "Anda dapat:"
+                                        echo "1. Memasukkan URL Git (misal: https://github.com/user/repo.git)"
+                                        echo "2. Memasukkan URL download langsung (misal: http://.../file.safetensors)"
+                                        echo "3. Menuliskan nama model missing populer, contoh:"
+                                        echo "   - DreamShaper_8_pruned.safetensors"
+                                        echo "   - v1-5-pruned-emaonly.safetensors"
+                                        echo "   - sd_xl_base_1.0.safetensors"
+                                        echo "---------------------------------------------"
+                                        read -p "Masukkan nama model / URL: " install_input
+                                        
+                                        if [ -z "$install_input" ]; then
+                                            continue
+                                        fi
+                                        
+                                        # Bersihkan input dari spasi di awal/akhir
+                                        install_input=$(echo "$install_input" | xargs)
+                                        
+                                        # 1. Cek apakah Git Repository
+                                        if [[ "$install_input" =~ \.git$ ]] || ( [[ "$install_input" =~ github\.com/ ]] && [[ ! "$install_input" =~ \.(safetensors|ckpt|pt|bin|yaml|json|png|jpg|jpeg|webp)$ ]] ); then
+                                            echo ""
+                                            echo "Detect: URL Git Repository."
+                                            echo "Mengkloning ke folder custom_nodes..."
+                                            local nodes_dir="${comfui_dir}/ComfyUI/custom_nodes"
+                                            if git -C "$nodes_dir" clone "$install_input"; then
+                                                echo -e "\033[92m✅ Berhasil mengkloning custom node!\033[0m"
+                                                echo "Silakan restart server ComfyUI (menu 3) agar perubahan aktif."
+                                            else
+                                                echo -e "\033[91m❌ Gagal mengkloning custom node.\033[0m"
+                                            fi
+                                            read -p "Tekan Enter untuk melanjutkan..."
+                                            continue
+                                        fi
+                                        
+                                        # 2. Cek apakah URL langsung atau nama model populer
+                                        local download_url=""
+                                        local file_name=""
+                                        if [[ "$install_input" =~ ^https?:// ]]; then
+                                            download_url="$install_input"
+                                            # Ambil nama file dari URL, buang query string jika ada
+                                            file_name=$(echo "$download_url" | awk -F/ '{print $NF}' | cut -d? -f1)
+                                        else
+                                            # Cek kecocokan di database populer
+                                            case "$install_input" in
+                                                "DreamShaper_8_pruned.safetensors")
+                                                    download_url="https://huggingface.co/Lykon/DreamShaper/resolve/main/DreamShaper_8_pruned.safetensors"
+                                                    file_name="DreamShaper_8_pruned.safetensors"
+                                                    ;;
+                                                "v1-5-pruned-emaonly.safetensors")
+                                                    download_url="https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.safetensors"
+                                                    file_name="v1-5-pruned-emaonly.safetensors"
+                                                    ;;
+                                                "v1-5-pruned-emaonly.ckpt")
+                                                    download_url="https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.ckpt"
+                                                    file_name="v1-5-pruned-emaonly.ckpt"
+                                                    ;;
+                                                "sd_xl_base_1.0.safetensors")
+                                                    download_url="https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors"
+                                                    file_name="sd_xl_base_1.0.safetensors"
+                                                    ;;
+                                                "sd_xl_refiner_1.0.safetensors")
+                                                    download_url="https://huggingface.co/stabilityai/stable-diffusion-xl-refiner-1.0/resolve/main/sd_xl_refiner_1.0.safetensors"
+                                                    file_name="sd_xl_refiner_1.0.safetensors"
+                                                    ;;
+                                                *)
+                                                    echo ""
+                                                    echo -e "\033[93m⚠️ Model tidak terdaftar di database populer.\033[0m"
+                                                    read -p "Masukkan URL download langsung untuk model ini (Enter untuk batal): " custom_url
+                                                    if [ -n "$custom_url" ]; then
+                                                        download_url=$(echo "$custom_url" | xargs)
+                                                        file_name=$(echo "$download_url" | awk -F/ '{print $NF}' | cut -d? -f1)
+                                                    else
+                                                        continue
+                                                    fi
+                                                    ;;
+                                            esac
+                                        fi
+                                        
+                                        if [ -n "$download_url" ] && [ -n "$file_name" ]; then
+                                            # Tentukan folder target secara cerdas
+                                            local target_subfolder=""
+                                            local lower_filename=$(echo "$file_name" | tr '[:upper:]' '[:lower:]')
+                                            
+                                            if [[ "$lower_filename" =~ \.safetensors$ ]] || [[ "$lower_filename" =~ \.ckpt$ ]]; then
+                                                if [[ "$lower_filename" =~ lora ]]; then
+                                                    target_subfolder="loras"
+                                                elif [[ "$lower_filename" =~ vae ]]; then
+                                                    target_subfolder="vae"
+                                                elif [[ "$lower_filename" =~ controlnet ]]; then
+                                                    target_subfolder="controlnet"
+                                                else
+                                                    target_subfolder="checkpoints"
+                                                fi
+                                            elif [[ "$lower_filename" =~ \.pt$ ]] || [[ "$lower_filename" =~ \.bin$ ]]; then
+                                                if [[ "$lower_filename" =~ vae ]]; then
+                                                    target_subfolder="vae"
+                                                elif [[ "$lower_filename" =~ lora ]]; then
+                                                    target_subfolder="loras"
+                                                elif [[ "$lower_filename" =~ upscale ]]; then
+                                                    target_subfolder="upscale_models"
+                                                elif [[ "$lower_filename" =~ controlnet ]]; then
+                                                    target_subfolder="controlnet"
+                                                else
+                                                    target_subfolder="checkpoints"
+                                                fi
+                                            fi
+                                            
+                                            # Jika belum terdeteksi, minta user memilih folder target
+                                            if [ -z "$target_subfolder" ]; then
+                                                echo ""
+                                                echo "Pilih folder tujuan untuk file '${file_name}':"
+                                                echo "1. Checkpoints (models/checkpoints/)"
+                                                echo "2. LoRAs (models/loras/)"
+                                                echo "3. VAE (models/vae/)"
+                                                echo "4. ControlNet (models/controlnet/)"
+                                                echo "5. Upscale Models (models/upscale_models/)"
+                                                echo "6. Embeddings (models/embeddings/)"
+                                                echo "7. Folder Custom (relatif terhadap ComfyUI/models/)"
+                                                read -p "Pilih [1-7]: " folder_choice
+                                                case $folder_choice in
+                                                    1) target_subfolder="checkpoints" ;;
+                                                    2) target_subfolder="loras" ;;
+                                                    3) target_subfolder="vae" ;;
+                                                    4) target_subfolder="controlnet" ;;
+                                                    5) target_subfolder="upscale_models" ;;
+                                                    6) target_subfolder="embeddings" ;;
+                                                    7)
+                                                        read -p "Masukkan nama folder (misal: checkpoints/xl): " custom_f
+                                                        target_subfolder=$(echo "$custom_f" | xargs)
+                                                        ;;
+                                                    *)
+                                                        echo "Folder tidak valid. Default ke checkpoints."
+                                                        target_subfolder="checkpoints"
+                                                        ;;
+                                                esac
+                                            fi
+                                            
+                                            local target_dir="${comfui_dir}/ComfyUI/models/${target_subfolder}"
+                                            mkdir -p "$target_dir"
+                                            
+                                            echo ""
+                                            echo -e "Memulai unduhan:"
+                                            echo -e "   • URL    : \033[96m${download_url}\033[0m"
+                                            echo -e "   • Nama   : \033[92m${file_name}\033[0m"
+                                            echo -e "   • Folder : models/${target_subfolder}/"
+                                            echo ""
+                                            
+                                            # Jalankan wget dengan opsi resume (-c)
+                                            wget -c -O "${target_dir}/${file_name}" "$download_url"
+                                            if [ $? -eq 0 ]; then
+                                                echo -e "\033[92m✅ Berhasil mengunduh model '${file_name}'!\033[0m"
+                                            else
+                                                echo -e "\033[91m❌ Gagal mengunduh model.\033[0m"
+                                            fi
+                                        fi
+                                        read -p "Tekan Enter untuk melanjutkan..."
+                                        ;;
+                                    2)
+                                        # ── Hapus Custom Nodes (interaktif) ──────────────────────
+                                        while true; do
+                                            clear
+                                            echo "============================================="
+                                            echo "     🗑️  Hapus Custom Nodes ComfyUI"
+                                            echo "============================================="
+                                            local nodes_dir="${comfui_dir}/ComfyUI/custom_nodes"
+                                            
+                                            # Bangun array nama node dan ukurannya
+                                            local node_names=()
+                                            local node_sizes=()
+                                            local idx=1
+                                            
+                                            echo ""
+                                            printf "  %-4s %-45s %s\n" "No." "Nama Custom Node" "Ukuran"
+                                            echo "  ---------------------------------------------------------------"
+                                            
+                                            for node_path in "${nodes_dir}"/*/; do
+                                                if [ -d "$node_path" ]; then
+                                                    local node_name=$(basename "$node_path")
+                                                    local node_size=$(du -sh "$node_path" 2>/dev/null | cut -f1)
+                                                    node_names+=("$node_name")
+                                                    node_sizes+=("$node_size")
+                                                    printf "  %-4s %-45s \033[96m%s\033[0m\n" "${idx}." "${node_name}" "${node_size}"
+                                                    idx=$((idx + 1))
+                                                fi
+                                            done
+                                            
+                                            if [ ${#node_names[@]} -eq 0 ]; then
+                                                echo "  (Tidak ada custom node yang terinstall)"
+                                                echo ""
+                                                read -p "Tekan Enter untuk kembali..."
+                                                break
+                                            fi
+                                            
+                                            echo "  ---------------------------------------------------------------"
+                                            local total_size=$(du -sh "${nodes_dir}" 2>/dev/null | cut -f1)
+                                            echo -e "  Total: \033[93m${total_size}\033[0m"
+                                            echo ""
+                                            echo -e "  \033[91m⚠️  Penghapusan bersifat PERMANEN dan tidak bisa dibatalkan!\033[0m"
+                                            echo "---------------------------------------------"
+                                            read -p "Pilih nomor node yang akan dihapus [1-$((idx-1))] (Enter untuk batal): " del_choice
+                                            
+                                            if [ -z "$del_choice" ]; then
+                                                break
+                                            fi
+                                            
+                                            if [[ "$del_choice" =~ ^[0-9]+$ ]] && [ "$del_choice" -ge 1 ] && [ "$del_choice" -le $((idx-1)) ]; then
+                                                local target_name="${node_names[$((del_choice-1))]}"
+                                                local target_size="${node_sizes[$((del_choice-1))]}"
+                                                local target_path="${nodes_dir}/${target_name}"
+                                                
+                                                echo ""
+                                                echo -e "  Target : \033[91m${target_name}\033[0m"
+                                                echo -e "  Ukuran : \033[93m${target_size}\033[0m"
+                                                echo -e "  Path   : ${target_path}"
+                                                echo ""
+                                                read -p "  Konfirmasi hapus? [y/N]: " confirm_del
+                                                
+                                                if [[ "$confirm_del" =~ ^[yY]$ ]]; then
+                                                    rm -rf "$target_path"
+                                                    echo -e "\033[92m  ✅ Custom node '${target_name}' berhasil dihapus!\033[0m"
+                                                    echo -e "  Lakukan Restart ComfyUI (menu 3) agar perubahan aktif."
+                                                    sleep 2
+                                                else
+                                                    echo "  Dibatalkan."
+                                                    sleep 1
+                                                fi
+                                            else
+                                                echo "  Pilihan tidak valid!"
+                                                sleep 1
+                                            fi
+                                        done
+                                        ;;
+                                    *)
+                                        # Pilihan di luar 1 & 2
+                                        break
+                                        ;;
+                                esac
+                            done
+                            ;;
+                        7)
+                            # ── Menu 7: Hapus Output Gambar / Video ──────────────────────────
+                            clear
+                            echo "============================================="
+                            echo "     🗑️  Hapus Output Generate ComfyUI"
+                            echo "============================================="
+                            local output_dir="${comfui_dir}/ComfyUI/output"
+                            
+                            if [ ! -d "$output_dir" ]; then
+                                echo -e "\033[91m❌ Folder output tidak ditemukan: ${output_dir}\033[0m"
+                                read -p "Tekan Enter untuk kembali..."
+                                continue
+                            fi
+                            
+                            # Statistik folder output
+                            local total_files=$(find "$output_dir" -type f | wc -l)
+                            local total_size=$(du -sh "$output_dir" 2>/dev/null | cut -f1)
+                            local img_count=$(find "$output_dir" -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.webp" \) | wc -l)
+                            local vid_count=$(find "$output_dir" -type f \( -name "*.mp4" -o -name "*.webm" -o -name "*.gif" \) | wc -l)
+                            
+                            echo ""
+                            echo "📊 Statistik Folder Output:"
+                            echo -e "   • Total Ukuran : \033[93m${total_size}\033[0m"
+                            echo -e "   • Total File   : \033[96m${total_files}\033[0m"
+                            echo -e "   • Gambar       : \033[96m${img_count} file\033[0m"
+                            echo -e "   • Video / GIF  : \033[96m${vid_count} file\033[0m"
+                            echo ""
+                            echo "============================================="
+                            echo "Pilihan Penghapusan:"
+                            echo "1. 🗑️  Hapus semua output (gambar + video)"
+                            echo "2. 🖼️  Hapus gambar saja (.png .jpg .jpeg .webp)"
+                            echo "3. 🎬 Hapus video / GIF saja (.mp4 .webm .gif)"
+                            echo "4. 📅 Hapus file lebih dari N hari yang lalu"
+                            echo "Enter untuk batal"
+                            echo "---------------------------------------------"
+                            read -p "Pilih [1-4]: " clean_choice
+                            
+                            case $clean_choice in
+                                1)
+                                    echo ""
+                                    echo -e "\033[91m⚠️  Seluruh ${total_files} file (${total_size}) akan dihapus PERMANEN!\033[0m"
+                                    read -p "Konfirmasi? [y/N]: " confirm_all
+                                    if [[ "$confirm_all" =~ ^[yY]$ ]]; then
+                                        find "$output_dir" -type f -delete
+                                        echo -e "\033[92m✅ Semua file output berhasil dihapus!\033[0m"
+                                    else
+                                        echo "Dibatalkan."
+                                    fi
+                                    ;;
+                                2)
+                                    echo ""
+                                    echo -e "\033[91m⚠️  ${img_count} file gambar akan dihapus PERMANEN!\033[0m"
+                                    read -p "Konfirmasi? [y/N]: " confirm_img
+                                    if [[ "$confirm_img" =~ ^[yY]$ ]]; then
+                                        find "$output_dir" -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.webp" \) -delete
+                                        echo -e "\033[92m✅ File gambar berhasil dihapus!\033[0m"
+                                    else
+                                        echo "Dibatalkan."
+                                    fi
+                                    ;;
+                                3)
+                                    echo ""
+                                    echo -e "\033[91m⚠️  ${vid_count} file video/GIF akan dihapus PERMANEN!\033[0m"
+                                    read -p "Konfirmasi? [y/N]: " confirm_vid
+                                    if [[ "$confirm_vid" =~ ^[yY]$ ]]; then
+                                        find "$output_dir" -type f \( -name "*.mp4" -o -name "*.webm" -o -name "*.gif" \) -delete
+                                        echo -e "\033[92m✅ File video/GIF berhasil dihapus!\033[0m"
+                                    else
+                                        echo "Dibatalkan."
+                                    fi
+                                    ;;
+                                4)
+                                    echo ""
+                                    read -p "Hapus file lebih dari berapa hari yang lalu? (contoh: 7): " days_old
+                                    if [[ "$days_old" =~ ^[0-9]+$ ]] && [ "$days_old" -ge 1 ]; then
+                                        local old_count=$(find "$output_dir" -type f -mtime +${days_old} | wc -l)
+                                        echo ""
+                                        echo -e "   Ditemukan: \033[93m${old_count} file\033[0m lebih dari ${days_old} hari yang lalu"
+                                        if [ "$old_count" -gt 0 ]; then
+                                            echo -e "\033[91m⚠️  File-file tersebut akan dihapus PERMANEN!\033[0m"
+                                            read -p "Konfirmasi? [y/N]: " confirm_days
+                                            if [[ "$confirm_days" =~ ^[yY]$ ]]; then
+                                                find "$output_dir" -type f -mtime +${days_old} -delete
+                                                echo -e "\033[92m✅ ${old_count} file lama berhasil dihapus!\033[0m"
+                                            else
+                                                echo "Dibatalkan."
+                                            fi
+                                        else
+                                            echo "   Tidak ada file yang lebih dari ${days_old} hari."
+                                        fi
+                                    else
+                                        echo "Input tidak valid. Harus berupa angka positif."
+                                    fi
+                                    ;;
+                                *)
+                                    echo "Kembali..."
+                                    ;;
+                            esac
+                            read -p "Tekan Enter untuk kembali..."
+                            ;;
+                        [iI])
+                            # ── Menu i: Instal Ulang Modul (setup.sh --install) ──────────────
                             echo "Menginisiasi ulang modul ComfyUI..."
                             if [ -f "${comfui_dir}/setup.sh" ]; then
                                 bash "${comfui_dir}/setup.sh" --install
@@ -1147,9 +1717,10 @@ while true; do
     echo "6. ☁️ Manajemen Cloudflare Tunnel"
     echo "7. 🖥️ Web RVM"
     echo "8. 🤖 Manajemen AspriAI (Ollama & WebUI)"
+    echo "9. 🛡️ Manajemen AspriGate Proxy"
     echo -e "\033[91m0. ❌ Keluar Menu\033[0m"
     echo "============================================="
-    read -p "Pilih menu [0-8]: " pilihan
+    read -p "Pilih menu [0-9]: " pilihan
 
     case $pilihan in
         1)
@@ -1289,6 +1860,9 @@ while true; do
             ;;
         8)
             manage_aspri_ai
+            ;;
+        9)
+            manage_asprigate
             ;;
         0)
             echo "Terima kasih telah menggunakan sistem ini."

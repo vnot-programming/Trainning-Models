@@ -792,6 +792,102 @@ def list_models():
     })
 
 
+# ==============================================================================
+# ASPRIAI GATEWAY SECURITY (API KEYS)
+# ==============================================================================
+ASPRI_KEYS_PATH = "/data/users/g6717500336/singularity/AspriAI/api_keys.json"
+ASPRI_ENV_PATH = "/data/users/g6717500336/singularity/AspriAI/.env"
+
+def _send_telegram_notification(message):
+    try:
+        import requests
+        bot_token = None
+        chat_id = None
+        if os.path.exists(ASPRI_ENV_PATH):
+            with open(ASPRI_ENV_PATH, "r") as f:
+                for line in f:
+                    if line.startswith("TELEGRAM_BOT_TOKEN="):
+                        bot_token = line.split("=")[1].strip()
+                    elif line.startswith("TELEGRAM_CHAT_ID="):
+                        chat_id = line.split("=")[1].strip()
+        
+        if bot_token and chat_id:
+            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            requests.post(url, json={"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}, timeout=5)
+    except Exception as e:
+        print(f"[Telegram] Gagal mengirim notifikasi: {e}")
+
+@app.route("/api/gateway_keys", methods=["GET"])
+def get_gateway_keys():
+    import json
+    if not os.path.exists(ASPRI_KEYS_PATH):
+        return jsonify({"status": "success", "keys": {}})
+    with open(ASPRI_KEYS_PATH, "r") as f:
+        data = json.load(f)
+    
+    # Sembunyikan key internal myslurm dari Dashboard UI
+    filtered_data = {k: v for k, v in data.items() if k != "sk-aspri-myslurm-permanent-token"}
+    
+    return jsonify({"status": "success", "keys": filtered_data})
+
+@app.route("/api/gateway_keys/generate", methods=["POST"])
+def generate_gateway_key():
+    import json
+    import uuid
+    from datetime import datetime, timedelta
+    
+    new_key = f"sk-aspri-{uuid.uuid4().hex}"
+    now = datetime.now()
+    expires = now + timedelta(days=730) # 2 years
+    
+    keys = {}
+    if os.path.exists(ASPRI_KEYS_PATH):
+        with open(ASPRI_KEYS_PATH, "r") as f:
+            try:
+                keys = json.load(f)
+            except:
+                pass
+                
+    keys[new_key] = {
+        "created_at": now.isoformat(),
+        "expires_at": expires.isoformat(),
+        "revoked": False
+    }
+    
+    with open(ASPRI_KEYS_PATH, "w") as f:
+        json.dump(keys, f, indent=2)
+        
+    _send_telegram_notification(f"🛡️ *AspriAI Security Alert*\n\nAPI Key baru telah dibuat:\n`{new_key[:15]}...`\n\nBerlaku hingga: {expires.strftime('%Y-%m-%d')}")
+    
+    return jsonify({"status": "success", "key": new_key, "data": keys[new_key]})
+
+@app.route("/api/gateway_keys/revoke", methods=["POST"])
+def revoke_gateway_key():
+    import json
+    req = request.json or {}
+    target_key = req.get("key")
+    if not target_key:
+        return jsonify({"status": "error", "message": "Key is required"}), 400
+        
+    if not os.path.exists(ASPRI_KEYS_PATH):
+        return jsonify({"status": "error", "message": "No keys found"}), 404
+        
+    with open(ASPRI_KEYS_PATH, "r") as f:
+        keys = json.load(f)
+        
+    if target_key not in keys:
+        return jsonify({"status": "error", "message": "Key not found"}), 404
+        
+    keys[target_key]["revoked"] = True
+    
+    with open(ASPRI_KEYS_PATH, "w") as f:
+        json.dump(keys, f, indent=2)
+        
+    _send_telegram_notification(f"⚠️ *AspriAI Security Alert*\n\nAPI Key telah DICABUT (Revoked):\n`{target_key[:15]}...`\n\nAkses ditolak mulai saat ini.")
+    
+    return jsonify({"status": "success", "message": "Key revoked"})
+
+
 @app.route("/api/queue/status", methods=["GET"])
 def queue_status():
     """

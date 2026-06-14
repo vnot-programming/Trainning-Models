@@ -774,8 +774,8 @@ CLOUDFLARE_TUNNEL_TOKEN = os.environ.get("CLOUDFLARE_TUNNEL_TOKEN", "")
 # Untuk evaluasi visual 1-5 gambar, CPU cukup memadai (~2-5 detik/gambar).
 # ==============================================================================
 EVAL_API_HOST              = "0.0.0.0"
-EVAL_API_BACKEND_PORT      = 8502
-EVAL_API_FRONTEND_PORT     = 8501
+EVAL_API_BACKEND_PORT      = 8602
+EVAL_API_FRONTEND_PORT     = 8601
 EVAL_API_MAX_UPLOAD_MB     = 16
 EVAL_API_ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 EVAL_API_DEBUG              = True

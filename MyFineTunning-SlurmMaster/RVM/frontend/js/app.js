@@ -99,6 +99,7 @@
         setupExport();
         setupImageComparison();
         setupGridDownload();
+        setupApiKeys();
         await fetchModels();
         checkHealth();
     }
@@ -159,6 +160,142 @@
             $statusText.textContent = "Backend Offline";
             document.querySelector(".status-dot").style.background =
                 "var(--c-error)";
+        }
+    }
+
+    // =========================================================================
+    // API KEYS MANAGEMENT
+    // =========================================================================
+    function setupApiKeys() {
+        const $apiKeysToggle = $("apiKeysToggle");
+        const $apiKeysMenu = $("apiKeysMenu");
+        
+        if ($apiKeysToggle && $apiKeysMenu) {
+            $apiKeysToggle.addEventListener("click", (e) => {
+                e.stopPropagation();
+                $apiKeysMenu.classList.toggle("visible");
+            });
+
+            // Close when clicking outside
+            document.addEventListener("click", (e) => {
+                if (!$apiKeysMenu.contains(e.target) && e.target !== $apiKeysToggle) {
+                    $apiKeysMenu.classList.remove("visible");
+                }
+            });
+        }
+
+        const $btnGenerate = $("btnGenerateKey");
+        if ($btnGenerate) {
+            $btnGenerate.addEventListener("click", generateApiKey);
+        }
+        fetchApiKeys();
+    }
+
+    async function fetchApiKeys() {
+        const $list = $("apiKeysList");
+        if (!$list) return;
+        
+        try {
+            const res = await fetch(`${API_BASE}/api/gateway_keys`, { headers: CF_HEADERS });
+            if (!res.ok) throw new Error("Failed to fetch keys");
+            const data = await res.json();
+            renderApiKeys(data.keys || {});
+        } catch (err) {
+            $list.innerHTML = `<div class="error-message">⚠️ Failed to load API Keys: ${err.message}</div>`;
+        }
+    }
+
+    function renderApiKeys(keys) {
+        const $list = $("apiKeysList");
+        if (!$list) return;
+        
+        $list.innerHTML = "";
+        const keyEntries = Object.entries(keys);
+        
+        if (keyEntries.length === 0) {
+            $list.innerHTML = '<div class="no-selection-placeholder">No API keys found. Generate one to get started.</div>';
+            return;
+        }
+        
+        keyEntries.sort((a, b) => new Date(b[1].created_at) - new Date(a[1].created_at)).forEach(([key, meta]) => {
+            const isRevoked = meta.revoked;
+            const isExpired = new Date(meta.expires_at) < new Date();
+            const statusColor = isRevoked ? "var(--c-error)" : (isExpired ? "var(--c-warning)" : "var(--c-success)");
+            const statusText = isRevoked ? "Revoked" : (isExpired ? "Expired" : "Active");
+            
+            const card = document.createElement("div");
+            card.style.cssText = `
+                background: var(--c-surface);
+                border: 1px solid var(--c-border);
+                border-radius: var(--radius-md);
+                padding: var(--space-md);
+                display: flex;
+                flex-direction: column;
+                gap: var(--space-sm);
+            `;
+            
+            card.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-size: 0.85rem; font-weight: 600;"><span style="color: ${statusColor}">●</span> ${statusText}</span>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn-export" onclick="navigator.clipboard.writeText('${escapeHtml(key)}').then(()=>showToast('Key copied to clipboard!', 'success'))" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; background: var(--c-surface-glass); color: var(--c-text); border: 1px solid var(--c-border); border-radius: var(--radius-sm); cursor: pointer;">📋 Copy</button>
+                        ${!isRevoked ? `<button class="btn-export" data-revoke="${escapeHtml(key)}" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: #ff6b6b; background: transparent; border: 1px solid #ff6b6b; border-radius: var(--radius-sm); cursor: pointer;">✕ Revoke</button>` : ''}
+                    </div>
+                </div>
+                <div style="background: var(--c-surface-hover); padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-sm); border: 1px solid var(--c-border);">
+                    <code style="font-family: monospace; font-size: 0.85rem; color: var(--c-text); user-select: all; word-break: break-all;">${escapeHtml(key)}</code>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--c-text-muted); display: flex; justify-content: space-between;">
+                    <span>Created: ${new Date(meta.created_at).toLocaleDateString()}</span>
+                    <span>Expires: ${new Date(meta.expires_at).toLocaleDateString()}</span>
+                </div>
+            `;
+            
+            const revokeBtn = card.querySelector("button[data-revoke]");
+            if (revokeBtn) {
+                revokeBtn.addEventListener("click", () => revokeApiKey(key));
+            }
+            
+            $list.appendChild(card);
+        });
+    }
+
+    async function generateApiKey() {
+        const $spinner = $("generateKeySpinner");
+        const $btnGenerate = $("btnGenerateKey");
+        if ($spinner) $spinner.style.display = "inline-block";
+        if ($btnGenerate) $btnGenerate.disabled = true;
+        
+        try {
+            const res = await fetch(`${API_BASE}/api/gateway_keys/generate`, {
+                method: "POST",
+                headers: CF_HEADERS
+            });
+            if (!res.ok) throw new Error("Failed to generate key");
+            showToast("New API Key generated successfully!", "success");
+            await fetchApiKeys();
+        } catch (err) {
+            showToast(`Error: ${err.message}`, "error");
+        } finally {
+            if ($spinner) $spinner.style.display = "none";
+            if ($btnGenerate) $btnGenerate.disabled = false;
+        }
+    }
+
+    async function revokeApiKey(key) {
+        if (!confirm("Are you sure you want to revoke this API key? This action cannot be undone and external apps using this key will lose access immediately.")) return;
+        
+        try {
+            const res = await fetch(`${API_BASE}/api/gateway_keys/revoke`, {
+                method: "POST",
+                headers: { ...CF_HEADERS, "Content-Type": "application/json" },
+                body: JSON.stringify({ key })
+            });
+            if (!res.ok) throw new Error("Failed to revoke key");
+            showToast("API Key revoked successfully!", "success");
+            await fetchApiKeys();
+        } catch (err) {
+            showToast(`Error: ${err.message}`, "error");
         }
     }
 

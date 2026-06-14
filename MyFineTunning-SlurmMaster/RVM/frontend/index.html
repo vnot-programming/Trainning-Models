@@ -9,10 +9,35 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔬</text></svg>">
 </head>
 <body>
-    <!-- Theme Toggle -->
-    <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark/light mode" title="Toggle Theme">
-        🌙
-    </button>
+    <!-- Top Controls -->
+    <div class="top-controls">
+        <!-- API Keys Dropdown -->
+        <div class="dropdown-wrapper" id="apiKeysDropdownWrapper">
+            <button class="btn-dropdown-toggle" id="apiKeysToggle" aria-label="Manage AspriAI API Keys" title="AspriAI API Keys">
+                🛡️ API Keys
+            </button>
+            <div class="dropdown-menu" id="apiKeysMenu">
+                <div class="dropdown-menu__header">
+                    <h3>🛡️ AspriAI API Keys</h3>
+                    <p>Manage your AspriAI Gateway tokens for external apps (9router, VSCode). Keys automatically expire after 2 years.</p>
+                </div>
+                <div class="dropdown-menu__action">
+                    <button id="btnGenerateKey" class="btn-generate-key">
+                        <span id="generateKeySpinner" class="spinner"></span>
+                        ➕ Generate New Key
+                    </button>
+                </div>
+                <div id="apiKeysList" class="dropdown-menu__list">
+                    <div class="no-selection-placeholder">Loading keys...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Theme Toggle -->
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark/light mode" title="Toggle Theme">
+            🌙
+        </button>
+    </div>
 
     <div class="app-container">
         <!-- Header -->

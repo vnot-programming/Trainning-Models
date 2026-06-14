@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AspriGate - Secure Tunnel</title>
+    <style>
+        :root {
+            /* Bio-Digital Minimalism Theme (Dark) */
+            --bg-color: hsl(220, 10%, 10%);
+            --text-primary: hsl(220, 10%, 90%);
+            --text-secondary: hsl(220, 10%, 60%);
+            --accent-glow: hsla(180, 100%, 50%, 0.15);
+            --border-subtle: hsla(220, 10%, 90%, 0.1);
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+            /* Fluid Layouts */
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+
+        .container {
+            max-width: 90vw;
+            width: 100%;
+            /* Elastic container */
+            padding: clamp(2rem, 5vw, 4rem);
+            background: linear-gradient(145deg, hsl(220, 10%, 12%), hsl(220, 10%, 8%));
+            border-radius: 2rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4), 
+                        inset 0 1px 0 hsla(220, 10%, 100%, 0.05);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        /* Bio-Digital Glow Effect */
+        .container::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at center, var(--accent-glow) 0%, transparent 60%);
+            animation: breathe 8s ease-in-out infinite alternate;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes breathe {
+            0% { transform: scale(0.9); opacity: 0.5; }
+            100% { transform: scale(1.1); opacity: 1; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .container::before { animation: none; }
+            .spinner { animation: none !important; }
+        }
+
+        .content-layer {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        h1 {
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            margin: 0;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        p#status-text {
+            font-size: clamp(1rem, 2vw, 1.25rem);
+            color: var(--text-secondary);
+            margin: 0;
+            line-height: 1.5;
+            min-height: 3rem; /* Prevents layout thrashing when text changes */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.3s ease;
+        }
+
+        /* The Spinner */
+        .spinner {
+            width: 44px; /* Touch target min size */
+            height: 44px;
+            border: 3px solid var(--border-subtle);
+            border-top-color: hsl(180, 100%, 50%);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 1rem 0;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="content-layer">
+            <!-- Dynamic Title based on Lang -->
+            <h1 id="main-title">
+                {% if lang == 'id' %}
+                    Mengamankan Koneksi
+                {% elif lang == 'th' %}
+                    กำลังเริ่มการเชื่อมต่อที่ปลอดภัย
+                {% else %}
+                    Initializing Secure Connection
+                {% endif %}
+            </h1>
+            
+            <div class="spinner" aria-hidden="true"></div>
+            
+            <p id="status-text" aria-live="polite">
+                {% if lang == 'id' %}
+                    Menghubungkan ke AspriGate...
+                {% elif lang == 'th' %}
+                    กำลังเชื่อมต่อกับ AspriGate...
+                {% else %}
+                    Connecting to AspriGate...
+                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const statusTextEl = document.getElementById('status-text');
+        
+        async function fetchStatus() {
+            try {
+                // Determine port to poll status from (we poll from the proxy port itself)
+                const res = await fetch('/asprigate-status?t=' + new Date().getTime(), { cache: 'no-store' });
+                if (res.ok) {
+                    const data = await res.json();
+                    
+                    // Smooth text transition
+                    if (statusTextEl.innerText !== data.message) {
+                        statusTextEl.style.opacity = 0;
+                        setTimeout(() => {
+                            statusTextEl.innerText = data.message;
+                            statusTextEl.style.opacity = 1;
+                        }, 300);
+                    }
+
+                    if (data.ready) {
+                        // Backend is ready! Reload the page to connect to the real engine.
+                        setTimeout(() => {
+                            window.location.reload(true);
+                        }, 500);
+                    }
+                }
+            } catch (err) {
+                console.error("Polling error:", err);
+            }
+            setTimeout(fetchStatus, 2000);
+        }
+
+        // Start polling
+        setTimeout(fetchStatus, 1000);
+    </script>
+</body>
+</html>

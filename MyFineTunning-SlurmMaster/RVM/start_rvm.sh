@@ -22,7 +22,7 @@ NC="\033[0m"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONDA_ACTIVATE="/data/programs/anaconda3/bin/activate"
 CONDA_ENV="yolo_env"
-BACKEND_PORT=8502
+BACKEND_PORT=8602
 TMUX_BIN="/usr/bin/tmux"
 
 print_header() {
@@ -45,10 +45,10 @@ start_frontend() {
     "$TMUX_BIN" new-session -d -s "$SESSION_FRONTEND"
     "$TMUX_BIN" send-keys -t "$SESSION_FRONTEND" "source $CONDA_ACTIVATE $CONDA_ENV && cd $ROOT_DIR && python RVM/serve_frontend.py 2>&1 | tee RVM/backend/logs/frontend.log" C-m
 
-    echo -e "  ${YELLOW}➔ Menunggu Frontend berjalan di port 8501 (timeout 15s)...${NC}"
+    echo -e "  ${YELLOW}➔ Menunggu Frontend berjalan di port 8601 (timeout 15s)...${NC}"
     local timeout=15
     local elapsed=0
-    while ! ss -tln 2>/dev/null | grep -q ":8501 " && [ $elapsed -lt $timeout ]; do
+    while ! ss -tln 2>/dev/null | grep -q ":8601 " && [ $elapsed -lt $timeout ]; do
         echo -ne "  ${CYAN}⏳ Loading... ($elapsed s)\r${NC}"
         sleep 1
         elapsed=$((elapsed+1))
@@ -56,10 +56,10 @@ start_frontend() {
     echo ""
 
     if [ $elapsed -ge $timeout ]; then
-        echo -e "  ${RED}⚠️  Timeout! Frontend (Port 8501) mungkin gagal berjalan.${NC}"
+        echo -e "  ${RED}⚠️  Timeout! Frontend (Port 8601) mungkin gagal berjalan.${NC}"
         echo -e "  ${YELLOW}➔ Cek log dengan: tmux attach -t $SESSION_FRONTEND${NC}"
     else
-        echo -e "  ${GREEN}✅ Frontend berhasil berjalan dan listening di port 8501!${NC}"
+        echo -e "  ${GREEN}✅ Frontend berhasil berjalan dan listening di port 8601!${NC}"
         echo -e "  ${CYAN}➔ Gunakan perintah berikut untuk melihat log frontend:${NC}"
         echo -e "     tmux attach -t $SESSION_FRONTEND"
         echo -e "  ${YELLOW}➔ Tekan Ctrl+B lalu D untuk keluar (detach) dari sesi tersebut.${NC}\n"
@@ -219,7 +219,7 @@ check_status() {
 
     # Cek Port listening di Login Node
     echo -e "\n  ${CYAN}🔌 Ports (Login Node):${NC}"
-    for port in 8501 8502; do
+    for port in 8601 8602; do
         if ss -tln 2>/dev/null | grep -q ":${port} "; then
             echo -e "  Port ${port}: ${GREEN}● LISTENING${NC}"
         else
