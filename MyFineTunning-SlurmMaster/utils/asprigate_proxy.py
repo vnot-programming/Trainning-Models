@@ -65,9 +65,18 @@ def start_engine_scripts():
     STATUS_MESSAGE = "Memuat konfigurasi mesin kecerdasan buatan..."
     logger.info(">>> MEMULAI PROSES BOOTING ENGINE (Scale-to-Zero Wake Up)...")
     
+    # Gunakan Popen agar non-blocking dan tidak membekukan proxy FastAPI
     # RVM Backend & Frontend
-    subprocess.run(["bash", "/data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/RVM/start_rvm.sh", "backend"])
-    subprocess.run(["bash", "/data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/RVM/start_rvm.sh", "frontend"])
+    subprocess.Popen(["bash", "/data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/RVM/start_rvm.sh", "backend"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen(["bash", "/data/users/g6717500336/Trainning-Models/MyFineTunning-SlurmMaster/RVM/start_rvm.sh", "frontend"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    
+    # Ollama Engine Daemon
+    logger.info(">>> Memulai Ollama Engine Daemon...")
+    subprocess.Popen(["tmux", "new-session", "-d", "-s", "ollama_daemon", "bash", "/data/users/g6717500336/singularity/ollama/run_ollama_daemon.sh"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    
+    # AspriAI Core Gateway
+    logger.info(">>> Memulai AspriAI Core Gateway...")
+    subprocess.Popen(["tmux", "new-session", "-d", "-s", "aspri_core", "bash", "/data/users/g6717500336/singularity/AspriAI/aspri-core/run_gateway.sh"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
     # ComfyUI Daemon
     comfui_dir = "/data/users/g6717500336/singularity/comfui"
@@ -83,10 +92,16 @@ def start_engine_scripts():
 
 def kill_engine_scripts():
     """Mematikan proses engine untuk hemat VRAM, tanpa scancel."""
-    logger.info(">>> IDLE TIMEOUT TERCAPAI. Mematikan Engine RVM/ComfyUI secara aman...")
+    global STATUS_MESSAGE
+    logger.info(">>> IDLE TIMEOUT TERCAPAI. Mematikan Engine secara aman...")
+    STATUS_MESSAGE = "Inisialisasi sistem..."
     # RVM Tmux
     subprocess.run(["tmux", "kill-session", "-t", "rvm_backend"], stderr=subprocess.DEVNULL)
     subprocess.run(["tmux", "kill-session", "-t", "rvm_frontend"], stderr=subprocess.DEVNULL)
+    
+    # AspriAI & Ollama Tmux
+    subprocess.run(["tmux", "kill-session", "-t", "aspri_core"], stderr=subprocess.DEVNULL)
+    subprocess.run(["tmux", "kill-session", "-t", "ollama_daemon"], stderr=subprocess.DEVNULL)
     
     # ComfyUI processes
     subprocess.run(["pkill", "-f", "run_comfui_daemon.sh"], stderr=subprocess.DEVNULL)
@@ -130,8 +145,14 @@ def create_proxy_app(target_port: int):
     
     @app.get("/asprigate-status")
     async def get_status(request: Request):
+        global IS_BOOTING, STATUS_MESSAGE
         update_activity()
         ready = check_port_listening(target_port)
+        
+        if not ready and not IS_BOOTING:
+            IS_BOOTING = True
+            STATUS_MESSAGE = "Inisialisasi sistem..."
+            
         msg = "Proses Berhasil, mengalihkan halaman!" if ready else STATUS_MESSAGE
         
         client_ip = request.headers.get("x-real-ip", request.client.host if request.client else "Unknown")
@@ -181,7 +202,9 @@ def create_proxy_app(target_port: int):
         except httpx.RequestError:
             # Target is Down!
             if not IS_BOOTING:
+                global STATUS_MESSAGE
                 IS_BOOTING = True
+                STATUS_MESSAGE = "Inisialisasi sistem..."
             
             # Jika Accept HTML, tampilkan Loading Screen. Jika tidak, return 503.
             accept = request.headers.get("accept", "")
@@ -196,10 +219,12 @@ def create_proxy_app(target_port: int):
 
     return app
 
-# Bikin 3 aplikasi
-app_rvm_front = create_proxy_app(8601)  # Target RVM Frontend yang baru
-app_rvm_back = create_proxy_app(8602)   # Target RVM Backend yang baru
+# Bikin aplikasi proxy
+app_rvm_front = create_proxy_app(8601)  # Target RVM Frontend
+app_rvm_back = create_proxy_app(8602)   # Target RVM Backend
 app_comfyui = create_proxy_app(8188)    # Target ComfyUI SSH Reverse Tunnel
+app_aspri_core = create_proxy_app(11434) # Target AspriAI Core Gateway
+app_ollama = create_proxy_app(11435)     # Target Ollama SSH Reverse Tunnel
 
 async def main():
     asyncio.create_task(booting_manager())
@@ -207,13 +232,17 @@ async def main():
     config1 = uvicorn.Config(app_rvm_front, port=8501, host="0.0.0.0", log_level="error")
     config2 = uvicorn.Config(app_rvm_back, port=8502, host="0.0.0.0", log_level="error")
     config3 = uvicorn.Config(app_comfyui, port=19095, host="0.0.0.0", log_level="error")
+    config4 = uvicorn.Config(app_aspri_core, port=8503, host="0.0.0.0", log_level="error")
+    config5 = uvicorn.Config(app_ollama, port=8504, host="0.0.0.0", log_level="error")
     
     server1 = uvicorn.Server(config1)
     server2 = uvicorn.Server(config2)
     server3 = uvicorn.Server(config3)
+    server4 = uvicorn.Server(config4)
+    server5 = uvicorn.Server(config5)
     
-    print("🚀 AspriGate berjalan melayani Port 8501, 8502, 19095...")
-    await asyncio.gather(server1.serve(), server2.serve(), server3.serve())
+    print("🚀 AspriGate berjalan melayani Port 8501, 8502, 8503, 8504, 19095...")
+    await asyncio.gather(server1.serve(), server2.serve(), server3.serve(), server4.serve(), server5.serve())
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -309,6 +309,7 @@ def main():
         healthy, draining = scan_slurm_nodes()
         target_node = None
         exclude_list = draining.copy()
+        exclude_list.append("ai2")  # Temporary fix: ai2 has hung NFS
         
         idle_nodes = [n for n in healthy if n['free_gpu'] > 0]
         best_node = None

@@ -27,8 +27,13 @@ pretty_tmux_ls() {
     echo "╭────────────────────────────────────────╮"
     echo "│         DAFTAR SESI TMUX AKTIF         │"
     echo "╰────────────────────────────────────────╯"
-    tmux ls | awk -F: '{ printf "  %d) 🟢 %-30s \n", NR, $1 }'
-    echo "------------------------------------------"
+    tmux ls | awk -F: '{ 
+        warn = ""
+        if ($1 == "asprigate" || $1 == "cloudflare_tunnel" || $1 == "gpu_booking") {
+            warn = "⚠️"
+        }
+        printf "  %d) 🟢 %-30s %s\n", NR, $1, warn 
+    }'
     return 0
 }
 
@@ -103,7 +108,7 @@ manage_asprigate() {
         echo "1. 🚀 Jalankan AspriGate Proxy (Background)"
         echo "2. 🛑 Hentikan AspriGate Proxy"
         echo "3. 💻 Masuk / Attach ke Sesi TMUX AspriGate"
-        echo "Enter untuk kembali ke menu utama"
+        echo "Enter untuk kembali ke menu sebelumnya"
         echo "============================================="
         read -p "Pilih aksi [1-3]: " ag_choice
         
@@ -209,7 +214,7 @@ manage_cloudflare_tunnel() {
         echo "2. 🛑 Hentikan Cloudflare Tunnel"
         echo "3. 📋 Cek Status & Log Terowongan"
         echo "4. 💻 Masuk / Attach ke Sesi TMUX Tunnel"
-        echo "Enter untuk kembali ke menu utama"
+        echo "Enter untuk kembali ke menu sebelumnya"
         echo "============================================="
         read -p "Pilih aksi [1-4]: " cf_choice
         
@@ -334,27 +339,39 @@ manage_web_rvm() {
         echo "          Manajemen Web RVM"
         echo "============================================="
         
-        # Tampilkan status port dan sesi tmux RVM
-        if [ -f "$start_rvm_script" ]; then
-            bash "$start_rvm_script" status
-        else
-            echo -e "\033[91m❌ Error: Launcher '$start_rvm_script' tidak ditemukan!\033[0m"
+        frontend_status="\033[0;31m○ INACTIVE\033[0m"
+        frontend_port="\033[0;31mOFF\033[0m"
+        backend_status="\033[0;31m○ INACTIVE\033[0m"
+        backend_port="\033[0;31mOFF\033[0m"
+
+        if tmux ls 2>/dev/null | grep -q "^rvm_frontend:"; then
+            frontend_status="\033[0;32m● RUNNING\033[0m"
+        fi
+        if ss -tln 2>/dev/null | grep -q ":8601 "; then
+            frontend_port="\033[0;32m8601 (LISTENING)\033[0m"
+        fi
+
+        if tmux ls 2>/dev/null | grep -q "^rvm_backend:"; then
+            backend_status="\033[0;32m● RUNNING\033[0m"
+        fi
+        if ss -tln 2>/dev/null | grep -q ":8602 "; then
+            backend_port="\033[0;32m8602 (LISTENING)\033[0m"
         fi
         
+        echo -e "Frontend: $frontend_status"
+        echo -e "Port: $frontend_port"
+        echo -e "Backend: $backend_status"
+        echo -e "Port: $backend_port"
+
         echo "============================================="
         echo "Sub Menu Web RVM:"
-        echo "1. 🚀 Start All Services (Frontend & Backend)"
-        echo "2. 🛑 Stop All Services (Matikan Frontend & Backend)"
-        echo "3. 🔄 Restart All Services"
-        echo "4. 📱 Start Frontend Only"
-        echo "5. 🛑 Stop Frontend Only"
-        echo "6. 🚀 Start Layanan backend Flask"
-        echo "7. 🛑 Stop Layanan backend Flask"
-        echo "8. 🔄 Restart Layanan backend Flask"
-        echo "9. 📋 Lihat Layanan Berjalan (Refresh Status)"
+        echo "1. 🚀 All Services (Frontend & Backend) => Start, Stop, Restart"
+        echo "2. 📱 Frontend => Start, Stop, Restart"
+        echo "3. 🚀 Backend => Start, Stop, Restart"
+        echo "4. 📋 Lihat Layanan Berjalan (Refresh Status)"
         echo "0. 🔙 Kembali ke Menu Utama"
-        echo "============================================="
-        read -p "Pilih aksi [0-9]: " rvm_choice
+        echo "Enter untuk kembali ke menu sebelumnya"
+        read -p "Pilih aksi [0-4]: " rvm_choice
 
         if [ -z "$rvm_choice" ] || [ "$rvm_choice" == "0" ]; then
             break
@@ -362,55 +379,62 @@ manage_web_rvm() {
 
         case $rvm_choice in
             1)
-                echo "Menghentikan semua service lama..."
-                bash "$start_rvm_script" stop
-                echo "Memulai Frontend..."
-                bash "$start_rvm_script" frontend
-                echo "Memulai Backend (tmux rvm_backend & attach GPU)..."
-                bash "$start_rvm_script" backend
+                echo "1. Start | 2. Stop | 3. Restart"
+                read -p "Pilih aksi: " action
+                if [ "$action" == "1" ]; then
+                    echo "Menghentikan semua service lama..."
+                    bash "$start_rvm_script" stop
+                    echo "Memulai Frontend..."
+                    bash "$start_rvm_script" frontend
+                    echo "Memulai Backend (tmux rvm_backend & attach GPU)..."
+                    bash "$start_rvm_script" backend
+                elif [ "$action" == "2" ]; then
+                    echo "Menghentikan semua service RVM..."
+                    bash "$start_rvm_script" stop
+                elif [ "$action" == "3" ]; then
+                    echo "Melakukan restart semua service RVM..."
+                    bash "$start_rvm_script" stop
+                    sleep 1
+                    bash "$start_rvm_script" frontend
+                    bash "$start_rvm_script" backend
+                fi
                 read -p "Tekan Enter untuk melanjutkan..."
                 ;;
             2)
-                echo "Menghentikan semua service RVM..."
-                bash "$start_rvm_script" stop
+                echo "1. Start | 2. Stop | 3. Restart"
+                read -p "Pilih aksi: " action
+                if [ "$action" == "1" ]; then
+                    echo "Memulai Frontend..."
+                    bash "$start_rvm_script" frontend
+                elif [ "$action" == "2" ]; then
+                    echo "Menghentikan Frontend..."
+                    bash "$start_rvm_script" stop_frontend
+                elif [ "$action" == "3" ]; then
+                    echo "Melakukan restart Frontend..."
+                    bash "$start_rvm_script" stop_frontend
+                    sleep 1
+                    bash "$start_rvm_script" frontend
+                fi
                 read -p "Tekan Enter untuk melanjutkan..."
                 ;;
             3)
-                echo "Melakukan restart semua service RVM..."
-                bash "$start_rvm_script" stop
-                sleep 1
-                bash "$start_rvm_script" frontend
-                bash "$start_rvm_script" backend
+                echo "1. Start | 2. Stop | 3. Restart"
+                read -p "Pilih aksi: " action
+                if [ "$action" == "1" ]; then
+                    echo "Memulai Layanan backend Flask..."
+                    bash "$start_rvm_script" backend
+                elif [ "$action" == "2" ]; then
+                    echo "Menghentikan Layanan backend Flask..."
+                    bash "$start_rvm_script" stop_backend
+                elif [ "$action" == "3" ]; then
+                    echo "Melakukan restart Layanan backend Flask..."
+                    bash "$start_rvm_script" stop_backend
+                    sleep 1
+                    bash "$start_rvm_script" backend
+                fi
                 read -p "Tekan Enter untuk melanjutkan..."
                 ;;
             4)
-                echo "Memulai Frontend..."
-                bash "$start_rvm_script" frontend
-                read -p "Tekan Enter untuk melanjutkan..."
-                ;;
-            5)
-                echo "Menghentikan Frontend..."
-                bash "$start_rvm_script" stop_frontend
-                read -p "Tekan Enter untuk melanjutkan..."
-                ;;
-            6)
-                echo "Memulai Layanan backend Flask..."
-                bash "$start_rvm_script" backend
-                read -p "Tekan Enter untuk melanjutkan..."
-                ;;
-            7)
-                echo "Menghentikan Layanan backend Flask..."
-                bash "$start_rvm_script" stop_backend
-                read -p "Tekan Enter untuk melanjutkan..."
-                ;;
-            8)
-                echo "Melakukan restart Layanan backend Flask..."
-                bash "$start_rvm_script" stop_backend
-                sleep 1
-                bash "$start_rvm_script" backend
-                read -p "Tekan Enter untuk melanjutkan..."
-                ;;
-            9)
                 echo "Mengecek/Lihat status Layanan Berjalan..."
                 bash "$start_rvm_script" status
                 read -p "Tekan Enter untuk melanjutkan..."
@@ -613,9 +637,8 @@ except Exception as e:
         echo "Modul AspriAI:"
         echo "4. Ollama"
         echo "5. Chat via Ollama"
-        echo "6. ComfUI"
-        echo "7. {AI Lainnya belum saya fikirkan}"
-        echo "Enter untuk kembali ke menu utama"
+        echo "6. ComfyUI"
+        echo "Enter untuk kembali ke menu sebelumnya"
         echo "---------------------------------------------"
         read -p "Pilih aksi [1-7]: " main_choice
         
@@ -963,15 +986,16 @@ except Exception:
                     fi
                     echo "---------------------------------------------"
                     echo "0) 📥 Download Model Baru (ollama pull)"
+                    echo "D) 🗑️ Hapus Model (ollama rm)"
                     echo "L) 🌐 Lihat Model External"
                     echo "Enter untuk kembali ke Manajemen Layanan AspriAI"
                     echo "---------------------------------------------"
                     
                     local max_choice=$((idx - 1))
                     if [ $max_choice -eq 0 ]; then
-                        read -p "Pilih aksi [0, L]: " chat_choice
+                        read -p "Pilih aksi [0, D, L]: " chat_choice
                     else
-                        read -p "Pilih aksi [0-$max_choice, L]: " chat_choice
+                        read -p "Pilih aksi [0-$max_choice, D, L]: " chat_choice
                     fi
                     
                     if [ -z "$chat_choice" ]; then
@@ -994,6 +1018,21 @@ except Exception:
                             ssh -t -o StrictHostKeyChecking=no ${node_name_chat} "export OLLAMA_HOST=127.0.0.1:${active_port_chat}; export SINGULARITYENV_OLLAMA_HOST=127.0.0.1:${active_port_chat}; singularity exec --bind ${aspri_dir}/models:/root/.ollama ${aspri_dir}/ollama-0.24.sif ollama pull ${model_to_pull}"
                             
                             echo -e "\nProses unduhan model selesai."
+                            read -p "Tekan Enter untuk memuat ulang daftar model..."
+                        else
+                            echo "⚠️ Nama model tidak boleh kosong."
+                            sleep 1.5
+                        fi
+                    elif [[ "$chat_choice" =~ ^[dD]$ ]]; then
+                        echo "============================================="
+                        echo "             Hapus Model Ollama"
+                        echo "============================================="
+                        read -p "Masukkan nama model yang ingin dihapus: " model_to_rm
+                        
+                        if [ -n "$model_to_rm" ]; then
+                            echo -e "\nMenghapus model \033[91m${model_to_rm}\033[0m..."
+                            ssh -t -o StrictHostKeyChecking=no ${node_name_chat} "export OLLAMA_HOST=127.0.0.1:${active_port_chat}; export SINGULARITYENV_OLLAMA_HOST=127.0.0.1:${active_port_chat}; singularity exec --bind ${aspri_dir}/models:/root/.ollama ${aspri_dir}/ollama-0.24.sif ollama rm ${model_to_rm}"
+                            
                             read -p "Tekan Enter untuk memuat ulang daftar model..."
                         else
                             echo "⚠️ Nama model tidak boleh kosong."
@@ -1704,56 +1743,209 @@ except Exception:
     done
 }
 
+manage_slurm() {
+    while true; do
+        clear
+        echo "============================================="
+        echo "           Sub Menu Slurm (Sewa GPU)"
+        echo "============================================="
+        echo "1. 🚀 Jalankan Booking GPU (Background)"
+        echo "2. 🛑 Batalkan / Hentikan Booking GPU"
+        echo "3. 📋 Cek Status Antrean (squeue)"
+        echo "0. 🔙 Kembali ke Menu Utama"
+        echo "============================================="
+        read -p "Pilih aksi [0-3]: " slurm_choice
+        
+        case $slurm_choice in
+            1)
+                # Memastikan daemon python book_gpu.py benar-benar berjalan
+                daemon_running=0
+                for pid in $(pgrep -u $USER -f "book_gpu.py" 2>/dev/null); do
+                    if [ -f "/proc/$pid/exe" ] && [[ "$(readlink "/proc/$pid/exe" 2>/dev/null)" == *"python"* ]]; then
+                        daemon_running=1
+                        break
+                    fi
+                done
+
+                if [ $daemon_running -eq 1 ]; then
+                    echo "=================================================================="
+                    echo "⚠️  DAEMON SUDAH BERJALAN!"
+                    echo "   Sistem mendeteksi bahwa daemon booking GPU (book_gpu.py) sudah aktif."
+                    echo "   Tidak perlu menjalankan ulang untuk mencegah Double Job."
+                    echo "=================================================================="
+                else
+                    echo "=================================================================="
+                    echo "ℹ️  INFO TMUX DAEMON BOOKING:"
+                    echo "   Sesi tmux ini menjalankan daemon 'book_gpu.py' di background."
+                    echo "   Daemon ini berfungsi melakukan monitoring job, Telegram alerting,"
+                    echo "   serta auto-rebooking otomatis jika job Slurm mati/timeout."
+                    echo "   ⚠️ JANGAN matikan/kill sesi tmux ini agar fitur rebook tetap aktif!"
+                    echo "=================================================================="
+                    echo "Memulai Booking GPU dalam sesi tmux..."
+                    SESSION_NAME=$(generate_gpu_session_name)
+                    tmux new-session -d -s "$SESSION_NAME" "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && python book_gpu.py"
+                    echo "✅ Proses berjalan di background pada sesi tmux: $SESSION_NAME."
+                    echo "   Anda akan menerima notifikasi Telegram saat status Running."
+                fi
+                read -p "Tekan Enter untuk melanjutkan..."
+                ;;
+            2)
+                echo "Mencari Job vnot Anda..."
+                JOBID=$(squeue -u $USER -n vnot -h -o %i | head -n 1)
+                if [ -z "$JOBID" ]; then
+                    echo "Tidak ada job booking GPU yang aktif atau mengantre."
+                else
+                    echo "Membatalkan Job ID: $JOBID"
+                    scancel $JOBID
+                    echo "Booking berhasil dihentikan."
+                fi
+                read -p "Tekan Enter untuk melanjutkan..."
+                ;;
+            3)
+                # Show pretty squeue and submenu actions
+                pretty_squeue
+                echo "Aksi pada antrian:"
+                echo "1) Hapus antrian (cancel job)"
+                echo "2) Pindah node (requeue to ai2/ai3)"
+                read -p "Pilih aksi [1-2] (atau Enter untuk kembali): " q_choice
+                case $q_choice in
+                    1) cancel_job ;;
+                    2) move_job_node ;;
+                    *) echo "Kembali ke menu..." ;;
+                esac
+                read -p "Tekan Enter untuk melanjutkan..."
+                ;;
+            0|'')
+                break
+                ;;
+            *)
+                echo "Pilihan tidak valid!"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+manage_all_proxies() {
+    while true; do
+        clear
+        echo "============================================="
+        echo "      Manajemen AspriGate Proxy & Apps"
+        echo "============================================="
+        echo "1. ☁️ Manajemen Cloudflare Tunnel"
+        echo "2. 🖥️ Web RVM"
+        echo "3. 🤖 Manajemen AspriAI (Ollama & WebUI)"
+        echo "4. 🛡️ Manajemen AspriGate Proxy API"
+        echo "0. 🔙 Kembali ke Menu Utama"
+        echo "============================================="
+        read -p "Pilih aksi [0-4]: " proxy_choice
+        
+        case $proxy_choice in
+            1)
+                manage_cloudflare_tunnel
+                ;;
+            2)
+                manage_web_rvm
+                ;;
+            3)
+                manage_aspri_ai
+                ;;
+            4)
+                manage_asprigate
+                ;;
+            0|'')
+                break
+                ;;
+            *)
+                echo "Pilihan tidak valid!"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+manage_tmux_sessions() {
+    while true; do
+        clear
+        echo "============================================="
+        echo "       Manajemen Sesi TMUX"
+        echo "============================================="
+        pretty_tmux_ls
+        has_sessions=$?
+
+        echo "⚠️ JANGAN di-kill"
+        echo "============================================="        
+        echo "Sub Menu TMUX:"
+        echo "1. Masuk ke Sesi Tmux (Attach)"
+        echo "2. Hapus Sesi Tmux (Kill)"
+        echo "3. Tambah Sesi Baru (Create)"
+        echo "Enter untuk kembali ke menu sebelumnya"
+        echo "============================================="
+        read -p "Pilih aksi [1-3]: " action_choice
+        
+        if [ -z "$action_choice" ]; then
+            break
+        elif [ "$action_choice" == "1" ]; then
+            if [ $has_sessions -ne 0 ]; then
+                echo "⚠️ Tidak ada sesi yang aktif untuk dimasuki."
+                sleep 1
+                continue
+            fi
+            total_sessions=$(tmux ls | wc -l)
+            read -p "Pilih nomor sesi untuk MASUK [1-$total_sessions] (Enter untuk batal): " sel_choice
+            if [[ "$sel_choice" =~ ^[0-9]+$ ]] && [ "$sel_choice" -ge 1 ] && [ "$sel_choice" -le "$total_sessions" ]; then
+                session_name=$(tmux ls | sed -n "${sel_choice}p" | cut -d: -f1)
+                echo "Memasuki sesi tmux '$session_name'..."
+                tmux attach -t "$session_name"
+            fi
+        elif [ "$action_choice" == "2" ]; then
+            if [ $has_sessions -ne 0 ]; then
+                echo "⚠️ Tidak ada sesi yang aktif untuk dihapus."
+                sleep 1
+                continue
+            fi
+            total_sessions=$(tmux ls | wc -l)
+            read -p "Pilih nomor sesi untuk DIHAPUS [1-$total_sessions] (Enter untuk batal): " sel_choice
+            if [[ "$sel_choice" =~ ^[0-9]+$ ]] && [ "$sel_choice" -ge 1 ] && [ "$sel_choice" -le "$total_sessions" ]; then
+                session_name=$(tmux ls | sed -n "${sel_choice}p" | cut -d: -f1)
+                tmux kill-session -t "$session_name"
+                echo "✅ Sesi tmux '$session_name' berhasil dihapus."
+                sleep 1
+            fi
+        elif [ "$action_choice" == "3" ]; then
+            read -p "Masukkan nama sesi baru (Enter untuk default): " new_session_name
+            if [ -z "$new_session_name" ]; then
+                new_session_name="session_$(date +%s)"
+            fi
+            tmux new-session -d -s "$new_session_name"
+            echo "✅ Sesi tmux '$new_session_name' berhasil dibuat di background."
+            read -p "Apakah Anda ingin langsung masuk (attach) ke sesi baru ini? (y/n): " go_choice
+            if [ "$go_choice" == "y" ] || [ "$go_choice" == "Y" ]; then
+                tmux attach -t "$new_session_name"
+            fi
+        else
+            echo "❌ Aksi tidak valid."
+            sleep 1
+        fi
+    done
+}
+
 while true; do
     clear
     echo "============================================="
     echo "     Sistem Pintar Booking GPU Slurm"
     echo "============================================="
-    echo "1. 🚀 Jalankan Booking GPU (Background)"
+    echo "1. 🐋 Slurm (Booking, Batal, Cek Antrean)"
     echo "2. 💻 Masuk / Attach ke Node GPU (Interactive)"
-    echo "3. 🛑 Batalkan / Hentikan Booking GPU"
-    echo "4. 📋 Cek Status Antrean (squeue)"
-    echo "5. 🗑️ Manajemen Sesi TMUX"
-    echo "6. ☁️ Manajemen Cloudflare Tunnel"
-    echo "7. 🖥️ Web RVM"
-    echo "8. 🤖 Manajemen AspriAI (Ollama & WebUI)"
-    echo "9. 🛡️ Manajemen AspriGate Proxy"
+    echo "3. 🖥️ Manajemen TMUX"
+    echo "4. 🛡️ Manajemen AspriGate Proxy (Semua Layanan)"
     echo -e "\033[91m0. ❌ Keluar Menu\033[0m"
     echo "============================================="
-    read -p "Pilih menu [0-9]: " pilihan
+    read -p "Pilih menu [0-4]: " pilihan
 
     case $pilihan in
         1)
-            # Memastikan daemon python book_gpu.py benar-benar berjalan (bukan proses tmux yatim yang memuat string book_gpu.py)
-            daemon_running=0
-            for pid in $(pgrep -u $USER -f "book_gpu.py" 2>/dev/null); do
-                if [ -f "/proc/$pid/exe" ] && [[ "$(readlink "/proc/$pid/exe" 2>/dev/null)" == *"python"* ]]; then
-                    daemon_running=1
-                    break
-                fi
-            done
-
-            if [ $daemon_running -eq 1 ]; then
-                echo "=================================================================="
-                echo "⚠️  DAEMON SUDAH BERJALAN!"
-                echo "   Sistem mendeteksi bahwa daemon booking GPU (book_gpu.py) sudah aktif."
-                echo "   Tidak perlu menjalankan ulang untuk mencegah Double Job."
-                echo "=================================================================="
-            else
-                echo "=================================================================="
-                echo "ℹ️  INFO TMUX DAEMON BOOKING:"
-                echo "   Sesi tmux ini menjalankan daemon 'book_gpu.py' di background."
-                echo "   Daemon ini berfungsi melakukan monitoring job, Telegram alerting,"
-                echo "   serta auto-rebooking otomatis jika job Slurm mati/timeout."
-                echo "   ⚠️ JANGAN matikan/kill sesi tmux ini agar fitur rebook tetap aktif!"
-                echo "=================================================================="
-                echo "Memulai Booking GPU dalam sesi tmux..."
-                SESSION_NAME=$(generate_gpu_session_name)
-                tmux new-session -d -s "$SESSION_NAME" "source /data/programs/anaconda3/bin/activate && conda activate yolo_env && python book_gpu.py"
-                echo "✅ Proses berjalan di background pada sesi tmux: $SESSION_NAME."
-                echo "   Anda akan menerima notifikasi Telegram saat status Running."
-            fi
-            read -p "Tekan Enter untuk kembali ke menu..."
+            manage_slurm
             ;;
         2)
             echo "Mencoba attach ke node GPU..."
@@ -1761,110 +1953,12 @@ while true; do
             read -p "Tekan Enter untuk kembali ke menu..."
             ;;
         3)
-            echo "Mencari Job vnot Anda..."
-            JOBID=$(squeue -u $USER -n vnot -h -o %i | head -n 1)
-            if [ -z "$JOBID" ]; then
-                echo "Tidak ada job booking GPU yang aktif atau mengantre."
-            else
-                echo "Membatalkan Job ID: $JOBID"
-                scancel $JOBID
-                echo "Booking berhasil dihentikan."
-            fi
-            read -p "Tekan Enter untuk kembali ke menu..."
+            manage_tmux_sessions
             ;;
         4)
-            # Show pretty squeue and submenu actions
-            pretty_squeue
-            echo "Aksi pada antrian:"
-            echo "1) Hapus antrian (cancel job)"
-            echo "2) Pindah node (requeue to ai2/ai3)"
-            read -p "Pilih aksi [1-2] (atau Enter untuk kembali): " q_choice
-            case $q_choice in
-                1) cancel_job ;;
-                2) move_job_node ;;
-                *) echo "Kembali ke menu utama..." ;;
-            esac
-            read -p "Tekan Enter untuk kembali ke menu..."
+            manage_all_proxies
             ;;
-        5)
-            while true; do
-                clear
-                echo "============================================="
-                echo "       Manajemen Sesi TMUX"
-                echo "============================================="
-                echo "⚠️ Peringatan Sesi Penting:"
-                echo "   - 'gpu_booking'      : Daemon monitoring Slurm & Telegram. JANGAN di-kill!"
-                echo "   - 'cloudflare_tunnel': Terowongan konektivitas luar Master Node. JANGAN di-kill!"
-                echo "   (Membunuh sesi di atas akan mematikan layanan background terkait)"
-                echo "---------------------------------------------"
-                pretty_tmux_ls
-                has_sessions=$?
-                
-                echo "Sub Menu TMUX:"
-                echo "1. Masuk ke Sesi Tmux (Attach)"
-                echo "2. Hapus Sesi Tmux (Kill)"
-                echo "3. Tambah Sesi Baru (Create)"
-                read -p "Pilih aksi [1-3] (Enter untuk batal): " action_choice
-                
-                if [ -z "$action_choice" ]; then
-                    break
-                elif [ "$action_choice" == "1" ]; then
-                    if [ $has_sessions -ne 0 ]; then
-                        echo "⚠️ Tidak ada sesi yang aktif untuk dimasuki."
-                        sleep 1
-                        continue
-                    fi
-                    total_sessions=$(tmux ls | wc -l)
-                    read -p "Pilih nomor sesi untuk MASUK [1-$total_sessions] (Enter untuk batal): " sel_choice
-                    if [[ "$sel_choice" =~ ^[0-9]+$ ]] && [ "$sel_choice" -ge 1 ] && [ "$sel_choice" -le "$total_sessions" ]; then
-                        session_name=$(tmux ls | sed -n "${sel_choice}p" | cut -d: -f1)
-                        echo "Memasuki sesi tmux '$session_name'..."
-                        tmux attach -t "$session_name"
-                    fi
-                elif [ "$action_choice" == "2" ]; then
-                    if [ $has_sessions -ne 0 ]; then
-                        echo "⚠️ Tidak ada sesi yang aktif untuk dihapus."
-                        sleep 1
-                        continue
-                    fi
-                    total_sessions=$(tmux ls | wc -l)
-                    read -p "Pilih nomor sesi untuk DIHAPUS [1-$total_sessions] (Enter untuk batal): " sel_choice
-                    if [[ "$sel_choice" =~ ^[0-9]+$ ]] && [ "$sel_choice" -ge 1 ] && [ "$sel_choice" -le "$total_sessions" ]; then
-                        session_name=$(tmux ls | sed -n "${sel_choice}p" | cut -d: -f1)
-                        tmux kill-session -t "$session_name"
-                        echo "✅ Sesi tmux '$session_name' berhasil dihapus."
-                        sleep 1
-                    fi
-                elif [ "$action_choice" == "3" ]; then
-                    read -p "Masukkan nama sesi baru (Enter untuk default): " new_session_name
-                    if [ -z "$new_session_name" ]; then
-                        new_session_name="session_$(date +%s)"
-                    fi
-                    tmux new-session -d -s "$new_session_name"
-                    echo "✅ Sesi tmux '$new_session_name' berhasil dibuat di background."
-                    read -p "Apakah Anda ingin langsung masuk (attach) ke sesi baru ini? (y/n): " go_choice
-                    if [ "$go_choice" == "y" ] || [ "$go_choice" == "Y" ]; then
-                        tmux attach -t "$new_session_name"
-                    fi
-                else
-                    echo "❌ Aksi tidak valid."
-                    sleep 1
-                fi
-            done
-            ;;
-        6)
-            manage_cloudflare_tunnel
-            ;;
-        7)
-            manage_web_rvm
-            ;;
-        8)
-            manage_aspri_ai
-            ;;
-        9)
-            manage_asprigate
-            ;;
-        0)
+        0|'')
             echo "Terima kasih telah menggunakan sistem ini."
             exit 0
             ;;

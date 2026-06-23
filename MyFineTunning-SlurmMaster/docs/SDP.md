@@ -2874,3 +2874,164 @@
 - **Status saat ini:** **Selesai 100%**
 - **Catatan untuk AI selanjutnya (Handoff Note):**
   - Jika Anda memodifikasi respons payload pada *streaming proxy*, pastikan `content-length` tidak diteruskan dari server asal (upstream) agar tidak terjadi *mismatch* ukuran byte di level koneksi (HTTP/1.1).
+
+---
+
+### [Entri 133] — Investigasi Mendalam Ollama Server Unhealthy & Bypass NFS Hang ai2
+
+- **Tanggal/Waktu:** 2026-06-18 12:45 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan investigasi menyeluruh (Deep Analysis) atas laporan pengguna mengenai ketidaksesuaian status "Ollama Engine: Unhealthy" pada HUD `myslurm.sh` sementara container diklaim berjalan.
+  - **Identifikasi Akar Masalah 1:** Proses SSH reverse tunnel (`11435:localhost:OLLAMA_PORT`) terputus diam-diam dan tidak memiliki mekanisme koneksi ulang yang mandiri (resilience) di dalam file `run_ollama_daemon.sh`.
+  - **Tindakan 1:** Mengubah `ssh -R` menjadi mode continuous loop dengan tambahan parameter keandalan jaringan (`ServerAliveInterval=60`, `ServerAliveCountMax=3`).
+  - **Identifikasi Akar Masalah Kritis 2 (Penyebab Utama Kehancuran Sesi):** Melalui tracing `strace` dan inspeksi file system, didapati bahwa *compute node* `@ai2` mengalami **NFS Hang** yang parah pada direktori `/data/users/g6717500336`. Akibatnya, seluruh proses yang diinjeksi via `srun` yang menyentuh direktori tersebut (termasuk membaca `~/.ssh/id_rsa`, `cloudflared`, dan `singularity exec`) terjebak dalam kondisi *Uninterruptible Sleep (D state)* dan berakhir dengan *Exit Code 255/1* atau dibunuh sistem (*Killed*). Hal inilah yang menggagalkan jalannya Ollama daemon secara total.
+  - **Tindakan 2:** Mengimplementasikan *bypass* node yang sakit dengan memodifikasi skrip *Smart Booking* (`utils/book_gpu.py`) secara *hotfix*, dengan menambahkan `ai2` ke dalam `exclude_list`.
+  - Membatalkan Job `8769` di node `ai2` dan me-restart *tmux session* `gpu_booking`, yang sukses mendelegasikan beban tugas ke node sehat `@ai3` (Job `8770`).
+  - Mengonfirmasi seluruh koneksi *reverse tunnel* port dinamis dan *gateway* AspriAI Core kembali hijau (Online - HTTP 200).
+- **File yang diubah/dibuat:**
+  - `singularity/ollama/run_ollama_daemon.sh` [DIMODIFIKASI - SSH Loop & Keepalive]
+  - `utils/book_gpu.py` [DIMODIFIKASI - Exclude ai2]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 133]
+- **Status saat ini:** **Selesai 100% (Sistem Normal dan Node Bypass Aktif)**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Node `ai2` sedang cacat secara OS (NFS *stale file handle*). Hal ini merupakan isu administrator kluster, bukan kode. Pengecualian sementara sudah dipasang di `book_gpu.py`.
+  - Pantau kesehatan node `ai2` kedepannya. Jangan cabut pengecualian `ai2` dari `book_gpu.py` sampai ada konfirmasi administrator bahwa NFS mount untuk `g6717500336` telah pulih.
+
+---
+
+### [Entri 134] — Eksekusi Penghapusan Model & Penambahan Fitur Hapus (myslurm.sh)
+
+- **Tanggal/Waktu:** 2026-06-18 12:57 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan penghapusan langsung terhadap 3 model Ollama yang tidak diperlukan (`Aspri-Q3e:8b-q8_0`, `Aspri-Q3.6:27b`, `qwen3.5:0.8b`) melalui REST API pada *tunnel gateway* Ollama.
+  - Menambahkan menu fungsional baru pada `utils/myslurm.sh` (Sub Menu Chat via Ollama) yaitu opsi **`D) 🗑️ Hapus Model (ollama rm)`**.
+  - Fitur hapus ini telah diintegrasikan dengan pemanggilan *Singularity* via alokasi TTY (`ssh -t`) agar pengguna dapat memasukkan nama model dan menghapusnya secara interaktif langsung dari dalam HUD Manajemen AspriAI.
+- **File yang diubah/dibuat:**
+  - `utils/myslurm.sh` [DIMODIFIKASI - Tambah Submenu Hapus Model Ollama]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 134]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Skrip `myslurm.sh` kini tidak hanya dapat mengunduh dan melakukan chat, tetapi juga memiliki kapabilitas manajemen penghapusan model (*Model Lifecycle Management*). Pilihan input pada menu ini mendukung angka `[0-N]`, opsi `D` (Hapus), dan `L` (Lihat External).
+
+---
+
+### [Entri 135] — Restrukturisasi UI Menu Utama myslurm.sh (Compact Mode)
+
+- **Tanggal/Waktu:** 2026-06-18 13:08 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan refaktorisasi besar pada arsitektur antarmuka (*User Interface*) layar utama `myslurm.sh` agar lebih rapi (*compact*) dan profesional sesuai permintaan pengguna.
+  - Memampatkan 9 opsi menu utama yang berserakan menjadi **4 Kategori Menu Utama**:
+    1. **🐋 Slurm (Booking, Batal, Cek Antrean)** -> (Membuka Submenu Slurm)
+    2. **💻 Masuk / Attach ke Node GPU (Interactive)** -> (Langsung memanggil `attach_gpu.sh`)
+    3. **🖥️ Manajemen TMUX** -> (Membuka Submenu manajemen sesi TMUX)
+    4. **🛡️ Manajemen AspriGate Proxy (Semua Layanan)** -> (Membuka Submenu berisi Cloudflare, Web RVM, AspriAI/Ollama, dan API Proxy)
+  - Modifikasi dilakukan secara murni pada lapisan antarmuka (abstraksi menu menggunakan fungsi Bash modular `manage_slurm()` dan `manage_all_proxies()`).
+  - **Zero Regression:** Logika fungsi inti seperti pemanggilan tunnel Cloudflared, booking GPU daemon, dan TMUX sama sekali tidak diubah sehingga seluruh sesi *background* dipastikan aman dan tidak terputus.
+- **File yang diubah/dibuat:**
+  - `utils/myslurm.sh` [DIMODIFIKASI - Refaktorisasi Antarmuka Menu Utama]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 135]
+- **Status saat ini:** **Selesai 100% (Compact Mode Aktif)**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Jika ingin menambahkan fitur layanan sekunder (AI, Proxy, Web), letakkan di dalam fungsi `manage_all_proxies()`. Jika berkaitan dengan alokasi kernel kluster, letakkan di `manage_slurm()`. Jangan mengotori *loop* layar utama (`while true`) dengan logika bisnis langsung.
+
+---
+
+### [Entri 136] — Penyatuan (Compact) Tampilan Antrean squeue
+
+- **Tanggal/Waktu:** 2026-06-18 13:13 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan refaktorisasi pada *script* Python pembentuk tabel antrean (`utils/slurm/pretty_squeue.py`).
+  - Menghilangkan *redundansi* di mana antrean dicetak dua kali (tabel Global dan tabel khusus User).
+  - Menyederhanakannya menjadi **satu tabel Global yang utuh (Compact)**, dengan fitur *dynamic highlighting*.
+  - Logika baru secara otomatis membandingkan ID pengguna (*environment* `USER`) dengan pemilik *job*. Jika terdapat *job* milik pengguna (misal: `g6717500336`), maka baris tersebut (Job ID dan Nama Pengguna) akan disorot menyala dengan warna *Bold Cyan* (`\033[1;96m`).
+- **File yang diubah/dibuat:**
+  - `utils/slurm/pretty_squeue.py` [DIMODIFIKASI - Menghapus duplikasi tabel & menambah *Cyan Highlight*]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 136]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Tampilan CLI sekarang sangat menghemat baris vertikal (*vertical height*) di terminal pengguna. Jika sewaktu-waktu pengguna meminta tabel khusus lagi, Anda hanya perlu memodifikasi fungsi parameter pencetakan, bukan mengubah fungsi utama *fetcher*.
+
+---
+
+### [Entri 137] — Penyesuaian UI & Peringatan Manajemen Sesi TMUX
+
+- **Tanggal/Waktu:** 2026-06-18 13:17 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan perapian tampilan (*Layout Reordering*) pada menu **Manajemen Sesi TMUX** di dalam `myslurm.sh`.
+  - Memindahkan blok Peringatan Sesi Penting (⚠️) ke posisi di bawah tabel "Daftar Sesi TMUX Aktif". Hal ini dilakukan agar daftar sesi yang sedang berjalan menjadi hal pertama yang tertangkap mata oleh pengguna sebelum melihat peringatannya.
+  - Menambahkan sesi `asprigate` (Gateway API AspriAI Core) ke dalam daftar sesi esensial yang tidak boleh dimatikan secara sembarangan, sejajar dengan `gpu_booking` dan `cloudflare_tunnel`.
+- **File yang diubah/dibuat:**
+  - `utils/myslurm.sh` [DIMODIFIKASI - Pergeseran blok teks dan penambahan peringatan asprigate]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 137]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Jika ke depannya ada daemon latar belakang baru (seperti ComfyUI daemon), jangan lupa untuk menambahkannya ke dalam blok gema (*echo*) peringatan di fungsi `manage_tmux_sessions()`.
+
+---
+
+### [Entri 138] — Penyederhanaan Visual Menu TMUX & Dynamic Warning
+
+- **Tanggal/Waktu:** 2026-06-18 13:20 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan penyederhanaan pesan antarmuka (*UI Simplification*) pada menu **Manajemen Sesi TMUX**.
+  - Mengubah logika pencetakan sesi (`pretty_tmux_ls`) yang menggunakan instruksi `awk` untuk mendeteksi secara dinamis jika nama sesi adalah `asprigate`, `cloudflare_tunnel`, atau `gpu_booking`. Jika benar, skrip akan secara otomatis menempelkan ikon `⚠️` persis di sebelah kanan nama sesi.
+  - Membuang penjelasan teks statis (*verbose*) yang panjang lebar di bawah tabel dan menggantinya dengan pesan tunggal yang sangat singkat: **"⚠️ Sesi dengan tanda ⚠️ JANGAN di-kill!"**
+- **File yang diubah/dibuat:**
+  - `utils/myslurm.sh` [DIMODIFIKASI - Penambahan logika kondisional di AWK dan peringkasan teks echo]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 138]
+- **Status saat ini:** **Selesai 100% (Ultra Compact Mode Aktif)**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Jika perlu menambahkan perlindungan pada sesi TMUX baru di masa depan, tambahkan nama sesinya pada kondisi logika `OR` di blok `awk -F:` dalam fungsi `pretty_tmux_ls`.
+
+---
+
+### [Entri 139] — Restrukturisasi Sub-Menu Web RVM (Compact Mode)
+
+- **Tanggal/Waktu:** 2026-06-18 13:39 WIB
+- **Tugas yang diselesaikan:**
+  - Melakukan penyederhanaan drastis terhadap antarmuka Sub-Menu Web RVM (fungsi `manage_web_rvm`) di file `myslurm.sh`.
+  - Merangkum status koneksi yang sebelumnya mengambil banyak baris (*verbose*) menjadi tampilan indikator 4-baris yang dinamis (Status dan Port Frontend/Backend).
+  - Melakukan sinkronisasi terminologi status (mengubah kata sandi `ACTIVE` menjadi `RUNNING`) agar konsisten dengan notasi manajemen *daemon* lainnya.
+  - Memampatkan menu daftar 9 aksi yang panjang dan bertele-tele menjadi format bertingkat (*nested menu*) dengan 4 Opsi Induk. Jika Anda menekan Opsi Utama, sub-opsi fungsional (*Start, Stop, Restart*) baru akan ditanyakan.
+- **File yang diubah/dibuat:**
+  - `utils/myslurm.sh` [DIMODIFIKASI - Refaktorisasi fungsi `manage_web_rvm` menggunakan Python Regex & Bash logic]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 139]
+- **Status saat ini:** **Selesai 100% (RVM Compact Menu Aktif)**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Pola Sub-Menu bertingkat (*Nested Menu Pattern*) ini sangat efisien untuk operasi CLI. Jika Anda perlu membuat antarmuka pengelola layanan baru, gunakan struktur yang sama seperti `manage_web_rvm` ini.
+
+---
+
+### [Entri 140] — Integrasi Otomatis AspriAI Core & Ollama Engine ke AspriGate Proxy
+
+- **Tanggal/Waktu:** 2026-06-23 07:06 WIB
+- **Tugas yang diselesaikan:**
+  - Menganalisis isu di mana AspriGate Proxy tidak berhasil menyalakan AspriAI Core dan Ollama Engine secara otomatis saat *Scale-to-Zero Wake Up*.
+  - Menambahkan baris perintah eksekusi untuk `aspri_core` (via `run_gateway.sh`) dan `ollama_daemon` (via `run_ollama_daemon.sh`) menggunakan Tmux di dalam fungsi `start_engine_scripts()` pada file `asprigate_proxy.py`.
+  - Mengubah eksekusi `subprocess.run` (yang memblokir *async loop* selama sinkronisasi RVM Frontend) menjadi `subprocess.Popen` untuk mengatasi perlambatan respons proxy.
+  - Menambahkan rutinitas *shutdown* (Tmux kill-session) untuk `aspri_core` dan `ollama_daemon` di dalam fungsi `kill_engine_scripts()`.
+  - Membuat *proxy app* tambahan di port `8503` (menargetkan 11434 - AspriAI Core) dan `8504` (menargetkan 11435 - Ollama Engine) di `asprigate_proxy.py` agar lalu lintas Cloudflare Tunnel bisa dirutekan melalui *gateway* ini.
+- **File yang diubah/dibuat:**
+  - `utils/asprigate_proxy.py` [DIMODIFIKASI - Penambahan proses booting & proxy ports]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 140]
+- **Status saat ini:** **Selesai 100%**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Layanan AspriAI Core dan Ollama sekarang secara otomatis di-start dan di-kill selaras dengan *idle timeout* (5 menit) dan *wake-up trigger*. Jika pengguna ingin *endpoint* mereka menampilkan *Loading Screen* saat tertidur, rute Cloudflare Tunnel untuk `aspri-core.vnot.my.id` dan `backend-ollama.penelitian.my.id` perlu dipindahkan ke target port `8503` dan `8504`.
+
+---
+
+### [Entri 141] — Bugfix Kritis: State Machine Proxy Terjebak & Infinite Loading
+
+- **Tanggal/Waktu:** 2026-06-23 08:55 WIB
+- **Tugas yang diselesaikan:**
+  - Menganalisis isu di mana halaman `front-rvm.penelitian.my.id` mengalami *loading* tiada akhir dengan pesan "Menghangatkan model AI... (Menunggu Port Aktif)".
+  - Mengidentifikasi akar masalah (Root Cause): Variabel global `STATUS_MESSAGE` tidak di-reset kembali ke `"Inisialisasi sistem..."` saat *Idle Timeout* tercapai maupun saat _request_ pertama kali gagal. Akibatnya, _state machine_ di dalam fungsi *async* `booting_manager` gagal memenuhi kondisi untuk memicu `start_engine_scripts()` dan tertahan pada state gantung.
+  - Memperbaiki alur state dengan menambahkan *reset* ke `"Inisialisasi sistem..."` di fungsi `kill_engine_scripts` dan di dalam blok eksepsi *RequestError*.
+  - Melakukan peningkatan pintar pada fungsi _polling_ `get_status` (`/asprigate-status`). Kini, jika *client* terus me-_refresh_ secara otomatis dari _loading screen_ lama saat *server* baru dinyalakan (`IS_BOOTING = False` namun `ready = False`), _proxy_ akan cukup cerdas untuk memahami bahwa itu adalah sinyal kebangkitan dan akan mengubah `IS_BOOTING` menjadi `True` secara mandiri.
+  - Melakukan *restart* pada sesi TMUX `asprigate`. _Engine_ otomatis terpicu bangun seketika oleh _polling browser_ pengguna.
+- **File yang diubah/dibuat:**
+  - `utils/asprigate_proxy.py` [DIMODIFIKASI - Perbaikan State Machine dan Polling Handler]
+  - `docs/SDP.md` [DIMODIFIKASI - Penambahan Log 141]
+- **Status saat ini:** **Selesai 100% (Port 8601 Berhasil Aktif)**
+- **Catatan untuk AI selanjutnya (Handoff Note):**
+  - Mesin *state* dari proksi ini sangat rentan terhadap *deadlock* jika variabel string statis tidak disetel ulang. Pastikan jika ada penambahan *state* baru di masa mendatang, variabel pembantu *reset* diikutkan secara eksplisit.

@@ -54,9 +54,9 @@ def get_squeue_data(user=None):
             data.append(parts)
     return data
 
-def print_table(data):
+def print_table(data, current_user=""):
     if not data:
-        print("  ⚠️ Anda tidak memiliki antrean yang sedang berjalan/pending.")
+        print("  ⚠️ Tidak ada antrean yang sedang berjalan/pending di kluster.")
         print("  " + "-"*75)
         return
 
@@ -81,7 +81,15 @@ def print_table(data):
         if len(name) > 17:
             name = name[:14] + "..."
             
-        print(f"  {jobid:<10} {user:<14} {f_time:<12} {name:<18} {c_padded_state} {nodes}")
+        # Highlight current user row
+        if user == current_user:
+            c_user = f"\033[1;96m{user:<14}\033[0m" # Bold Cyan
+            c_jobid = f"\033[1;96m{jobid:<10}\033[0m"
+        else:
+            c_user = f"{user:<14}"
+            c_jobid = f"{jobid:<10}"
+
+        print(f"  {c_jobid} {c_user} {f_time:<12} {name:<18} {c_padded_state} {nodes}")
     print("  " + "-"*75)
 
 if __name__ == "__main__":
@@ -91,14 +99,4 @@ if __name__ == "__main__":
     print("│                       DAFTAR ANTREAN SLURM GLOBAL                       │")
     print("╰─────────────────────────────────────────────────────────────────────────╯")
     all_data = get_squeue_data()
-    print_table(all_data)
-    
-    print("\n╭─────────────────────────────────────────────────────────────────────────╮")
-    print("│                     DAFTAR ANTREAN SLURM ANDA (USER)                    │")
-    print("╰─────────────────────────────────────────────────────────────────────────╯")
-    if current_user:
-        user_data = get_squeue_data(current_user)
-        print_table(user_data)
-    else:
-        print("  ⚠️ User tidak terdeteksi.")
-        print("  " + "-"*75)
+    print_table(all_data, current_user)
